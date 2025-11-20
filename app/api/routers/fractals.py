@@ -4,7 +4,8 @@ Router for fractal lifecycle: create fractal, join, start/force start.
 """
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-from datetime import datetime
+from datetime import datetime, timezone
+
 from app.infrastructure.db.session import SessionLocal
 from app.infrastructure.models import (
     Fractal, FractalMember, User, Group, GroupMember, Proposal, ProposalVote, Comment, CommentVote, Round
@@ -17,7 +18,7 @@ from app.services.fractal_service import (
     create_level_groups
 )
 
-
+DEBUG = False
 router = APIRouter()
 
 
@@ -86,7 +87,7 @@ def join_fractal(fractal_id: int, req: JoinRequest):
             raise HTTPException(status_code=404, detail="Fractal not found")
 
         # --- Debug print ---
-        print(f"[DEBUG] Searching user: {req.dict()}")
+        if DEBUG: print(f"[DEBUG] Searching user: {req.dict()}")
 
         # --- Look for existing user on any platform ---
         user = None
@@ -131,7 +132,6 @@ def join_fractal(fractal_id: int, req: JoinRequest):
     finally:
         db.close()
 
-        
 @router.post("/{fractal_id}/start", summary="Force start fractal (admin)")
 def start_fractal(fractal_id: int):
     """
@@ -148,20 +148,24 @@ def start_fractal(fractal_id: int):
         # --- 2. Mark fractal as running ---
         fractal.status = "in_progress"
         db.add(fractal)
-        db.commit()
+
+        # Capture primitive values before commit to avoid DetachedInstanceError
+        fid = fractal.id
+
+        db.commit()  # commit changes
 
         # --- 3. Start round 0 and create groups ---
-        # Pass only primitive IDs; do not pass the SQLAlchemy instance
         create_level_groups(
-            fractal_id=fractal.id,
+            fractal_id=fid,   # use captured primitive ID
             round_level=0,
             algorithm="random",
             options={}
         )
+        
 
         return {
             "ok": True,
-            "fractal_id": fractal.id,
+            "fractal_id": fid,
             "round_started": 0
         }
 
@@ -250,19 +254,11 @@ def fractal_status(fractal_id: int):
         db.close()
         
 
-@router.post("/{fractal_id}/close_round", summary="Close current round")
+@router.post("/{fractal_id}/close_round", summary="Close current round and start next")
 def close_round(fractal_id: int):
     db = SessionLocal()
     try:
-        fractal = (
-            db.query(Fractal)
-            .filter(Fractal.id == fractal_id)
-            .first()
-        )
-        if not fractal:
-            raise HTTPException(status_code=404, detail="Fractal not found")
-
-        # Find the currently open round
+        # --- 1. Find the highest open round ---
         current_round = (
             db.query(Round)
             .filter(Round.fractal_id == fractal_id, Round.status == "open")
@@ -271,28 +267,42 @@ def close_round(fractal_id: int):
         )
 
         if not current_round:
-            raise HTTPException(status_code=400, detail="No open round to close")
+            raise HTTPException(400, "No open round to close")
 
         current_level = current_round.level
 
-        # --- Perform scoring ---
+        # --- 2. Close the round ---
         calculate_proposal_scores(db, fractal_id, current_level)
         calculate_comment_votes(db, fractal_id, current_level)
+        promote_representatives_to_next_round(db, fractal_id)
 
-        # --- CLOSE THE ROUND HERE ---
         current_round.status = "closed"
-        current_round.ended_at = now()
-
+        current_round.ended_at = datetime.now(timezone.utc)
         db.add(current_round)
         db.commit()
 
-        # --- Promote representatives AFTER closing ---
-        promote_representatives_to_next_round(db, fractal_id, current_level)
+        # --- 3. Check how many groups were in this round ---
+        groups_count = db.query(Group).filter(Group.round_id == current_round.id).count()
+
+        next_round_started = False
+        next_level = current_level + 1
+
+        if groups_count > 1:
+            # --- 4. Create next round ---
+            create_level_groups(
+                fractal_id=fractal_id,
+                round_level=next_level,
+                algorithm="random",
+                options={}
+            )
+            next_round_started = True
 
         return {
             "ok": True,
             "fractal_id": fractal_id,
             "level_closed": current_level,
+            "next_round_started": next_round_started,
+            "next_level": next_level if next_round_started else None
         }
 
     finally:

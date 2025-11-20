@@ -197,7 +197,7 @@ async def todo(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Show voting status"""
     user_id = update.effective_user.id
-    resp = requests.get(f"{BACKEND_URL}/users/{user_id}/status")
+    resp = requests.get(f"{BACKEND_URL}/users/{/to}/status")
     if resp.ok:
         data = resp.json()
         msg = "Proposals:\n" + "\n".join([f"{p['title']}: {p['avg_vote']}" for p in data.get("proposals", [])])

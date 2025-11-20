@@ -8,57 +8,96 @@ These functions use SQLAlchemy sessions and models in app.infrastructure.models.
 """
 from typing import List, Dict, Any
 from sqlalchemy.orm import Session
-from app.infrastructure.models import Group, GroupMember, Round, Proposal, Fractal, FractalMember, ProposalMerge, RepresentativeSelection, ProposalVote
 from app.infrastructure.db.session import SessionLocal
 from app.domain import fractal_service as domain
 from app.config.settings import settings
-from datetime import datetime
-
+from datetime import datetime, timezone
+from app.infrastructure.models import (
+    Fractal, FractalMember, User, Group, GroupMember, Proposal, ProposalVote, Comment, CommentVote, Round, RepresentativeSelection
+)
 
 def _get_session() -> Session:
     return SessionLocal()
 
 
-def create_level_groups(fractal_id: int, round_level: int, algorithm: str = "random", options: Dict = None) -> List[int]:
+def create_level_groups(
+    fractal_id: int, 
+    round_level: int, 
+    algorithm: str = "random", 
+    options: Dict = None
+) -> List[int]:
     """
     Create groups for the given fractal and round using the specified algorithm.
     Returns list of created group ids.
+    Prints debug info about groups and members.
     """
     options = options or {}
     db = _get_session()
     try:
-        # collect members for fractal
-        members = db.query(FractalMember).filter(FractalMember.fractal_id == fractal_id, FractalMember.left_at == None).all()
-        member_objs = []
-        for m in members:
-            user = db.query(FractalMember).get(m.id)  # not necessary; keep minimal
-        # simple: use user ids from FractalMember rows
+        # -------------------------
+        # 1. Collect active members
+        # -------------------------
+        members = db.query(FractalMember)\
+                    .filter(FractalMember.fractal_id == fractal_id,
+                            FractalMember.left_at == None)\
+                    .all()
         user_ids = [m.user_id for m in members]
-        # domain grouping (members need dicts)
-        member_dicts = [{"user_id": uid, "prefs": {}} for uid in user_ids]
+
+        print(f"[DEBUG] Fractal {fractal_id} has {len(user_ids)} active members: {user_ids}")
+
+        if not user_ids:
+            print("[DEBUG] No members found, no groups will be created.")
+            return []
+
+        # -------------------------
+        # 2. Determine group size
+        # -------------------------
         options.setdefault("group_size", settings.GROUP_SIZE_DEFAULT)
-        groups_flat = domain.random_grouping(member_dicts, options)  # currently random
-        created_group_ids = []
-        # create DB round if not exists
-        rnd = Round(fractal_id=fractal_id, level=round_level, started_at=datetime.utcnow(), status="open")
+
+        # -------------------------
+        # 3. Domain-level grouping
+        # -------------------------
+        member_dicts = [{"user_id": uid, "prefs": {}} for uid in user_ids]
+        groups_flat = domain.random_grouping(member_dicts, options)  # returns list of lists of user_ids
+
+        # -------------------------
+        # 4. Create DB round if not exists
+        # -------------------------
+        rnd = Round(
+            fractal_id=fractal_id,
+            level=round_level,
+            started_at=datetime.now(timezone.utc),
+            status="open"
+        )
         db.add(rnd)
         db.commit()
         db.refresh(rnd)
+
+        # -------------------------
+        # 5. Create groups & members
+        # -------------------------
+        created_group_ids = []
         for g in groups_flat:
             grp = Group(round_id=rnd.id, level=round_level, meta={})
             db.add(grp)
             db.commit()
             db.refresh(grp)
-            # add group members
+
+            # Add group members
             for uid in g:
                 gm = GroupMember(group_id=grp.id, user_id=uid)
                 db.add(gm)
             db.commit()
+
             created_group_ids.append(grp.id)
+            print(f"[DEBUG] Group {grp.id} created with members: {g}")
+
+        print(f"[DEBUG] Total {len(created_group_ids)} groups created for round {round_level}")
+
         return created_group_ids
+
     finally:
         db.close()
-
 
 def add_proposal(fractal_id: int, group_id: int, round_id: int, title: str, body: str, creator_user_id: int, ptype: str = "base") -> int:
     """
@@ -66,7 +105,7 @@ def add_proposal(fractal_id: int, group_id: int, round_id: int, title: str, body
     """
     db = _get_session()
     try:
-        p = Proposal(fractal_id=fractal_id, group_id=group_id, round_id=round_id, title=title, body=body, creator_user_id=creator_user_id, type=ptype, created_at=datetime.utcnow())
+        p = Proposal(fractal_id=fractal_id, group_id=group_id, round_id=round_id, title=title, body=body, creator_user_id=creator_user_id, type=ptype, created_at=datetime.now(timezone.utc))
         db.add(p)
         db.commit()
         db.refresh(p)
@@ -82,7 +121,7 @@ def add_comment(proposal_id: int, user_id: int, text: str, parent_comment_id: in
     from app.infrastructure.models import Comment
     db = _get_session()
     try:
-        c = Comment(proposal_id=proposal_id, parent_comment_id=parent_comment_id, user_id=user_id, text=text, created_at=datetime.utcnow())
+        c = Comment(proposal_id=proposal_id, parent_comment_id=parent_comment_id, user_id=user_id, text=text, created_at=datetime.now(timezone.utc))
         db.add(c)
         db.commit()
         db.refresh(c)
@@ -102,10 +141,10 @@ def cast_proposal_vote(proposal_id: int, voter_user_id: int, score: int):
         pv = db.query(ProposalVote).filter(ProposalVote.proposal_id == proposal_id, ProposalVote.voter_user_id == voter_user_id).first()
         if pv:
             pv.score = int(score)
-            pv.created_at = datetime.utcnow()
+            pv.created_at = datetime.now(timezone.utc)
             db.add(pv)
         else:
-            pv = ProposalVote(proposal_id=proposal_id, voter_user_id=voter_user_id, score=int(score), created_at=datetime.utcnow())
+            pv = ProposalVote(proposal_id=proposal_id, voter_user_id=voter_user_id, score=int(score), created_at=datetime.now(timezone.utc))
             db.add(pv)
         db.commit()
         return True
@@ -123,10 +162,10 @@ def cast_comment_vote(comment_id: int, voter_user_id: int, vote: bool):
         cv = db.query(CommentVote).filter(CommentVote.comment_id == comment_id, CommentVote.voter_user_id == voter_user_id).first()
         if cv:
             cv.vote = bool(vote)
-            cv.created_at = datetime.utcnow()
+            cv.created_at = datetime.now(timezone.utc)
             db.add(cv)
         else:
-            cv = CommentVote(comment_id=comment_id, voter_user_id=voter_user_id, vote=bool(vote), created_at=datetime.utcnow())
+            cv = CommentVote(comment_id=comment_id, voter_user_id=voter_user_id, vote=bool(vote), created_at=datetime.now(timezone.utc))
             db.add(cv)
         db.commit()
         return True
@@ -156,7 +195,7 @@ def select_representative_for_group(group_id: int) -> int:
         members = [g.user_id for g in gm_rows]
         rep = domain.select_representative_from_messages(messages, members)
         # persist rep
-        sel = RepresentativeSelection(group_id=group_id, representative_user_id=rep, created_at=datetime.utcnow(), method="vote")
+        sel = RepresentativeSelection(group_id=group_id, representative_user_id=rep, created_at=datetime.now(timezone.utc), method="vote")
         db.add(sel)
         db.commit()
         return rep
@@ -188,7 +227,7 @@ def promote_representatives_to_next_round(db: Session, fractal_id: int, current_
         groups = domain.random_grouping(member_dicts, options)
         created_ids = []
         # create Round entry
-        rnd = Round(fractal_id=fractal_id, level=next_level, started_at=datetime.utcnow(), status="open")
+        rnd = Round(fractal_id=fractal_id, level=next_level, started_at=datetime.now(timezone.utc), status="open")
         db.add(rnd)
         db.commit()
         db.refresh(rnd)

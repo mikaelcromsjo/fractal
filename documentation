@@ -1,169 +1,227 @@
-Here’s a structured overview of your **Fractal Governance backend project**, mapping files to their main classes/functions, including inputs, outputs, and models used. I’ve organized it by folder so you can quickly see the logic flow and data structures.
-
----
-
-## **1. `app/domain`**
-
-Pure domain logic (no DB, no FastAPI). All functions operate on plain Python types.
-
-### `fractal_service.py`
-
-* **partition_into_groups(member_ids: List[int], group_size: int) → List[List[int]]**
-  Input: list of user IDs, target group size
-  Output: list of lists of user IDs
-  Comments: Splits members into groups; last group may be smaller.
-
-* **balance_groups(groups: List[List[int]], target_size: int) → List[List[int]]**
-  Input: list of groups, target size
-  Output: balanced groups
-  Comments: Re-chunks members to make groups more equal in size.
-
-* **random_grouping(members: List[Dict], options: Dict) → List[List[int]]**
-  Input: list of member dicts (`{"user_id": int, ...}`), options (`group_size`, `seed`)
-  Output: grouped user IDs
-  Comments: Shuffles members randomly; placeholder for future grouping logic.
-
-* **select_representative_from_group(messages: List[Dict], members: List[int]) → Optional[int]**
-  Input: list of message dicts with votes, member IDs
-  Output: selected representative ID
-  Comments: Chooses user with highest average votes.
-
-* **compute_top_proposals(proposals: List[Dict], top_n: int) → List[Dict]**
-  Input: proposals with vote dicts, number of top proposals
-  Output: list of top proposals
-  Comments: Sorted by average vote.
-
-* **propagate_proposals(top_proposals: List[Dict]) → List[Dict]**
-  Input: top proposals
-  Output: new proposals for next round, type='propagated'
-
-* **merge_proposals(proposals_to_merge: List[Dict], new_title: str, new_body: str) → Dict**
-  Input: proposals to merge, new title/body
-  Output: merged proposal with `merged_from` field
-
-* **select_representatives_for_all_groups(groups: List[Dict], top_proposals_per_group: Dict[int, List[Dict]]) → Dict[int,int]**
-  Input: list of groups, mapping group_id → top proposals
-  Output: mapping group_id → representative_id
-
----
-
-## **2. `app/infrastructure`**
-
-Handles DB access, session management, and storage.
-
-### `db/session.py`
-
-* **engine**: SQLAlchemy engine
-* **SessionLocal**: sessionmaker
-* **Base**: declarative base for models
-
-### `models/*.py`
-
-**SQLAlchemy models** (all inherit `Base`):
-
-* `Fractal`: id, name, description, start_date, status
-* `User`: id, username, email
-* `FractalMember`: id, user_id, fractal_id
-* `Round`: id, fractal_id, round_number, start_date, end_date
-* `Group`: id, round_id, name
-* `GroupMember`: id, group_id, user_id
-* `Proposal`: id, group_id, user_id, title, description, type, merged_from
-* `ProposalMerge`: id, new_proposal_id, old_proposal_ids
-* `Comment`: id, proposal_id, parent_comment_id, user_id, content
-* `ProposalVote`: id, proposal_id, user_id, vote
-* `CommentVote`: id, comment_id, user_id, vote
-* `RepresentativeSelection`: id, group_id, user_id, round_id
-* `AuditLog`: id, action, actor_id, target_id, timestamp
-
----
-
-## **3. `app/services`**
-
-Service layer connecting DB/models to domain logic.
-
-**Typical functions:**
-
-* `create_fractal(db, name, desc, start_date) → Fractal`
-* `join_fractal(db, fractal_id, user_id) → FractalMember`
-* `create_groups(db, round_id, members, group_size, preferences) → List[Group]`
-* `create_proposal(db, group_id, user_id, title, body) → Proposal`
-* `create_comment(db, proposal_id, parent_comment_id, user_id, content) → Comment`
-* `cast_vote(db, user_id, target_id, vote, type) → ProposalVote/CommentVote`
-* `select_representatives(db, group_id) → RepresentativeSelection`
-* `promote_representatives(db, next_round_id, reps: List[User]) → Groups`
-
-All service functions call **domain functions** to calculate groups, top proposals, or representative selection.
-
----
-
-## **4. `app/api/routers`**
-
-FastAPI routers mapping HTTP endpoints to service functions.
-
-* `fractals.py`:
-
-  * POST `/fractals/` → create fractal
-  * POST `/fractals/join` → join fractal
-  * GET `/fractals/` → list fractal
-  * POST `/start` -> Force start fractal (admin and testing)
-
-* `users.py`:
-
-  * GET `/users/{user_id}` → get user info
-  * POST `/users/create` → create user
-
-* `groups.py`:
-
-  * POST `/groups/create` → generate level groups
-  * GET `/groups/{group_id}` → list members
-
-* `proposals.py`:
-
-  * POST `/proposals/create` → create proposal
-  * GET `/proposals/{proposal_id}` → get proposal info
-
-* `comments.py`:
-
-  * POST `/comments/create` → comment on proposal/comment
-
-* `votes.py`:
-
-  * POST `/votes/proposal` → cast proposal vote
-  * POST `/votes/comment` → cast comment vote
-
-* `admin.py`:
-
-  * GET `/admin/status` → overview
-  * POST `/admin/promote` → promote top proposals
-
----
-
-## **5. `app/config`**
-
-* `settings.py`
-
-  * Environment variables, DB URL, default group size, proposal limits, deliberation times
-
----
-
-## **6. `scripts`**
-
-* `init_db.py`: Creates all tables using `Base.metadata.create_all(engine)`
-* `generate_test_data.py`: Populates DB with sample users, fractals, proposals
-* `inspect_db.py`: Debug helper for checking DB contents
-
----
-
-## **Data Flow Overview**
-
-1. **User triggers UI command → API router → service function**
-2. **Service function queries DB → extracts data → calls domain logic**
-3. **Domain logic functions** (pure Python) compute groups, top proposals, reps, merges
-4. **Service layer stores results → DB**
-5. **Bot / UI fetches updated data from DB → sends messages**
-
----
-
-This overview maps every important file and function, input/output types, and models involved, giving a complete blueprint of the backend architecture.
-
-
+=== api/routers/admin.py ===
+FastAPI Routes:
+  - POST /init_db → init_db
+  - POST /reset_db → reset_db
+Functions: init_db, reset_db
+=== api/routers/comments.py ===
+Pydantic Models:
+  - CommentCreateReq
+      proposal_id: int
+      user_id: int
+      text: str
+      parent_comment_id: int | None = None
+FastAPI Routes:
+  - POST / → create_comment
+  - GET /{comment_id} → get_comment
+Functions: create_comment, get_comment
+=== api/routers/fractals.py ===
+Pydantic Models:
+  - FractalCreateRequest
+      name: str
+      description: str = ''
+      start_date: datetime
+      settings: dict = {}
+  - JoinRequest
+      user_id: int
+FastAPI Routes:
+  - GET / → list_fractals
+  - POST / → create_fractal
+  - POST /{fractal_id}/join → join_fractal
+  - POST /{fractal_id}/start → start_fractal
+Functions: list_fractals, create_fractal, join_fractal, start_fractal
+=== api/routers/groups.py ===
+Pydantic Models:
+  - CreateGroupsReq
+      fractal_id: int
+      round_level: int = 0
+      algorithm: str = 'random'
+      options: dict = {}
+FastAPI Routes:
+  - POST /create → create_groups
+  - GET /{group_id} → get_group
+  - POST /{group_id}/select_representative → select_rep
+  - POST /promote → promote
+Functions: create_groups, get_group, select_rep, promote
+=== api/routers/posts.py ===
+Pydantic Models:
+  - PostRequest
+      user_id: int
+      text: str
+FastAPI Routes:
+  - POST / → post
+Functions: post
+=== api/routers/proposals.py ===
+Pydantic Models:
+  - ProposalCreateReq
+      fractal_id: int
+      group_id: int
+      round_id: int
+      title: str
+      body: str = ''
+      creator_user_id: int = None
+  - MergeReq
+      ids: list[int]
+      title: str
+      body: str
+      creator_user_id: int = None
+FastAPI Routes:
+  - POST / → create_proposal
+  - POST /{proposal_id}/merge → merge_proposal
+Functions: create_proposal, merge_proposal
+=== api/routers/users.py ===
+Pydantic Models:
+  - UserCreateReq
+      username: str = None
+      telegram_id: int = None
+      is_ai: bool = False
+FastAPI Routes:
+  - POST / → create_user
+  - GET / → list_users
+Functions: create_user, list_users
+=== api/routers/votes.py ===
+Pydantic Models:
+  - ProposalVoteReq
+      user_id: int
+      proposal_id: int
+      score: int
+  - CommentVoteReq
+      user_id: int
+      comment_id: int
+      vote: bool
+FastAPI Routes:
+  - POST /proposal → vote_proposal
+  - POST /comment → vote_comment
+Functions: vote_proposal, vote_comment
+=== domain/fractal_service.py ===
+Functions: partition_into_groups, balance_groups, random_grouping, select_representative_from_group, compute_top_proposals, propagate_proposals, merge_proposals, select_representatives_for_all_groups, select_representative_from_messages
+=== domain/models.py ===
+Pydantic Models:
+  - UserDTO
+      id: int
+      username: Optional[str] = None
+      is_ai: bool = False
+      current_group_id: Optional[int] = None
+      level: int = 0
+  - MessageDTO
+      id: int
+      group_id: int
+      user_id: int
+      text: str
+      timestamp: datetime = Field(default_factory=datetime.utcnow)
+      votes: Dict[int, int] = Field(default_factory=dict)
+  - GroupDTO
+      id: int
+      level: int
+      members: List[int] = Field(default_factory=list)
+      messages: List[MessageDTO] = Field(default_factory=list)
+      representative: Optional[int] = None
+      post_deadline: Optional[datetime] = None
+      member_deadline: Optional[datetime] = None
+=== infrastructure/models.py ===
+SQLAlchemy Models:
+  - Fractal
+      id: Integer
+      name: String(255)
+      description: Text
+      start_date: DateTime
+      status: String(50) = 'waiting'
+      settings: JSON = {}
+      created_at: DateTime = now
+  - User
+      id: Integer
+      telegram_id: Integer
+      username: String(200)
+      is_ai: Boolean = False
+      prefs: JSON = {}
+      created_at: DateTime = now
+  - FractalMember
+      id: Integer
+      fractal_id: Integer
+      user_id: Integer
+      joined_at: DateTime = now
+      left_at: DateTime
+      role: String(50) = 'member'
+  - Round
+      id: Integer
+      fractal_id: Integer
+      level: Integer = 0
+      started_at: DateTime
+      ended_at: DateTime
+      status: String(50) = 'open'
+  - Group
+      id: Integer
+      round_id: Integer
+      level: Integer = 0
+      meta: JSON = {}
+      created_at: DateTime = now
+  - GroupMember
+      id: Integer
+      group_id: Integer
+      user_id: Integer
+      joined_at: DateTime = now
+      left_at: DateTime
+      replaced_by: Integer
+  - Proposal
+      id: Integer
+      fractal_id: Integer
+      group_id: Integer
+      round_id: Integer
+      title: String(300)
+      body: Text
+      creator_user_id: Integer
+      type: String(50) = 'base'
+      meta: JSON = {}
+      created_at: DateTime = now
+  - ProposalMerge
+      id: Integer
+      new_proposal_id: Integer
+      merged_from_proposal_id: Integer
+  - Comment
+      id: Integer
+      proposal_id: Integer
+      parent_comment_id: Integer
+      user_id: Integer
+      text: Text
+      created_at: DateTime = now
+  - ProposalVote
+      id: Integer
+      proposal_id: Integer
+      voter_user_id: Integer
+      score: Integer
+      created_at: DateTime = now
+  - CommentVote
+      id: Integer
+      comment_id: Integer
+      voter_user_id: Integer
+      vote: Boolean
+      created_at: DateTime = now
+  - RepresentativeSelection
+      id: Integer
+      group_id: Integer
+      representative_user_id: Integer
+      created_at: DateTime = now
+      method: String(80) = 'vote'
+      seed: Integer
+  - AuditLog
+      id: Integer
+      entity_type: String(50)
+      entity_id: Integer
+      action: String(50)
+      payload: JSON = {}
+      user_id: Integer
+      timestamp: DateTime = now
+Functions: now
+=== infrastructure/repositories/group_repo.py ===
+Functions: __init__, create, get, list_by_level, save
+=== infrastructure/repositories/message_repo.py ===
+Functions: __init__, create, list_by_group, get, save
+=== infrastructure/repositories/user_repo.py ===
+Functions: __init__, create, get, list_all, update_current_group
+=== services/fractal_service.py ===
+Functions: _get_session, create_level_groups, add_proposal, add_comment, cast_proposal_vote, cast_comment_vote, select_representative_for_group, promote_representatives_to_next_round
+=== services/group_service.py ===
+Functions: __init__, create_level0_from_users, add_post, vote, select_representative
+=== services/user_service.py ===
+Functions: __init__, create_user, list_users
+=== simulation/simulate.py ===
+Functions: run_simulation

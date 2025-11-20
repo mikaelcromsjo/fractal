@@ -17,7 +17,7 @@ Mock Telegram CLI with 128 AI users for testing Fractal Governance.
 
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import requests
 import random
 import time
@@ -29,11 +29,13 @@ API_URL = "http://localhost:8030/api/v1"
 USERS = {}
 FAKE = Faker()
 CURRENT_FRACTAL = None
-PROPOSALS_PER_USER = 2  # Adjust as needed
+PROPOSALS_PER_USER = 1  # Adjust as needed
 PLATFORM = "ai"  # default platform for CLI AI users
+DEBUG = True  # default platform for CLI AI users
+NR_USERS = 64  # default platform for CLI AI users
 
 # Initialize 128 AI users
-for i in range(1, 8):
+for i in range(1, NR_USERS):
     USERS[i] = {"name": FAKE.name()}
 
 # ----------------- Helper -----------------
@@ -52,7 +54,49 @@ def list_open_fractals():
     except Exception as e:
         print(f"[ERROR] Failed to list open fractals: {e}")
         return []
-        
+
+
+ CLI global cache
+CURRENT_FRACTAL_GROUPS: dict[int, int] = {}  # user_id -> group_id
+
+def refresh_group_cache(fractal_id: int):
+    """
+    Fetch all user -> group mappings for the current round of the fractal.
+    Stores them in CURRENT_FRACTAL_GROUPS for fast access.
+    """
+    global CURRENT_FRACTAL_GROUPS
+
+    # Fetch current round
+    res = api_get(f"/fractals/{fractal_id}/current_round")
+    if not res or "round_id" not in res:
+        print("[ERROR] Could not fetch current round")
+        return False
+
+    round_id = res["round_id"]
+
+    # Fetch all groups for this round
+    groups_res = api_get(f"/fractals/{fractal_id}/rounds/{round_id}/groups")
+    if not groups_res:
+        print("[ERROR] Could not fetch groups for current round")
+        return False
+
+    # Build cache
+    CURRENT_FRACTAL_GROUPS.clear()
+    for group in groups_res:
+        gid = group["group_id"]
+        members = group.get("members", [])
+        for uid in members:
+            CURRENT_FRACTAL_GROUPS[uid] = gid
+
+    print(f"[DEBUG] Group cache refreshed: {len(CURRENT_FRACTAL_GROUPS)} members cached")
+    return True
+
+def get_group_id(user_id: int) -> int | None:
+    """
+    Return the cached group ID for a given user in the current round.
+    """
+    return CURRENT_FRACTAL_GROUPS.get(user_id)    
+
 # --- Join open fractal ---
 def join_open(fractal_id):
     global CURRENT_FRACTAL
@@ -78,16 +122,16 @@ def select_fractal(fractal_id):
 def api_get(path, params=None):
     url = f"{API_URL}{path}"
     try:
-        print(f"[DEBUG] GET {url} params: {params}")
+        if DEBUG: print(f"[DEBUG] GET {url} params: {params}")
         r = requests.get(url, params=params)
         r.raise_for_status()
         res_json = r.json()
-        print(f"[DEBUG] Response: {res_json}")
+        if DEBUG: print(f"[DEBUG] Response: {res_json}")
         return res_json
     except requests.RequestException as e:
         print(f"[ERROR] API GET call {url} failed: {e}")
         try:
-            print(f"[DEBUG] Response text: {r.text}")
+            if DEBUG: print(f"[DEBUG] Response text: {r.text}")
         except:
             pass
         return {}
@@ -95,25 +139,25 @@ def api_get(path, params=None):
 def api_post(path, payload):
     url = f"{API_URL}{path}"
     try:
-        print(f"[DEBUG] POST {url} payload: {payload}")  # debug print before request
+        if DEBUG: print(f"[DEBUG] POST {url} payload: {payload}")  # debug print before request
         r = requests.post(url, json=payload)
         r.raise_for_status()
         res_json = r.json()
-        print(f"[DEBUG] Response: {res_json}")  # optional: see success response
+        if DEBUG: print(f"[DEBUG] Response: {res_json}")  # optional: see success response
         return res_json
     except requests.RequestException as e:
         print(f"[ERROR] API call {url} failed: {e}")
-        print(f"[DEBUG] Payload was: {payload}")
+        if DEBUG: print(f"[DEBUG] Payload was: {payload}")
         try:
             # Print the response body for more info
-            print(f"[DEBUG] Response text: {r.text}")
+            if DEBUG: print(f"[DEBUG] Response text: {r.text}")
         except:
             print("[DEBUG] No response text available")
         return {}
     except ValueError as ve:
         # JSON decode error
         print(f"[ERROR] Failed to decode JSON response: {ve}")
-        print(f"[DEBUG] Response text: {r.text}")
+        if DEBUG: print(f"[DEBUG] Response text: {r.text}")
         return {}
     
 # ----------------- Fractal Commands -----------------
@@ -121,7 +165,7 @@ def create_fractal(user_id, name, description, start_date=None):
     global CURRENT_FRACTAL
     try:        
         if start_date is None:
-            start_date = (datetime.utcnow() + timedelta(minutes=10)).strftime("%Y-%m-%d %H:%M:%S")
+            start_date = (datetime.now(timezone.utc) + timedelta(minutes=10)).strftime("%Y-%m-%d %H:%M:%S")
         res = api_post("/fractals/", {
             "name": name,
             "description": description,
@@ -132,9 +176,9 @@ def create_fractal(user_id, name, description, start_date=None):
         if not CURRENT_FRACTAL:
             print("[ERROR] Failed to start fractal: no ID returned")
         else:
-            print(f"Fractal started: {res}")
+            print(f"Fractal created: {res}")
     except Exception as e:
-        print(f"[ERROR] Failed to start fractal: {e}")
+        print(f"[ERROR] Failed to create fractal: {e}")
         print("Example: /create_fractal 'My Fractal' 'Description' '2025-12-01T12:00:00'")
 
 def join_fractal(user_id):
@@ -224,6 +268,7 @@ def close_round():
     except Exception as e:
         print(f"[ERROR] Failed to close round: {e}")
 
+
 # ----------------- AI Simulation -----------------
 def simulate_ai_round():
     if not CURRENT_FRACTAL:
@@ -232,15 +277,16 @@ def simulate_ai_round():
 
     print("=== Simulating AI users round ===")
 
-    # --- Step 1: Create proposals ---
     all_proposals = []
+    # --- Step 1: Create proposals for each user in their group ---
     for user_id in USERS:
         for p in range(PROPOSALS_PER_USER):
-            res = create_proposal(user_id, f"AI Proposal {user_id}-{p}", "Random description")
-            if res:
-                prop_id = res.get("proposal_id") or res.get("id")
-                if prop_id:
-                    all_proposals.append({"id": prop_id, "owner": user_id})
+            if random.random() < 0.2:
+                res = create_proposal(user_id, f"AI Proposal {user_id}-{p}", "Random description")
+                if res:
+                    prop_id = res.get("proposal_id") or res.get("id")
+                    if prop_id:
+                        all_proposals.append({"id": prop_id, "owner": user_id})
 
     print(f"[INFO] {len(all_proposals)} proposals created by AI users")
 
@@ -248,7 +294,10 @@ def simulate_ai_round():
     all_comments = []
     for proposal in all_proposals:
         prop_id = proposal["id"]
+        owner_group_id = get_group_id(proposal["owner"])  # implement a helper to get user's group
         for user_id in USERS:
+            if get_group_id(user_id) != owner_group_id:
+                continue  # skip users not in the same group
             if random.random() < 0.2:
                 res = create_comment(user_id, prop_id, f"AI comment by {user_id}")
                 if res:
@@ -258,10 +307,13 @@ def simulate_ai_round():
 
     print(f"[INFO] {len(all_comments)} comments created by AI users")
 
-    # --- Step 3: Vote on proposals ---
+    # --- Step 3: Vote on proposals (only within group) ---
     for proposal in all_proposals:
         prop_id = proposal["id"]
+        owner_group_id = get_group_id(proposal["owner"])
         for user_id in USERS:
+            if get_group_id(user_id) != owner_group_id:
+                continue  # only vote within group
             score = random.randint(1, 5)
             vote_proposal(user_id, prop_id, score)
 

@@ -6,11 +6,11 @@ from sqlalchemy import (
     Column, Integer, String, Text, DateTime, Boolean, ForeignKey, JSON, UniqueConstraint
 )
 from sqlalchemy.orm import relationship
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from app.infrastructure.db.session import Base
 
 def now():
-    return datetime.utcnow()
+    datetime.now(timezone.utc)
 
 
 class Fractal(Base):

@@ -12,8 +12,8 @@ class GroupRepo:
         g = Group(
             level=level,
             members=members,
-            post_deadline=datetime.utcnow() + timedelta(seconds=settings.POST_DEADLINE_SECONDS),
-            member_deadline=datetime.utcnow() + timedelta(seconds=settings.MEMBER_DEADLINE_SECONDS)
+            post_deadline=datetime.now(timezone.utc) + timedelta(seconds=settings.POST_DEADLINE_SECONDS),
+            member_deadline=datetime.now(timezone.utc) + timedelta(seconds=settings.MEMBER_DEADLINE_SECONDS)
         )
         self.db.add(g)
         self.db.commit()
