@@ -1,0 +1,14 @@
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: fractal_dev
+    ports:
+      - "8030:8030"
+    volumes:
+      - .:/app  # mount code for live reload
+      - fractal_db:/dbdata
+    environment:
+      - DATABASE_URL=sqlite:////dbdata/app.db

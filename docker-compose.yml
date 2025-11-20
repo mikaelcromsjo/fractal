@@ -1,0 +1,15 @@
+services:
+  app:
+    build: .
+    container_name: fractal
+    ports:
+      - "8030:8030"
+    volumes:
+      - ./scripts:/app/scripts
+      - fractal_db:/dbdata
+    environment:
+      - DATABASE_URL=sqlite:////dbdata/app.db
+    command: uvicorn main:app --host 0.0.0.0 --port 8030 --reload
+
+volumes:
+  fractal_db:
