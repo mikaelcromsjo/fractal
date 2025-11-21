@@ -307,3 +307,58 @@ def close_round(fractal_id: int):
 
     finally:
         db.close()
+
+@router.get("{fractal_id}/members/{user_id}")
+def get_member_context(fractal_id: int, user_id: int, db: Session = Depends(get_db)):
+    """
+    Returns the user's state inside a fractal:
+    - current round
+    - group in that round
+    - user prefs (if any)
+    - username
+    """
+
+    # --- 1. Verify user is a member ---
+    fm = db.query(FractalMember).filter(
+        FractalMember.fractal_id == fractal_id,
+        FractalMember.user_id == user_id,
+        FractalMember.left_at == None
+    ).first()
+
+    if not fm:
+        raise HTTPException(status_code=404, detail="User is not an active member of this fractal")
+
+    # --- 2. Get active/open round ---
+    rnd = db.query(Round).filter(
+        Round.fractal_id == fractal_id
+    ).order_by(Round.level.desc()).first()
+
+    if not rnd:
+        raise HTTPException(status_code=404, detail="No round exists for this fractal")
+
+    # If latest round is closed → no open round
+    if rnd.status != "open":
+        return {
+            "username": fm.username,
+            "round_id": None,
+            "round_level": None,
+            "group_id": None,
+            "prefs": {}
+        }
+
+    # --- 3. Find group for this user in this round ---
+    gm = db.query(GroupMember).join(Group).filter(
+        Group.round_id == rnd.id,
+        GroupMember.user_id == user_id
+    ).first()
+
+    group_id = gm.group_id if gm else None
+
+    # --- 4. Return result ---
+    return {
+        "username": fm.username,
+        "round_id": rnd.id,
+        "round_level": rnd.level,
+        "group_id": group_id,
+        "prefs": fm.prefs or {}
+    }
