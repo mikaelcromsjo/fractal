@@ -3,12 +3,15 @@
 Router for fractal lifecycle: create fractal, join, start/force start.
 """
 from fastapi import APIRouter, HTTPException
+from fastapi import Depends
+from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from datetime import datetime, timezone
+from app.infrastructure.db.session import get_db
 
 from app.infrastructure.db.session import SessionLocal
 from app.infrastructure.models import (
-    Fractal, FractalMember, User, Group, GroupMember, Proposal, ProposalVote, Comment, CommentVote, Round
+    Fractal, FractalMember, User, Group, GroupMember, Proposal, ProposalVote, Comment, CommentVote, Round, RepresentativeSelection
 )
 
 from app.services.fractal_service import (
@@ -30,11 +33,10 @@ class FractalCreateRequest(BaseModel):
 
 
 @router.get("/", summary="List all fractals")
-def list_fractals():
+def list_fractals(db: Session = Depends(get_db)):
     """
     Return a list of all fractals.
     """
-    db = SessionLocal()
     try:
         fractals = db.query(Fractal).all()
         return [
@@ -44,6 +46,7 @@ def list_fractals():
                 "description": f.description,
                 "start_date": str(f.start_date),
                 "created_at": str(f.created_at),
+                "status": f.status
             }
             for f in fractals
         ]
@@ -51,11 +54,10 @@ def list_fractals():
         db.close()
 
 @router.post("/", summary="Create a new fractal")
-def create_fractal(req: FractalCreateRequest):
+def create_fractal(req: FractalCreateRequest, db: Session = Depends(get_db)):
     """
     Create a fractal with a start_date. Members can join until start_date.
     """
-    db = SessionLocal()
     try:
         f = Fractal(name=req.name, description=req.description, start_date=req.start_date, settings=req.settings)
         db.add(f)
@@ -75,12 +77,11 @@ class JoinRequest(BaseModel):
 
 
 @router.post("/{fractal_id}/join", summary="Join a fractal")
-def join_fractal(fractal_id: int, req: JoinRequest):
+def join_fractal(fractal_id: int, req: JoinRequest, db: Session = Depends(get_db)):
     """
     Add a user to a fractal. 
     If the user does not exist on any platform, create them.
     """
-    db = SessionLocal()
     try:
         fractal = db.query(Fractal).get(fractal_id)
         if not fractal:
@@ -122,6 +123,11 @@ def join_fractal(fractal_id: int, req: JoinRequest):
         if fm:
             return {"ok": True, "member_id": fm.id, "info": "Already a member"}
 
+
+        status = db.query(Fractal.status).filter_by(id=fractal_id).scalar()
+        if status != "waiting":
+            return {"ok": False, "info": "Fractal is not open"}
+
         # --- Add as member ---
         fm = FractalMember(fractal_id=fractal_id, user_id=user.id)
         db.add(fm)
@@ -133,12 +139,11 @@ def join_fractal(fractal_id: int, req: JoinRequest):
         db.close()
 
 @router.post("/{fractal_id}/start", summary="Force start fractal (admin)")
-def start_fractal(fractal_id: int):
+def start_fractal(fractal_id: int, db: Session = Depends(get_db)):
     """
     Force-start a fractal: create round 0 and groups.
     Uses existing service-layer functions only.
     """
-    db = SessionLocal()
     try:
         # --- 1. Load fractal ---
         fractal = db.query(Fractal).filter(Fractal.id == fractal_id).first()
@@ -156,6 +161,7 @@ def start_fractal(fractal_id: int):
 
         # --- 3. Start round 0 and create groups ---
         create_level_groups(
+            db,
             fractal_id=fid,   # use captured primitive ID
             round_level=0,
             algorithm="random",
@@ -172,10 +178,128 @@ def start_fractal(fractal_id: int):
     finally:
         db.close()
 
+@router.post("/{fractal_id}/users/{user_id}/vote_representative", summary="Vote for a representative in current group")
+def vote_representative(fractal_id: int, user_id: int, voted_user_id: int, db: Session = Depends(get_db)):
+    """
+    Let a user vote for a representative within their current group in the given fractal.
+    Rules:
+        - User cannot vote for themselves
+        - Only members of the group can vote
+    """
+    # --- Find current round ---
+    current_round = db.query(Round).filter(Round.fractal_id == fractal_id).order_by(Round.level.desc()).first()
+    if not current_round:
+        raise HTTPException(status_code=404, detail="No active round in fractal")
+
+    # --- Find the user's group in the current round ---
+    group_member = db.query(GroupMember).join(Group).filter(
+        Group.round_id == current_round.id,
+        GroupMember.user_id == user_id
+    ).first()
+    if not group_member:
+        raise HTTPException(status_code=403, detail="User not assigned to a group in current round")
+
+    group_id = group_member.group_id
+
+    # --- Check voted user is in the same group ---
+    voted_member = db.query(GroupMember).filter(
+        GroupMember.group_id == group_id,
+        GroupMember.user_id == voted_user_id
+    ).first()
+    if not voted_member:
+        raise HTTPException(status_code=400, detail="Voted user not in your group")
+
+    if user_id == voted_user_id:
+        raise HTTPException(status_code=400, detail="Cannot vote for yourself")
+
+    # --- Record the vote ---
+    vote = RepresentativeSelection(
+        group_id=group_id,
+        representative_user_id=voted_user_id,
+        method="vote"
+    )
+    db.add(vote)
+    db.commit()
+
+    return {"ok": True, "voter_id": user_id, "voted_for": voted_user_id, "group_id": group_id}
+
+
+@router.get("/{fractal_id}/users/{user_id}/status", summary="Get current group status for a user")
+def user_group_status(fractal_id: int, user_id: int, db: Session = Depends(get_db)):
+    try:
+        # --- Check fractal exists ---
+        fractal = db.query(Fractal).get(fractal_id)
+        if not fractal:
+            raise HTTPException(status_code=404, detail="Fractal not found")
+
+        # --- Determine current round/level ---
+        current_round = db.query(Round).filter(Round.fractal_id == fractal_id).order_by(Round.level.desc()).first()
+        if current_round:
+            current_level = current_round.level
+        else:
+            current_level = 0
+
+        # --- Find the user's group in current round ---
+        group_member = db.query(GroupMember).join(Group).filter(
+            Group.round_id == (current_round.id if current_round else None),
+            GroupMember.user_id == user_id
+        ).first()
+
+        if not group_member:
+            return {"group": None, "message": "User is not assigned to a group in current round"}
+
+        group = db.query(Group).get(group_member.group_id)
+
+        # --- Users in group ---
+        group_members = db.query(User).join(GroupMember).filter(GroupMember.group_id == group.id).all()
+        users_info = [{"id": u.id, "username": u.username, "is_ai": u.is_ai} for u in group_members]
+
+        # --- Proposals in group ---
+        proposals = db.query(Proposal).filter(Proposal.group_id == group.id).all()
+        proposal_info = []
+        for p in proposals:
+            votes = db.query(ProposalVote).filter(ProposalVote.proposal_id == p.id).all()
+            total_score = sum(v.score for v in votes) if votes else None
+
+            # --- Comments (threaded) ---
+            def serialize_comment(c):
+                votes_c = db.query(CommentVote).filter(CommentVote.comment_id == c.id).all()
+                yes_count = sum(1 for v in votes_c if v.vote)
+                no_count = sum(1 for v in votes_c if not v.vote)
+                children = db.query(Comment).filter(Comment.parent_comment_id == c.id).all()
+                return {
+                    "id": c.id,
+                    "user_id": c.user_id,
+                    "text": c.text,
+                    "votes": {"yes": yes_count, "no": no_count} if votes_c else None,
+                    "replies": [serialize_comment(ch) for ch in children]
+                }
+
+            comments = db.query(Comment).filter(Comment.proposal_id == p.id, Comment.parent_comment_id == None).all()
+            serialized_comments = [serialize_comment(c) for c in comments]
+
+            proposal_info.append({
+                "id": p.id,
+                "title": p.title,
+                "body": p.body,
+                "creator_user_id": p.creator_user_id,
+                "total_score": total_score,
+                "comments": serialized_comments
+            })
+
+        return {
+            "fractal_id": fractal.id,
+            "group_id": group.id,
+            "level": group.level,
+            "members": users_info,
+            "proposals": proposal_info
+        }
+    finally:
+        db.close()
+
 
 @router.get("/{fractal_id}/status", summary="Get current fractal status with group details")
-def fractal_status(fractal_id: int):
-    db: Session = SessionLocal()
+def fractal_status(fractal_id: int, db: Session = Depends(get_db)):
     try:
         fractal = db.query(Fractal).get(fractal_id)
         if not fractal:
@@ -255,8 +379,7 @@ def fractal_status(fractal_id: int):
         
 
 @router.post("/{fractal_id}/close_round", summary="Close current round and start next")
-def close_round(fractal_id: int):
-    db = SessionLocal()
+def close_round(fractal_id: int, db: Session = Depends(get_db)):
     try:
         # --- 1. Find the highest open round ---
         current_round = (
@@ -290,6 +413,7 @@ def close_round(fractal_id: int):
         if groups_count > 1:
             # --- 4. Create next round ---
             create_level_groups(
+                db,
                 fractal_id=fractal_id,
                 round_level=next_level,
                 algorithm="random",
@@ -308,7 +432,7 @@ def close_round(fractal_id: int):
     finally:
         db.close()
 
-@router.get("{fractal_id}/members/{user_id}")
+@router.get("/{fractal_id}/members/{user_id}")
 def get_member_context(fractal_id: int, user_id: int, db: Session = Depends(get_db)):
     """
     Returns the user's state inside a fractal:
@@ -325,6 +449,13 @@ def get_member_context(fractal_id: int, user_id: int, db: Session = Depends(get_
         FractalMember.left_at == None
     ).first()
 
+
+    # --- 1. Verify user is a user ---
+    u = db.query(User).filter(
+        User.id == user_id,
+    ).first()
+
+
     if not fm:
         raise HTTPException(status_code=404, detail="User is not an active member of this fractal")
 
@@ -339,11 +470,12 @@ def get_member_context(fractal_id: int, user_id: int, db: Session = Depends(get_
     # If latest round is closed → no open round
     if rnd.status != "open":
         return {
-            "username": fm.username,
+            "ok": True,
+            "username": u.username,
             "round_id": None,
             "round_level": None,
             "group_id": None,
-            "prefs": {}
+            "prefs": u.prefs or {}
         }
 
     # --- 3. Find group for this user in this round ---
@@ -356,9 +488,10 @@ def get_member_context(fractal_id: int, user_id: int, db: Session = Depends(get_
 
     # --- 4. Return result ---
     return {
-        "username": fm.username,
+        "ok": True,
+        "username": u.username,
         "round_id": rnd.id,
         "round_level": rnd.level,
         "group_id": group_id,
-        "prefs": fm.prefs or {}
+        "prefs": u.prefs or {}
     }

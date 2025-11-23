@@ -14,10 +14,3 @@
 ## Docker
 docker-compose up --build
 
-## API
-- POST /api/users/create  {"username":"bob","is_ai":false}
-- POST /api/users/list
-- POST /api/groups/create_level0 {"user_ids":[1,2,3,4,5,6,7,8]}
-- POST /api/posts  {"user_id":1,"text":"hello"}
-- POST /api/votes {"user_id":2,"message_id":1,"score":5}
-- POST /api/admin/init_db

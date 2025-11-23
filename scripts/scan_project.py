@@ -78,6 +78,7 @@ def extract_sqlalchemy_fields(node):
 
 def extract_fastapi_routes(tree):
     routes = []
+
     for node in ast.walk(tree):
         if isinstance(node, ast.FunctionDef):
             for decorator in node.decorator_list:
@@ -87,10 +88,40 @@ def extract_fastapi_routes(tree):
                         if decorator.args:
                             if isinstance(decorator.args[0], ast.Constant):
                                 path = decorator.args[0].value or "/"
+
+                        # Extract a structured response
+                        response = None
+                        for stmt in ast.walk(node):
+                            if isinstance(stmt, ast.Return):
+                                val = stmt.value
+                                # Case 1: literal dict/list
+                                try:
+                                    response = ast.literal_eval(val)
+                                except Exception:
+                                    # Case 2: dict with variables or complex expressions
+                                    if isinstance(val, ast.Dict):
+                                        response = {}
+                                        for k, v in zip(val.keys, val.values):
+                                            # Key
+                                            if isinstance(k, ast.Constant):
+                                                key = k.value
+                                            else:
+                                                key = ast.unparse(k)
+                                            # Value: show placeholder for variable names
+                                            if isinstance(v, ast.Name):
+                                                value = f"<{v.id}>"
+                                            else:
+                                                value = ast.unparse(v)
+                                            response[key] = value
+                                    else:
+                                        # Fallback: just show the source code
+                                        response = ast.unparse(val)
+
                         routes.append({
                             "method": decorator.func.attr.upper(),
                             "path": path,
-                            "function": node.name
+                            "function": node.name,
+                            "response": response
                         })
     return routes
 
@@ -149,6 +180,8 @@ def walk_project(root):
 # --------------------
 # Print AI-optimized
 # --------------------
+import json
+
 def print_report(report):
     for file, info in report.items():
         print(f"=== {file} ===")
@@ -176,10 +209,20 @@ def print_report(report):
             for r in info.fastapi_routes:
                 path = r['path'] if r['path'] else "/"
                 print(f"  - {r['method']} {path} → {r['function']}")
+                if r['response'] is not None:
+                    # Pretty-print JSON-like structure
+                    try:
+                        # If it's a dict/list, format it
+                        formatted = json.dumps(r['response'], indent=6)
+                        print(f"      Returns: {formatted}")
+                    except Exception:
+                        # Fallback to string
+                        print(f"      Returns: {r['response']}")
 
         if info.functions:
             # Show each function on its own line
             print("Functions:\n  " + "\n  ".join(info.functions))
+
 
 
 # --------------------

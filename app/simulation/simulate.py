@@ -39,7 +39,7 @@ def run_simulation():
         service.join_fractal(fractal.id, u.id)
 
     # Create level 0 groups
-    groups = service.create_level_groups(fractal.id, 0, USERS_PER_GROUP)
+    groups = service.create_level_groups(db, fractal.id, 0, USERS_PER_GROUP)
 
     # Each user creates proposals
     proposals = []

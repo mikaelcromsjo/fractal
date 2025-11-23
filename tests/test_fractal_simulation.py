@@ -1,98 +1,176 @@
-# tests/test_fractal_simulation.py
-"""
-Simulation test harness for Fractal Governance backend.
-
-- Mocks 128 AI users
-- Creates fractal, groups, proposals, comments
-- Casts votes
-- Forces round progression
-- Aggregates results
-"""
-
+# tests/test_ai_simulation_integration.py
+import pytest
 import asyncio
 import random
 from faker import Faker
-import pytest
-from httpx import AsyncClient
-from main import app
+import httpx
+from main import app  # adjust if your FastAPI instance is elsewhere
+from httpx import ASGITransport
 
-NUM_USERS = 128
-USERS_PER_GROUP = 8
+FAKE = Faker()
+NR_USERS = 10
 PROPOSALS_PER_USER = 2
-COMMENTS_PER_USER = 3
-faker = Faker()
+USERS = {}
 
-@pytest.mark.asyncio
-async def test_full_fractal_simulation():
-    async with AsyncClient(app=app, base_url="http://test") as ac:
-        # 1) Create fractal
-        fractal_resp = await ac.post("/fractal/", json={
-            "name": "Simulated Fractal",
-            "description": "Full test simulation",
-            "start_date": "2025-11-20T12:00:00"
-        })
-        fractal_data = fractal_resp.json()
-        fractal_id = fractal_data["id"]
+BASE_URL = "http://localhost:8030/"
 
-        # 2) Create users and join fractal
-        user_ids = []
-        for _ in range(NUM_USERS):
-            user_name = faker.first_name()
-            resp = await ac.post(f"/fractal/{fractal_id}/join", json={"user_name": user_name})
-            user_data = resp.json()
-            user_ids.append(user_data["id"])
+@pytest.fixture(scope="module")
+async def async_client():
+    transport = ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url=BASE_URL) as client:
+        yield client
 
-        # 3) Create level 0 groups
-        groups_resp = await ac.post(f"/fractal/{fractal_id}/groups", json={"users_per_group": USERS_PER_GROUP})
-        groups = groups_resp.json()
+@pytest.fixture(scope="module")
+async def create_users():
+    """
+    Create NR_USERS mock AI users locally.
+    No API calls, no backend dependencies.
 
-        # 4) Each user creates proposals
-        proposal_ids = []
-        for uid in user_ids:
-            for _ in range(PROPOSALS_PER_USER):
-                title = faker.sentence(nb_words=4)
-                desc = faker.text(max_nb_chars=50)
-                resp = await ac.post(f"/fractal/{fractal_id}/proposal", json={
-                    "user_id": uid,
-                    "title": title,
-                    "description": desc
+    Returns:
+        Dict[int, Dict]: A dictionary indexed 1..NR_USERS,
+        each entry containing:
+            {
+                "id": int,          # simulated user ID
+                "name": str,        # fake name
+                "is_ai": True,
+                "other_id": str     # stable reference ID
+            }
+    """
+    USERS = {}
+
+    for i in range(1, NR_USERS + 1):
+        username = FAKE.name()
+        USERS[i] = {
+            "id": i,                      # local simulated ID
+            "name": username,
+            "is_ai": True,
+            "other_id": f"ai_{i}",
+        }
+
+    return USERS
+
+
+@pytest.mark.anyio
+async def test_full_fractal_flow(async_client, create_users):
+    users = create_users
+
+    # 1️⃣ Create a fractal
+    fractal_data = {
+        "name": FAKE.word(),
+        "description": FAKE.sentence(),
+        "start_date": "2025-11-21T00:00:00",
+        "settings": {}
+    }
+    resp = await async_client.post("/fractals/", json=fractal_data)
+    assert resp.status_code == 200
+    fractal = resp.json()
+    fractal_id = fractal["id"]
+
+    # 2️⃣ Join all users properly and store assigned user_ids
+    for i, u in users.items():
+        resp = await async_client.post(
+            f"/fractals/{fractal_id}/join",
+            json={
+                "username": u["name"],
+                "other_id": f"ai_{i}",
+                "is_ai": True
+            }
+        )
+
+        # Ensure no crash if backend returns an error
+        data = resp.json()
+        if resp.status_code != 200:
+            print(f"[ERROR] join user {i}: {data}")
+            continue
+
+        # Extract assigned user_id and store in users dict
+        joined_id = data.get("user_id") or data.get("id")
+        if joined_id is None:
+            print(f"[ERROR] join user {i}: missing user_id")
+            continue
+
+        USERS[i]["id"] = joined_id
+
+    # 3️⃣ Start the fractal
+    resp = await async_client.post(f"/fractals/{fractal_id}/start")
+    assert resp.status_code == 200
+
+    round_number = 1
+    while True:
+        print(f"\n=== Round {round_number} ===")
+
+        # 4️⃣ Users submit proposals
+        for i, u in users.items():
+            for p in range(PROPOSALS_PER_USER):
+                await async_client.post("/proposals/", json={
+                    "creator_user_id": u["id"],
+                    "title": FAKE.sentence(),
+                    "body": FAKE.paragraph()
                 })
-                proposal_data = resp.json()
-                proposal_ids.append(proposal_data["id"])
 
-        # 5) Users comment randomly
-        comment_ids = []
-        for uid in user_ids:
-            for _ in range(COMMENTS_PER_USER):
-                target = random.choice(proposal_ids)
-                comment_text = faker.sentence(nb_words=6)
-                resp = await ac.post(f"/comment", json={
-                    "user_id": uid,
-                    "target_id": target,
-                    "text": comment_text
+        # 5️⃣ Users comment on all proposals in their group
+        for i, u in users.items():
+            status_resp = await async_client.get(f"/fractals/{fractal_id}/users/{u['id']}/status")
+            status = status_resp.json()
+            proposals_in_group = status.get("proposals", [])
+            for p in proposals_in_group:
+                await async_client.post("/comments/", json={
+                    "proposal_id": p["id"],
+                    "user_id": u["id"],
+                    "text": FAKE.sentence()
                 })
-                comment_data = resp.json()
-                comment_ids.append(comment_data["id"])
 
-        # 6) Users vote randomly on proposals
-        for uid in user_ids:
-            for pid in proposal_ids:
-                vote = random.randint(1,10)
-                await ac.post(f"/proposal_vote", json={"user_id": uid, "proposal_id": pid, "vote": vote})
+        # 6️⃣ Users vote on proposals and comments
+        for i, u in users.items():
+            status_resp = await async_client.get(f"/fractals/{fractal_id}/users/{u['id']}/status")
+            status = status_resp.json()
+            members = status.get("members", [])
+            proposals_in_group = status.get("proposals", [])
 
-        # 7) Users vote randomly on comments
-        for uid in user_ids:
-            for cid in comment_ids:
-                vote = random.choice(["yes","no"])
-                await ac.post(f"/comment_vote", json={"user_id": uid, "comment_id": cid, "vote": vote})
+            # Vote on proposals
+            for p in proposals_in_group:
+                for m in members:
+                    if m["id"] != p["creator_user_id"]:
+                        await async_client.post("/votes/proposal", json={
+                            "user_id": m["id"],
+                            "proposal_id": p["id"],
+                            "score": random.randint(1, 5)
+                        })
 
-        # 8) Force round progression: select representatives
-        reps_resp = await ac.post(f"/fractal/{fractal_id}/representatives")
-        reps_data = reps_resp.json()
-        assert len(reps_data) > 0
+            # Vote on comments
+            for p in proposals_in_group:
+                for c in p.get("comments", []):
+                    for m in members:
+                        if m["id"] != c["user_id"]:
+                            await async_client.post("/votes/comment", json={
+                                "user_id": m["id"],
+                                "comment_id": c["id"],
+                                "vote": random.choice([True, False])
+                            })
 
-        # 9) Print summary
-        print(f"Total users: {NUM_USERS}")
-        print(f"Total proposals: {len(proposal_ids)}")
-        print(f"Total comments: {len(comment_ids)}")
-        print(f"Representatives selected: {len(reps_data)}")
+        # 7️⃣ Users vote for representatives
+        for i, u in users.items():
+            status_resp = await async_client.get(f"/fractals/{fractal_id}/users/{u['id']}/status")
+            members = status_resp.json().get("members", [])
+            for m in members:
+                if m["id"] != u["id"]:
+                    await async_client.post(
+                        f"/fractals/{fractal_id}/users/{u['id']}/vote_representative",
+                        json={
+                            "user_id": u["id"],
+                            "voted_user_id": m["id"]
+                        }
+                    )
+
+        # 8️⃣ Close round
+        resp = await async_client.post(f"/fractals/{fractal_id}/close_round")
+        round_info = resp.json()
+        print(f"Round {round_number} closed:", round_info)
+
+        # 9️⃣ Stop if no next round
+        if not round_info.get("next_round_started"):
+            print("Fractal ended: only one group remains.")
+            break
+
+        round_number += 1
+

@@ -3,10 +3,13 @@
 User endpoints: create users, list users, set prefs.
 """
 from fastapi import APIRouter, HTTPException
+from fastapi import Depends
+from sqlalchemy.orm import Session
+
 from pydantic import BaseModel
 from app.infrastructure.db.session import SessionLocal
 from app.infrastructure.models import User, Proposal, FractalMember
-
+from app.infrastructure.db.session import get_db
 
 router = APIRouter()
 
@@ -19,8 +22,7 @@ class UserCreateReq(BaseModel):
     is_ai: bool = False
 
 @router.post("/", summary="Create a user")
-def create_user(req: UserCreateReq):
-    db = SessionLocal()
+def create_user(req: UserCreateReq, db: Session = Depends(get_db)):
     try:
         # --- Check if a user already exists on any platform ---
         user = None
@@ -55,8 +57,7 @@ def create_user(req: UserCreateReq):
         db.close()
 
 @router.get("/", summary="List users")
-def list_users():
-    db = SessionLocal()
+def list_users(db: Session = Depends(get_db)):
     try:
         rows = db.query(User).all()
         return {"users": [{"id": r.id, "username": r.username, "telegram_id": r.telegram_id} for r in rows]}
@@ -65,8 +66,7 @@ def list_users():
 
 # api/routers/users.py
 @router.get("/{user_id}/todo", summary="Get TODO items for a user")
-def get_todo(user_id: int):
-    db = SessionLocal()
+def get_todo(user_id: int, db: Session = Depends(get_db)):
     try:
         # For simplicity: return proposals/comments user can vote on
         user = db.query(User).get(user_id)

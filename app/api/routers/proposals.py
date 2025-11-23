@@ -3,6 +3,8 @@
 Proposal endpoints: create proposal, merge proposals.
 """
 from fastapi import APIRouter, HTTPException
+from fastapi import Depends
+from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from app.services.fractal_service import add_proposal
 from app.infrastructure.db.session import SessionLocal
@@ -10,6 +12,7 @@ from app.infrastructure.models import (
     Fractal, FractalMember, User, Group, GroupMember, Proposal, ProposalVote, Comment, CommentVote, Round
 )
 from sqlalchemy import func
+from app.infrastructure.db.session import get_db
 
 router = APIRouter()
 
@@ -20,8 +23,7 @@ class ProposalCreateReq(BaseModel):
     body: str = ""
 
 @router.post("/", summary="Create a proposal (auto group/round detection)")
-def create_proposal(req: ProposalCreateReq):
-    db: Session = SessionLocal()
+def create_proposal(req: ProposalCreateReq, db: Session = Depends(get_db)):
     try:
         # -------------------------
         # 1. Find active fractal
@@ -81,6 +83,7 @@ def create_proposal(req: ProposalCreateReq):
             .first()
         )
         if not fm:
+            print("DEBUG: User is not a member of fractal")
             raise HTTPException(403, "User is not a member of this fractal")
 
         # -------------------------
@@ -96,6 +99,8 @@ def create_proposal(req: ProposalCreateReq):
             .first()
         )
         if not gm:
+            print("DEBUG: User is not in a group for this round")
+            print(f"rid (round_id): {rid}, fid (fractal_id): {fid}, creator_user_id: {req.creator_user_id}")
             raise HTTPException(403, "User is not assigned to a group in this round")
 
         gid = gm.group_id
@@ -104,6 +109,7 @@ def create_proposal(req: ProposalCreateReq):
         # 5. Create proposal
         # -------------------------
         pid = add_proposal(
+            db,
             fractal_id=fid,
             group_id=gid,
             round_id=rid,
@@ -131,12 +137,11 @@ class MergeReq(BaseModel):
 
 
 @router.post("/{proposal_id}/merge", summary="Merge proposals into a new one")
-def merge_proposal(proposal_id: int, req: MergeReq):
+def merge_proposal(proposal_id: int, req: MergeReq, db: Session = Depends(get_db)):
     """
     Create a merged proposal using existing proposal ids.
     The new proposal will get meta.merged_from = [...]
     """
-    db = SessionLocal()
     try:
         # create new proposal
         new = Proposal(fractal_id=None, group_id=None, round_id=None, title=req.title, body=req.body, creator_user_id=req.creator_user_id, type="merged", meta={"merged_from": req.ids})

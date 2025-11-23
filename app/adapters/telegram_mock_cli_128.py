@@ -29,12 +29,13 @@ API_URL = "http://localhost:8030/api/v1"
 USERS = {}
 FAKE = Faker()
 CURRENT_FRACTAL = None
-PROPOSALS_PER_USER = 1  # Adjust as needed
+PROPOSALS_PER_USER = 2  # Adjust as needed
 PLATFORM = "ai"  # default platform for CLI AI users
 DEBUG = True  # default platform for CLI AI users
-NR_USERS = 64  # default platform for CLI AI users
+NR_USERS = 10  # default platform for CLI AI users
+RAND = .2 # 1 100%
 
-# Initialize 128 AI users
+# Initialize AI users
 for i in range(1, NR_USERS):
     USERS[i] = {"name": FAKE.name()}
 
@@ -54,13 +55,29 @@ def list_open_fractals():
     except Exception as e:
         print(f"[ERROR] Failed to list open fractals: {e}")
         return []
+    
+def get_group_id(user_id):
+    if not CURRENT_FRACTAL:
+        print("[ERROR] No fractal started")
+        return None
 
+    res = api_get(f"/fractals/{CURRENT_FRACTAL}/members/{user_id}")
 
-def get_group_id(user_id: int) -> int | None:
-    """
-    Return the cached group ID for a given user in the current round.
-    """
-    return CURRENT_FRACTAL_GROUPS.get(user_id)    
+    if not res:
+        print(f"[ERROR] No response when fetching group for user {user_id}")
+        return None
+
+    if not res.get("ok"):
+        print(f"[WARN] Failed to fetch member info for user {user_id}: {res}")
+        return None
+
+    group_id = res.get("group_id")
+    if group_id is None:
+        print(f"[WARN] User {user_id} has no group assigned: {res}")
+        return None
+
+    return group_id
+
 
 # --- Join open fractal ---
 def join_open(fractal_id):
@@ -246,7 +263,7 @@ def simulate_ai_round():
     # --- Step 1: Create proposals for each user in their group ---
     for user_id in USERS:
         for p in range(PROPOSALS_PER_USER):
-            if random.random() < 0.2:
+            if random.random() < 1:
                 res = create_proposal(user_id, f"AI Proposal {user_id}-{p}", "Random description")
                 if res:
                     prop_id = res.get("proposal_id") or res.get("id")
@@ -255,62 +272,62 @@ def simulate_ai_round():
 
     print(f"[INFO] {len(all_proposals)} proposals created by AI users")
 
-# --- Preload group IDs once ---
-group_cache = {uid: get_group_id(uid) for uid in USERS}
+    # --- Preload group IDs once ---
+    group_cache = {uid: get_group_id(uid) for uid in USERS}
 
-# --- Step 2: Create comments (only within the same group as proposal owner) ---
-all_comments = []
+    # --- Step 2: Create comments (only within the same group as proposal owner) ---
+    all_comments = []
 
-for proposal in all_proposals:
-    prop_id = proposal["id"]
-    owner_id = proposal["owner"]
-    owner_group_id = group_cache[owner_id]
+    for proposal in all_proposals:
+        prop_id = proposal["id"]
+        owner_id = proposal["owner"]
+        owner_group_id = group_cache[owner_id]
 
-    for user_id in USERS:
-        if group_cache[user_id] != owner_group_id:
-            continue  # skip users outside the group
+        for user_id in USERS:
+            if group_cache[user_id] != owner_group_id:
+                continue  # skip users outside the group
 
-        if random.random() < 0.2:
-            res = create_comment(user_id, prop_id, f"AI comment by {user_id}")
-            if res:
-                comment_id = res.get("comment_id") or res.get("id")
-                if comment_id:
-                    all_comments.append({
-                        "id": comment_id,
-                        "proposal_id": prop_id,
-                        "owner": user_id
-                    })
+            if random.random() < RAND:
+                res = create_comment(user_id, prop_id, f"AI comment by {user_id}")
+                if res:
+                    comment_id = res.get("comment_id") or res.get("id")
+                    if comment_id:
+                        all_comments.append({
+                            "id": comment_id,
+                            "proposal_id": prop_id,
+                            "owner": user_id
+                        })
 
-print(f"[INFO] {len(all_comments)} comments created by AI users")
+    print(f"[INFO] {len(all_comments)} comments created by AI users")
 
-# --- Step 3: Vote on proposals (only within same group) ---
-for proposal in all_proposals:
-    prop_id = proposal["id"]
-    owner_group_id = group_cache[proposal["owner"]]
+    # --- Step 3: Vote on proposals (only within same group) ---
+    for proposal in all_proposals:
+        prop_id = proposal["id"]
+        owner_group_id = group_cache[proposal["owner"]]
 
-    for user_id in USERS:
-        if group_cache[user_id] != owner_group_id:
-            continue
+        for user_id in USERS:
+            if group_cache[user_id] != owner_group_id:
+                continue
 
-        score = random.randint(1, 5)
-        vote_proposal(user_id, prop_id, score)
+            score = random.randint(1, 5)
+            vote_proposal(user_id, prop_id, score)
 
-print("[INFO] Voting on proposals completed")
+    print("[INFO] Voting on proposals completed")
 
-# --- Step 4: Vote on comments (only within same group) ---
-for comment in all_comments:
-    comment_id = comment["id"]
-    prop_owner = comment["owner"]
-    owner_group_id = group_cache[prop_owner]
+    # --- Step 4: Vote on comments (only within same group) ---
+    for comment in all_comments:
+        comment_id = comment["id"]
+        prop_owner = comment["owner"]
+        owner_group_id = group_cache[prop_owner]
 
-    for user_id in USERS:
-        if group_cache[user_id] != owner_group_id:
-            continue
+        for user_id in USERS:
+            if group_cache[user_id] != owner_group_id:
+                continue
 
-        vote = random.choice([True, False])
-        vote_comment(user_id, comment_id, vote)
+            vote = random.choice([True, False])
+            vote_comment(user_id, comment_id, vote)
 
-print("[INFO] Voting on comments completed")
+    print("[INFO] Voting on comments completed")
 
 def start_fractal(fractal_id = CURRENT_FRACTAL):
     try:
@@ -416,27 +433,6 @@ def run_cli():
             print(f"[ERROR] {e}")
 
 
-def get_group_id(user_id):
-    if not CURRENT_FRACTAL:
-        print("[ERROR] No fractal started")
-        return None
-
-    res = api_get(f"/fractals/{CURRENT_FRACTAL}/members/{user_id}")
-
-    if not res:
-        print(f"[ERROR] No response when fetching group for user {user_id}")
-        return None
-
-    if not res.get("ok"):
-        print(f"[WARN] Failed to fetch member info for user {user_id}: {res}")
-        return None
-
-    group_id = res.get("group")
-    if group_id is None:
-        print(f"[WARN] User {user_id} has no group assigned: {res}")
-        return None
-
-    return group_id
 
 if __name__ == "__main__":
     run_cli()

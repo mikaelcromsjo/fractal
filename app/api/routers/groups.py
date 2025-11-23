@@ -3,11 +3,14 @@
 Group endpoints: create groups for a round (uses service), get group details.
 """
 from fastapi import APIRouter, HTTPException
+from fastapi import Depends
+from sqlalchemy.orm import Session
+
 from pydantic import BaseModel
 from app.services.fractal_service import create_level_groups, promote_representatives_to_next_round, select_representative_for_group
 from app.infrastructure.db.session import SessionLocal
 from app.infrastructure.models import Group, GroupMember, User, Proposal, Comment, ProposalVote, CommentVote
-
+from app.infrastructure.db.session import get_db
 
 router = APIRouter()
 
@@ -20,14 +23,13 @@ class CreateGroupsReq(BaseModel):
 
 
 @router.post("/create", summary="Create level groups for a fractal (run grouping algorithm)")
-def create_groups(req: CreateGroupsReq):
-    created = create_level_groups(req.fractal_id, req.round_level, req.algorithm, req.options)
+def create_groups(req: CreateGroupsReq, db: Session = Depends(get_db)):
+    created = create_level_groups(db, req.fractal_id, req.round_level, req.algorithm, req.options)
     return {"created_group_ids": created}
 
 
 @router.get("/{group_id}", summary="Get group details")
-def get_group(group_id: int):
-    db = SessionLocal()
+def get_group(group_id: int, db: Session = Depends(get_db)):
     try:
         g = db.query(Group).get(group_id)
         if not g:
@@ -39,16 +41,15 @@ def get_group(group_id: int):
 
 
 @router.post("/{group_id}/select_representative", summary="Calculate representative for group")
-def select_rep(group_id: int):
-    rep = select_representative_for_group(group_id)
+def select_rep(group_id: int, db: Session = Depends(get_db)):
+    rep = select_representative_for_group(db, group_id)
     if not rep:
         raise HTTPException(status_code=404, detail="no representative selected")
     return {"group_id": group_id, "representative": rep}
 
 
 @router.get("/{group_id}/status", summary="Get status of a group")
-def group_status(group_id: int):
-    db: Session = SessionLocal()
+def group_status(group_id: int, db: Session = Depends(get_db)):
     try:
         group = db.query(Group).get(group_id)
         if not group:

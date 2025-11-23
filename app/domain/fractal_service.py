@@ -8,7 +8,6 @@ functions with data extracted from models.
 
 Functions included:
 - partition_into_groups
-- balance_groups
 - random_grouping
 - select_representative_from_group
 - compute_top_proposals
@@ -23,30 +22,32 @@ import random
 from statistics import mean
 
 
-def partition_into_groups(member_ids: List[int], group_size: int) -> List[List[int]]:
+from typing import List
+import math
+
+def partition_into_groups(member_ids: List[int], target_size: int) -> List[List[int]]:
     """
-    Partition a list of member IDs into sublists of at most `group_size`.
-    Last group may be smaller.
-
-    Example:
-    >>> partition_into_groups([1,2,3,4,5], 2)
-    [[1,2],[3,4],[5]]
+    Partition members into groups as evenly as possible.
+    Members from other groups are moved if the last group would be too large.
     """
-    return [member_ids[i:i + group_size] for i in range(0, len(member_ids), group_size)]
+    n = len(member_ids)
+    if n == 0:
+        return []
 
+    # Number of groups needed
+    num_groups = max(1, math.ceil(n / target_size))
+    base_size = n // num_groups
+    extra = n % num_groups  # first 'extra' groups get 1 more
 
-def balance_groups(groups: List[List[int]], target_size: int) -> List[List[int]]:
-    """
-    Redistribute members so groups are as equal as possible.
-    Simple flatten + re-chunk method.
+    groups = []
+    idx = 0
+    for i in range(num_groups):
+        size = base_size + (1 if i < extra else 0)
+        groups.append(member_ids[idx: idx + size])
+        idx += size
 
-    Example:
-    >>> balance_groups([[1,2],[3,4,5]], 2)
-    [[1,2],[3,4],[5]]
-    """
-    flat = [u for g in groups for u in g]
-    return [flat[i:i + target_size] for i in range(0, len(flat), target_size)]
-
+    return groups
+    
 
 def random_grouping(members: List[Dict], options: Dict) -> List[List[int]]:
     """
@@ -63,7 +64,7 @@ def random_grouping(members: List[Dict], options: Dict) -> List[List[int]]:
     rng = random.Random(seed)
     rng.shuffle(ids)
     groups = partition_into_groups(ids, options.get("group_size", 8))
-    return balance_groups(groups, options.get("group_size", 8))
+    return groups
 
 
 def select_representative_from_group(messages: List[Dict], members: List[int]) -> Optional[int]:

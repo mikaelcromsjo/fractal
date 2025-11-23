@@ -16,11 +16,9 @@ from app.infrastructure.models import (
     Fractal, FractalMember, User, Group, GroupMember, Proposal, ProposalVote, Comment, CommentVote, Round, RepresentativeSelection
 )
 
-def _get_session() -> Session:
-    return SessionLocal()
-
 
 def create_level_groups(
+    db,
     fractal_id: int, 
     round_level: int, 
     algorithm: str = "random", 
@@ -32,7 +30,6 @@ def create_level_groups(
     Prints debug info about groups and members.
     """
     options = options or {}
-    db = _get_session()
     try:
         # -------------------------
         # 1. Collect active members
@@ -99,11 +96,10 @@ def create_level_groups(
     finally:
         db.close()
 
-def add_proposal(fractal_id: int, group_id: int, round_id: int, title: str, body: str, creator_user_id: int, ptype: str = "base") -> int:
+def add_proposal(db, fractal_id: int, group_id: int, round_id: int, title: str, body: str, creator_user_id: int, ptype: str = "base") -> int:
     """
     Create a proposal record.
     """
-    db = _get_session()
     try:
         p = Proposal(fractal_id=fractal_id, group_id=group_id, round_id=round_id, title=title, body=body, creator_user_id=creator_user_id, type=ptype, created_at=datetime.now(timezone.utc))
         db.add(p)
@@ -114,12 +110,11 @@ def add_proposal(fractal_id: int, group_id: int, round_id: int, title: str, body
         db.close()
 
 
-def add_comment(proposal_id: int, user_id: int, text: str, parent_comment_id: int = None) -> int:
+def add_comment(db, proposal_id: int, user_id: int, text: str, parent_comment_id: int = None) -> int:
     """
     Create comment under a proposal or comment (thread).
     """
     from app.infrastructure.models import Comment
-    db = _get_session()
     try:
         c = Comment(proposal_id=proposal_id, parent_comment_id=parent_comment_id, user_id=user_id, text=text, created_at=datetime.now(timezone.utc))
         db.add(c)
@@ -130,12 +125,11 @@ def add_comment(proposal_id: int, user_id: int, text: str, parent_comment_id: in
         db.close()
 
 
-def cast_proposal_vote(proposal_id: int, voter_user_id: int, score: int):
+def cast_proposal_vote(db, proposal_id: int, voter_user_id: int, score: int):
     """
     Cast or update a proposal vote. Score should be between 1 and 10.
     """
     from app.infrastructure.models import ProposalVote
-    db = _get_session()
     try:
         # upsert behavior: attempt to find existing
         pv = db.query(ProposalVote).filter(ProposalVote.proposal_id == proposal_id, ProposalVote.voter_user_id == voter_user_id).first()
@@ -152,12 +146,11 @@ def cast_proposal_vote(proposal_id: int, voter_user_id: int, score: int):
         db.close()
 
 
-def cast_comment_vote(comment_id: int, voter_user_id: int, vote: bool):
+def cast_comment_vote(db, comment_id: int, voter_user_id: int, vote: bool):
     """
     Cast or update comment vote (yes/no).
     """
     from app.infrastructure.models import CommentVote
-    db = _get_session()
     try:
         cv = db.query(CommentVote).filter(CommentVote.comment_id == comment_id, CommentVote.voter_user_id == voter_user_id).first()
         if cv:
@@ -173,12 +166,11 @@ def cast_comment_vote(comment_id: int, voter_user_id: int, vote: bool):
         db.close()
 
 
-def select_representative_for_group(group_id: int) -> int:
+def select_representative_for_group(db, group_id: int) -> int:
     """
     Compute representative for a group by collecting proposal messages/votes in that group.
     Returns selected user id or None.
     """
-    db = _get_session()
     try:
         # collect messages (proposals) under group's round and group
         group = db.query(Group).get(group_id)
