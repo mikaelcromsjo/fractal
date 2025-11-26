@@ -1,15 +1,56 @@
+version: "3.9"
+
 services:
   app:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile
     container_name: fractal
     ports:
       - "8030:8030"
     volumes:
+      - ./app:/app
       - ./scripts:/app/scripts
-      - fractal_db:/dbdata
+      - ./data:/dbdata
     environment:
-      - DATABASE_URL=sqlite:////dbdata/app.db
+      - PYTHONPATH=/app
+      - DATABASE_URL=postgresql+asyncpg://fractal_user:fractal_pass@db:5432/fractal_db
+      - TEST_DATABASE_URL=postgresql+asyncpg://fractal_user:fractal_pass@db:5432/test_fractal_db
+      - BOT_TOKEN=${BOT_TOKEN}
+    depends_on:
+      - db
     command: uvicorn main:app --host 0.0.0.0 --port 8030 --reload
 
+  telegram-bot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: fractal_bot
+    volumes:
+      - ./app:/app
+      - ./scripts:/app/scripts
+      - ./data:/dbdata
+    environment:
+      - PYTHONPATH=/app
+      - DATABASE_URL=postgresql+asyncpg://fractal_user:fractal_pass@db:5432/fractal_db
+      - BOT_TOKEN=${BOT_TOKEN}
+    depends_on:
+      - db
+    command: python -m app.telegram.run_bot
+    restart: always
+
+  db:
+    image: postgres:15
+    container_name: fractal_db
+    restart: always
+    environment:
+      POSTGRES_USER: fractal_user
+      POSTGRES_PASSWORD: fractal_pass
+      POSTGRES_DB: fractal_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+
 volumes:
-  fractal_db:
+  db_data:

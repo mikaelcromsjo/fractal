@@ -1,5 +1,6 @@
 import os
 import ast
+import json
 
 PROJECT_ROOT = "app"  # Adjust to your project root
 
@@ -34,7 +35,7 @@ def is_sqlalchemy_model(node):
 def extract_pydantic_fields(node):
     fields = {}
     for stmt in node.body:
-        if isinstance(stmt, ast.FunctionDef):
+        if isinstance(stmt, ast.FunctionDef) or isinstance(stmt, ast.AsyncFunctionDef):
             continue
         if isinstance(stmt, ast.AnnAssign):
             if isinstance(stmt.target, ast.Name):
@@ -80,7 +81,7 @@ def extract_fastapi_routes(tree):
     routes = []
 
     for node in ast.walk(tree):
-        if isinstance(node, ast.FunctionDef):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             for decorator in node.decorator_list:
                 if isinstance(decorator, ast.Call) and hasattr(decorator.func, "attr"):
                     if decorator.func.attr in ["get", "post", "put", "delete", "patch"]:
@@ -94,27 +95,22 @@ def extract_fastapi_routes(tree):
                         for stmt in ast.walk(node):
                             if isinstance(stmt, ast.Return):
                                 val = stmt.value
-                                # Case 1: literal dict/list
                                 try:
                                     response = ast.literal_eval(val)
                                 except Exception:
-                                    # Case 2: dict with variables or complex expressions
                                     if isinstance(val, ast.Dict):
                                         response = {}
                                         for k, v in zip(val.keys, val.values):
-                                            # Key
                                             if isinstance(k, ast.Constant):
                                                 key = k.value
                                             else:
                                                 key = ast.unparse(k)
-                                            # Value: show placeholder for variable names
                                             if isinstance(v, ast.Name):
                                                 value = f"<{v.id}>"
                                             else:
                                                 value = ast.unparse(v)
                                             response[key] = value
                                     else:
-                                        # Fallback: just show the source code
                                         response = ast.unparse(val)
 
                         routes.append({
@@ -147,10 +143,11 @@ def extract_from_file(path):
                     "name": node.name,
                     "fields": extract_sqlalchemy_fields(node)
                 })
-        elif isinstance(node, ast.FunctionDef):
-            # Store full function signature instead of only the name
+
+        elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            prefix = "async def " if isinstance(node, ast.AsyncFunctionDef) else "def "
             info.functions.append(
-                "def " + node.name + "(" +
+                prefix + node.name + "(" +
                 ", ".join(arg.arg for arg in node.args.args) +
                 "):"
             )
@@ -180,8 +177,6 @@ def walk_project(root):
 # --------------------
 # Print AI-optimized
 # --------------------
-import json
-
 def print_report(report):
     for file, info in report.items():
         print(f"=== {file} ===")
@@ -210,19 +205,14 @@ def print_report(report):
                 path = r['path'] if r['path'] else "/"
                 print(f"  - {r['method']} {path} → {r['function']}")
                 if r['response'] is not None:
-                    # Pretty-print JSON-like structure
                     try:
-                        # If it's a dict/list, format it
                         formatted = json.dumps(r['response'], indent=6)
                         print(f"      Returns: {formatted}")
                     except Exception:
-                        # Fallback to string
                         print(f"      Returns: {r['response']}")
 
         if info.functions:
-            # Show each function on its own line
             print("Functions:\n  " + "\n  ".join(info.functions))
-
 
 
 # --------------------

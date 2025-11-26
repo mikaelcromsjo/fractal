@@ -1,4 +1,0 @@
-=== adapters/telegram_bot.py ===
-Functions: build_proposal_vote_keyboard, build_comment_vote_keyboard, run_bot
-=== adapters/telegram_mock_cli_128.py ===
-Functions: api_post, start_fractal, join_fractal, create_proposal, create_comment, vote_proposal, vote_comment, show_todo, show_status, simulate_ai_round, close_round, run_cli

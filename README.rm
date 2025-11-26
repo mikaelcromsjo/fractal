@@ -1,16 +1,3 @@
-# Fractal Backend - Boilerplate
+docker exec -it fractal python scripts/scan_project.py
 
-## Setup
-1. python -m venv .venv
-2. source .venv/bin/activate  (or Windows: .venv\Scripts\activate)
-3. pip install -r requirements.txt
-
-## Run (local)
-1. Initialize DB: python scripts/init_db.py
- docker exec -it fractal python scripts/init_db.py
- 
-2. Start server: uvicorn main:app --reload --port 8030
-
-## Docker
-docker-compose up --build
-
+docker exec -it fractal python -m pytest -o anyio_backend=asyncio --tb=line -q -x
