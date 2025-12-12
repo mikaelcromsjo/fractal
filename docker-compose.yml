@@ -14,8 +14,8 @@ services:
       - ./data:/dbdata
     environment:
       - PYTHONPATH=/app
-      - DATABASE_URL=postgresql+asyncpg://fractal_user:fractal_pass@db:5432/fractal_db
-      - TEST_DATABASE_URL=postgresql+asyncpg://fractal_user:fractal_pass@db:5432/test_fractal_db
+      - DATABASE_URL=${DATABASE_URL}
+      - TEST_DATABASE_URL=${TEST_DATABASE_URL}
       - BOT_TOKEN=${BOT_TOKEN}
     depends_on:
       - db
@@ -32,11 +32,12 @@ services:
       - ./data:/dbdata
     environment:
       - PYTHONPATH=/app
-      - DATABASE_URL=postgresql+asyncpg://fractal_user:fractal_pass@db:5432/fractal_db
+      - DATABASE_URL=${DATABASE_URL}
+      - TEST_DATABASE_URL=${TEST_DATABASE_URL}
       - BOT_TOKEN=${BOT_TOKEN}
     depends_on:
       - db
-    command: python -m app.telegram.run_bot
+    command: python -u -m telegram.hot_run_bot
     restart: always
 
   db:

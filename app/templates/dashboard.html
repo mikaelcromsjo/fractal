@@ -1,0 +1,691 @@
+<%!
+    import json
+    # Ensure default_name always exists
+    default_name = default_name if 'default_name' in locals() else 'Guest'
+%>
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Telegram WebApp Dashboard</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+.proposal-comment-vote {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 10px;
+    margin-left: 6px;
+}
+
+.comment-vote-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    border: 1px solid #ddd;
+    cursor: pointer;
+    user-select: none;
+    line-height: 1;
+}
+
+.comment-vote-minus {
+    color: #c0392b;
+    background: #fdecea;
+}
+
+.comment-vote-plus {
+    color: #1e8449;
+    background: #eafaf1;
+}
+
+.comment-vote-score {
+    min-width: 16px;
+    text-align: center;
+    font-weight: 600;
+    color: #555;
+}
+
+.proposal-card {
+    background: #fff;
+    border-radius: 14px;
+    padding: 12px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    animation: proposal-card-in 0.3s ease-out;
+}
+
+@keyframes proposal-card-in {
+    from {
+        transform: translateY(8px);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+/* Header row: avatar + name + date + optional score */
+.proposal-header-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.proposal-userblock {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.proposal-avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 999px;
+    object-fit: cover;
+}
+
+.proposal-usertext {
+    display: flex;
+    flex-direction: column;
+}
+
+.proposal-username {
+    font-weight: 600;
+    font-size: 14px;
+    color: #0088cc;
+    text-decoration: none;
+}
+
+.proposal-username:hover {
+    text-decoration: underline;
+}
+
+.proposal-date {
+    font-size: 12px;
+    color: #888;
+}
+
+.proposal-score-pill {
+    padding: 4px 8px;
+    border-radius: 999px;
+    background: rgba(0,136,204,0.08);
+    color: #0088cc;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+/* Main content */
+.proposal-main {
+    margin-top: 4px;
+}
+
+.proposal-title {
+    margin: 0 0 4px;
+    font-size: 16px;
+    font-weight: 600;
+    color: #222;
+}
+
+.proposal-text {
+    margin: 0;
+    font-size: 14px;
+    color: #444;
+    white-space: pre-wrap;
+}
+
+.proposal-tags {
+    margin-top: 6px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+
+.proposal-tag {
+    font-size: 11px;
+    padding: 2px 6px;
+    border-radius: 999px;
+    background: #f0f4ff;
+    color: #4a6fdc;
+}
+
+/* Rating slider */
+.proposal-rating-block {
+    margin-top: 8px;
+    padding: 8px 10px;
+    border-radius: 10px;
+    background: #f6f7fb;
+}
+
+.proposal-rating-top {
+    display: flex;
+    justify-content: space-between;
+    font-size: 13px;
+    margin-bottom: 6px;
+    color: #555;
+}
+
+.proposal-rating-value {
+    font-weight: 600;
+    color: #0088cc;
+}
+
+/* Simple visible slider */
+.proposal-slider {
+    width: 100%;
+    margin: 0;
+    -webkit-appearance: none;
+    appearance: none;
+    height: 6px;
+    border-radius: 999px;
+    background: #d0e4f7;
+    outline: none;
+}
+
+/* Chrome / Safari / Edge */
+.proposal-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: #fff;
+    border: 2px solid #0088cc;
+    box-shadow: 0 0 0 3px rgba(0,136,204,0.2);
+    cursor: pointer;
+}
+
+/* Firefox */
+.proposal-slider::-moz-range-thumb {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: #fff;
+    border: 2px solid #0088cc;
+    box-shadow: 0 0 0 3px rgba(0,136,204,0.2);
+    cursor: pointer;
+}
+
+.proposal-slider::-moz-range-track {
+    height: 6px;
+    border-radius: 999px;
+    background: #d0e4f7;
+}
+
+.proposal-slider:active::-webkit-slider-thumb,
+.proposal-slider:active::-moz-range-thumb {
+    transform: scale(1.05);
+}
+
+/* scale labels 1–10 */
+.proposal-rating-scale {
+    margin-top: 4px;
+    display: flex;
+    justify-content: space-between;
+    font-size: 11px;
+    color: #999;
+}
+
+/* Comments section */
+.proposal-comments-block {
+    margin-top: 6px;
+    padding-top: 6px;
+    border-top: 1px solid #eee;
+}
+
+.proposal-comments-header {
+    font-size: 13px;
+    font-weight: 600;
+    color: #555;
+    margin-bottom: 4px;
+}
+
+.proposal-comments-list {
+    _max-height: 130px;
+    _overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-bottom: 6px;
+}
+
+.proposal-comment-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+}
+
+.proposal-comment-avatar {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    object-fit: cover;
+}
+
+.proposal-comment-content {
+    flex: 1;
+    background: #f6f7fb;
+    border-radius: 10px;
+    padding: 6px 8px;
+
+}
+.proposal-comment-top {
+    display: flex;
+    justify-content: space-between;
+    font-size: 11px;
+    color: #777;
+}
+
+.proposal-comment-username {
+    font-weight: 600;
+    color: #444;
+}
+
+.proposal-comment-text {
+    font-size: 13px;
+    color: #333;
+    margin-top: 2px;
+}
+
+.proposal-comment-empty {
+    font-size: 12px;
+    color: #999;
+    font-style: italic;
+}
+
+/* Comment input row: wide and nice */
+.proposal-comment-input-row {
+    display: flex;
+    align-items: flex-end;
+    gap: 8px;
+    margin-top: 4px;
+}
+
+.proposal-comment-input {
+    flex: 1;
+    padding: 8px 10px;
+    border-radius: 12px;
+    border: 1px solid #ddd;
+    font-size: 13px;
+    resize: none;
+    min-height: 42px;
+    max-height: 80px;
+    box-sizing: border-box;
+}
+
+.proposal-comment-input:focus {
+    border-color: #0088cc;
+    box-shadow: 0 0 0 2px rgba(0,136,204,0.16);
+    outline: none;
+}
+
+.proposal-comment-send-btn {
+    border: none;
+    border-radius: 999px;
+    padding: 8px 14px;
+    font-size: 13px;
+    background: #0088cc;
+    color: #fff;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+
+        body {
+            font-family: "Telegram", sans-serif;
+            margin: 0;
+            padding: 0;
+            background: #f5f5f5;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+        #status-panel {
+            background: #fff;
+            padding: 12px 16px;
+            border-bottom: 1px solid #ddd;
+            flex-shrink: 0;
+        }
+        #status-panel p {
+            margin: 0;
+        }
+        #cards-container {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            padding: 12px 16px;
+            overflow-y: auto;
+            flex-grow: 1;
+        }
+        .card {
+            background: #fff;
+            padding: 12px;
+            border-radius: 12px;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+            opacity: 0;
+            transform: translateX(50px);
+            transition: all 0.4s ease-out;
+        }
+        .card.show {
+            opacity: 1;
+            transform: translateX(0);
+        }
+        #proposal-form {
+            background: #fff;
+            padding: 12px 16px;
+            margin: 12px 16px;
+            border-radius: 12px;
+            display: none;
+            flex-direction: column;
+            gap: 8px;
+        }
+        #proposal-form textarea {
+            resize: none;
+            border-radius: 8px;
+            padding: 8px;
+            border: 1px solid #ccc;
+        }
+        #proposal-form input, #proposal-form button {
+            padding: 8px;
+            border-radius: 8px;
+            border: 1px solid #ccc;
+        }
+        #proposal-form button {
+            background: #0088cc;
+            color: #fff;
+            border: none;
+            cursor: pointer;
+        }
+        #add-proposal-btn {
+            margin: 12px 16px;
+            padding: 10px;
+            border-radius: 12px;
+            border: none;
+            background: #0088cc;
+            color: #fff;
+            cursor: pointer;
+            width: calc(100% - 32px);
+            flex-shrink: 0;
+        }
+        #char-count {
+            text-align: right;
+            font-size: 12px;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+
+<div id="status-panel">
+    <p id="status">Authenticating...</p>
+</div>
+
+<div id="cards-container">
+    <!-- Cards will appear here -->
+</div>
+
+<button id="add-proposal-btn">Create Proposal</button>
+
+<div id="proposal-form">
+    <input type="text" id="proposal-name" placeholder="Proposal Name" />
+    <textarea id="proposal-desc" rows="4" maxlength="2000" placeholder="Description (max 2000 chars)"></textarea>
+    <div id="char-count">0 / 2000</div>
+    <button id="submit-proposal">Submit Proposal</button>
+    <button id="cancel-proposal" style="background:#ccc;color:#000;">Cancel</button>
+</div>
+
+<%text>
+<script>
+
+
+
+    const tg = window.Telegram.WebApp;
+    tg.ready();
+    tg.expand();
+
+    const initDataUnsafe = tg.initDataUnsafe || {};
+    const defaultName = "${default_name}";
+    const userName = (initDataUnsafe.user && initDataUnsafe.user.first_name)
+        ? initDataUnsafe.user.first_name
+        : defaultName;
+
+    let currentUserId = initDataUnsafe.user ? initDataUnsafe.user.id : null;
+
+
+    const statusEl = document.getElementById("status");
+    statusEl.innerText = "Hello, " + userName + "! Sending auth to server...";
+
+fetch("/api/v1/fractals/auth", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ init_data: tg.initData })
+})
+.then(res => res.json())
+.then(data => {
+    if(data.status === "ok") {
+        statusEl.innerText = "Authenticated as: " + data.first_name;
+        
+        // ✅ Set all current context variables
+        currentUserId = data.user_id;
+        currentFractalId = data.fractal_id;
+        currentRoundId = data.round_id;
+        currentGroupId = data.group_id;
+        
+        console.log("Auth context:", {
+            userId: currentUserId,
+            fractalId: currentFractalId,
+            roundId: currentRoundId,
+            groupId: currentGroupId
+        });
+        
+        loadNextCard(); // Start loading cards after auth
+    } else {
+        statusEl.innerText = "Auth failed: " + data.error;
+    }
+})
+.catch(err => {
+    console.error(err);
+    statusEl.innerText = "Error connecting to server.";
+});
+
+    // Proposal form logic
+    const addBtn = document.getElementById("add-proposal-btn");
+    const form = document.getElementById("proposal-form");
+    const cancelBtn = document.getElementById("cancel-proposal");
+    const submitBtn = document.getElementById("submit-proposal");
+    const nameInput = document.getElementById("proposal-name");
+    const descInput = document.getElementById("proposal-desc");
+    const charCount = document.getElementById("char-count");
+    const cardsContainer = document.getElementById("cards-container");
+
+    addBtn.addEventListener("click", function() {
+        form.style.display = "flex";
+        addBtn.style.display = "none";
+    });
+
+    cancelBtn.addEventListener("click", function() {
+        form.style.display = "none";
+        addBtn.style.display = "block";
+        nameInput.value = "";
+        descInput.value = "";
+        charCount.innerText = "0 / 2000";
+    });
+
+    descInput.addEventListener("input", function() {
+        charCount.innerText = descInput.value.length + " / 2000";
+    });
+
+submitBtn.addEventListener("click", function() {
+    const name = nameInput.value.trim();
+    const desc = descInput.value.trim();
+    if (!name || !desc) {
+        alert("Name and description required!");
+        return;
+    }
+    if (!currentUserId) {
+        alert("Cannot create proposal: no user id");
+        return;
+    }
+    if (currentFractalId === null || currentGroupId === null || currentRoundId === null) {
+        alert("Missing fractal/group/round context");
+        return;
+    }
+
+    fetch("/api/v1/fractals/create_proposal_async", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+            fractal_id: currentFractalId,
+            group_id: currentGroupId,
+            round_id: currentRoundId,
+            title: name,
+            body: desc,
+            creator_user_id: currentUserId,
+            type: "base",
+            meta: {}
+        })
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.status === "ok") {
+            // you may want to use returned proposal instead of addCard(name, desc)
+            form.style.display = "none";
+            addBtn.style.display = "block";
+            nameInput.value = "";
+            descInput.value = "";
+            charCount.innerText = "0 / 2000";
+        } else {
+            alert("Error creating proposal: " + data.error);
+        }
+    })
+    .catch(console.error);
+});
+
+
+// Load a single card from backend
+function loadNextCard() {
+    // Call with current context from auth
+    fetch(`/api/v1/fractals/load_card?group_id=${currentGroupId}&user_id=${currentUserId}`)
+        .then(res => res.text())  // HTMLResponse
+        .then(html => {
+            addCard(data);
+        })
+        .catch(err => console.error(err));
+}
+
+function addCard(html) {
+    var card = document.createElement("div");
+    card.className = "card";
+    card.innerHTML = html; // Insert full HTML from backend
+    cardsContainer.appendChild(card);
+
+    // Trigger animation
+    requestAnimationFrame(function() {
+        card.classList.add("show");
+    });
+
+    // Scroll to the new card
+    card.scrollIntoView({ behavior: "smooth" });
+}
+
+function onRatingChange(statusId, value) {
+    const el = document.getElementById("rating-value-" + statusId);
+    if (el) {
+        el.textContent = value + " / 10";
+    }
+}
+
+function onRatingCommit(proposalId, value) {
+    
+    if (!currentUserId) {
+        console.warn("No current user id, cannot rate");
+        return;
+    }
+
+    fetch("/api/v1/fractals/vote_proposal_async", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+            proposal_id: proposalId,
+            voter_user_id: currentUserId,
+            score: Number(value)
+        })
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.status === "ok") {
+            loadNextCard();
+        }
+    })
+    .catch(console.error);
+}
+
+function submitProposalComment(proposalId) {
+    const input = document.getElementById("comment-input-" + proposalId);
+    if (!input) return;
+    const text = input.value.trim();
+    if (!text) return;
+    if (!currentUserId) {
+        console.warn("No current user id, cannot comment");
+        return;
+    }
+
+    fetch("/api/v1/fractals/create_comment_async", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+            proposal_id: proposalId,
+            parent_comment_id: null,
+            user_id: currentUserId,
+            text: text
+        })
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.status === "ok") {
+            input.value = "";
+            // optionally: append new comment based on data.comment
+        }
+    })
+    .catch(console.error);
+}
+
+function voteComment(commentId, delta) {
+    if (!currentUserId) {
+        console.warn("No current user id, cannot vote");
+        return;
+    }
+
+    const vote = delta > 0; // +1 => True, -1 => False
+
+    fetch("/api/v1/fractals/vote_comment_async", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+            comment_id: commentId,
+            voter_user_id: currentUserId,
+            vote: vote
+        })
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.status === "ok" && typeof data.new_score !== "undefined") {
+            const el = document.getElementById("comment-vote-score-" + commentId);
+            if (el) el.textContent = data.new_score;
+        }
+    })
+    .catch(console.error);
+}
+
+    </script>
+</%text>
+
+</body>
+</html>

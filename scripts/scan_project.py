@@ -2,7 +2,7 @@ import os
 import ast
 import json
 
-PROJECT_ROOT = "app"  # Adjust to your project root
+PROJECT_ROOT = "."  # Adjust to your project root
 
 
 class FileInfo:

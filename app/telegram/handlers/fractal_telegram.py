@@ -1,0 +1,772 @@
+# telegram/handlers/fractal_telegram.py
+import logging
+from datetime import datetime, timedelta, timezone
+import re
+from typing import Optional, Dict, Any, Union
+from aiogram import types, Router
+from aiogram.filters import Command, CommandStart, StateFilter
+from aiogram.fsm.context import FSMContext
+from sqlalchemy.ext.asyncio import AsyncSession
+from html import escape
+from aiogram.enums import ParseMode
+from fastapi import HTTPException
+
+from infrastructure.db.session import get_async_session
+from services.fractal_service import (
+    create_fractal,
+    join_fractal,
+    start_fractal,
+    close_round,
+    get_fractal_from_name_or_id_repo,
+    set_active_fractal_repo
+)
+
+from infrastructure.db.session import get_async_session
+from services.fractal_service import (
+    create_proposal,
+    create_comment,
+    vote_proposal,
+    vote_comment,
+    vote_representative,
+    get_proposals_comments_tree,
+    get_proposal_comments_tree,
+    get_user_by_telegram_id,
+    get_user_info_by_telegram_id
+)
+
+from telegram.states import ProposalStates, CreateFractal
+from telegram.keyboards import create_keyboard, vote_comment_keyboard, vote_proposal_keyboard, list_more_keyboard, show_hidden_keyboard, cancel_keyboard, fractal_actions_menu
+from aiogram.filters import CommandStart
+
+
+logger = logging.getLogger(__name__)
+router = Router()
+
+
+# Central command list (help)
+COMMANDS = [
+    ("start", "Check if bot is alive"),
+    ("help", "Show available commands"),
+    ("create_fractal", "Create a new fractal"),
+    ("join", "Join a fractal (id or name)"),
+    ("start_fractal", "Start the fractal (admin)"),
+    ("close_round", "Close current round (admin)"),
+#    ("proposal", "Start a new proposal (FSM)"),
+#    ("comment", "Add a comment: /comment p_[id] <text> or /comment c_[id] <text>"),
+#    ("vote", "Vote on proposal/comment"),
+#    ("representative", "Vote for representative"),
+#    ("tree", "Show proposals/comments tree"),
+]
+
+# Callbacks
+
+@router.callback_query(lambda c: c.data == "cmd:help")
+async def cb_help(call: types.CallbackQuery):
+    await call.answer()
+    await cmd_help(call.message)
+
+@router.callback_query(lambda c: c.data.startswith("join:"))
+async def cb_join(call: types.CallbackQuery, state: FSMContext):
+    await call.answer()  # stop spinner
+
+    fractal_id = call.data.split(":", 1)[1]  # get the id from "join:42"
+
+    # optionally convert to int
+    try:
+        fractal_id = int(fractal_id)
+    except ValueError:
+        await call.message.answer("Invalid fractal ID.")
+        return
+
+    # call your existing join command logic
+    await cmd_join(call.message, fractal_id=fractal_id, state=state)
+    
+
+@router.callback_query(lambda c: c.data.startswith("tree:"))
+async def cb_tree(call: types.CallbackQuery, state: FSMContext):
+    await call.answer()  # stop the spinner
+
+    fractal_id = call.data.split(":", 1)[1]  # extract fractal ID
+
+    # call your existing cmd_start function directly
+    # assuming cmd_start accepts fractal_id and optionally FSM state
+    await cmd_tree(call.message, fractal_id=fractal_id)
+
+
+@router.callback_query(lambda c: c.data.startswith("start_fractal:"))
+async def cb_start_fractal(call: types.CallbackQuery, state: FSMContext):
+    await call.answer()  # stop the spinner
+
+    fractal_id = call.data.split(":", 1)[1]  # extract fractal ID
+
+    # call your existing cmd_start function directly
+    # assuming cmd_start accepts fractal_id and optionally FSM state
+    await cmd_start_fractal(call.message, fractal_id=fractal_id, state=state)
+
+
+@router.callback_query(lambda c: c.data == "cmd:create_fractal")
+async def cb_start_create_fractal(call: types.CallbackQuery, state: FSMContext):
+    await call.answer()
+    await call.message.answer("📝 Please enter the *fractal name*:", parse_mode="Markdown", reply_markup=cancel_keyboard())
+    await state.set_state(CreateFractal.name)
+
+
+@router.callback_query(lambda c: c.data.startswith("proposal:"))
+async def cb_proposal_button(call: types.CallbackQuery, state: FSMContext):
+    await call.answer()
+
+    # Extract fractal_id from callback_data
+    fractal_id = call.data.split(":", 1)[1]
+
+    # Save Telegram ID and fractal_id in FSM state
+    await state.update_data(
+        telegram_id=str(call.from_user.id),  # the user who clicked
+        fractal_id=fractal_id,
+        body=""
+    )
+
+    # Start the proposal FSM
+    await cmd_proposal_start(call.message, state)
+
+
+@router.callback_query(lambda c: c.data == "cmd:cancel")
+async def cb_cancel(call: types.CallbackQuery, state: FSMContext):
+    await call.answer()  # stops the spinner
+    await state.clear()  # cancels any FSM
+    await call.message.answer(
+        "❌ Operation canceled.",
+        reply_markup=default_menu()
+    )
+
+# -----------------------
+# Helpers
+# -----------------------
+
+
+async def get_user_info(telegram_id) -> Dict:
+    print("get_user_info")
+    async for db in get_async_session():
+            try:
+                user_info = await get_user_info_by_telegram_id(db, str(telegram_id))
+                print ("got user_info", user_info)
+                return user_info
+            except Exception:
+                print("failed in get_user_info")
+
+                logger.exception("Failed getting user data")
+                return {}
+
+def format_proposal_preview(proposal: Dict[str, Any]) -> str:
+    """Return HTML formatted preview of a proposal (placeholder)."""
+    pid = getattr(proposal, "id", None) or proposal.get("id")
+    title = getattr(proposal, "title", "") or proposal.get("title", "")
+    creator = getattr(proposal, "creator_user_id", "") or proposal.get("creator_user_id", "")
+    snippet = (getattr(proposal, "body", "") or proposal.get("body", ""))[:200].replace("<", "&lt;")
+    return f"<b>P_{pid}</b> {title}\nBy: {creator}\n{snippet}..."
+
+
+
+def parse_start_date(s: str) -> Optional[datetime]:
+    """
+    Accept either:
+      - minutes from now (e.g., "30")
+      - YYYYMMDDHHMM (e.g., 202511261530)
+    Returns UTC datetime or None.
+    """
+    if not s:
+        return None
+    s = s.strip()
+    try:
+        if re.fullmatch(r"\d{1,4}", s):
+            minutes = int(s)
+            return datetime.now(timezone.utc) + timedelta(minutes=minutes)
+        if re.fullmatch(r"\d{12}", s):
+            # assume provided time is in UTC
+            return datetime.strptime(s, "%Y%m%d%H%M").replace(tzinfo=timezone.utc)
+    except Exception:
+        return None
+    return None
+
+
+def sanitize_text(s: str) -> str:
+    """Escape characters that might be misinterpreted by Telegram when parse_mode=None is not set."""
+    if s is None:
+        return ""
+    return s.replace("<", "&lt;").replace(">", "&gt;")
+
+
+# -----------------------
+# Handlers
+# -----------------------
+
+
+from telegram.keyboards import default_menu  # adjust import to your structure
+
+@router.message(CommandStart())
+async def cmd_start(message: types.Message):
+    await message.answer(
+        "👋 Fractal bot online!\n"
+        "Use the menu below or type /help for available commands.\n"
+        "Make sure the bot is a *group admin*.",
+        reply_markup=default_menu(),
+        parse_mode="Markdown"
+    )
+
+@router.message(Command("help"))
+async def cmd_help(message: types.Message):
+
+    help_text = "Available commands:\n\n" + "\n".join(f"/{cmd} — {desc}" for cmd, desc in COMMANDS)
+    # send plain text, safe
+    await message.answer(help_text, parse_mode=None)
+
+
+@router.message(CreateFractal.name)
+async def fsm_get_name(message: types.Message, state: FSMContext):
+    await state.update_data(name=message.text.strip())
+    await message.answer(
+        "✏️ Now enter the *fractal description*.\n"
+        "You can write multiple lines in a single message.",
+        parse_mode="Markdown",
+        reply_markup=cancel_keyboard()
+    )
+    await state.set_state(CreateFractal.description)
+
+@router.message(CreateFractal.description)
+async def fsm_get_description(message: types.Message, state: FSMContext):
+    await state.update_data(description=message.text.strip())
+    await message.answer(
+        "📅 Finally, enter the *start date*:\n"
+        "• minutes-from-now (e.g. 30)\n"
+        "• or YYYYMMDDHHMM (e.g. 202511271300)",
+        parse_mode="Markdown",
+        reply_markup=cancel_keyboard()
+    )
+    await state.set_state(CreateFractal.start_date)
+
+@router.message(CreateFractal.start_date)
+async def fsm_get_start_date(message: types.Message, state: FSMContext):
+    start_date_raw = message.text.strip()
+    start_date = parse_start_date(start_date_raw)
+
+    if not start_date:
+        await message.answer("❌ Couldn't parse start_date.\nTry again (minutes or YYYYMMDDHHMM).")
+        return
+
+    data = await state.get_data()
+    name = data["name"]
+    description = data["description"]
+
+    async for db in get_async_session():
+        try:
+            fractal = await create_fractal(
+                db=db,
+                name=name,
+                description=description,
+                start_date=start_date,
+            )
+            fractal_id = getattr(fractal, "id", None)
+            fractal_name = getattr(fractal, "name", name)
+
+            from telegram.keyboards import fractal_created_menu
+
+            await message.answer(
+                f"✨ Fractal '{sanitize_text(fractal_name)}' created!\nid = {fractal_id}",
+                reply_markup=fractal_created_menu(fractal_id),
+                parse_mode=None,
+            )
+        except Exception as e:
+            logger.exception("FSM create_fractal failed")
+            await message.answer(f"Failed to create fractal: {e}")
+
+    await state.clear()
+
+@router.message(Command("create_fractal"))
+async def cmd_create_fractal(message: types.Message):
+    """
+    Usage:
+      /create_fractal name "description with spaces" start_date
+    start_date: minutes or YYYYMMDDHHMM
+    """
+    import shlex
+
+    # Remove the command itself
+    args = message.text[len("/create_fractal "):].strip()
+    if not args:
+        await message.answer(
+            "Usage: /create_fractal <name> \"<description>\" <start_date>\n"
+            "start_date: minutes-from-now (e.g. 30) or YYYYMMDDHHMM (e.g. 202511261530)",
+            parse_mode=None,
+            reply_markup=create_keyboard(),
+
+        )
+        return
+
+    try:
+        tokens = shlex.split(args)
+    except Exception:
+        await message.answer("Failed to parse arguments. Use quotes for description.", parse_mode=None)
+        return
+
+    if len(tokens) < 3:
+        await message.answer(
+            "Usage: /create_fractal <name> \"<description>\" <start_date>",
+            parse_mode=None,
+        )
+        return
+
+    name = tokens[0].strip()
+    description = tokens[1].strip()
+    start_date_raw = tokens[2].strip()
+    start_date = parse_start_date(start_date_raw)
+    if not start_date:
+        await message.answer("Couldn't parse start_date. Use minutes or YYYYMMDDHHMM.", parse_mode=None)
+        return
+
+    # create fractal using your existing session pattern
+    async for db in get_async_session():
+        try:
+            fractal = await create_fractal(
+                db=db,
+                name=name,
+                description=description,
+                start_date=start_date,
+            )
+            fractal_id = getattr(fractal, "id", None)
+            fractal_name = getattr(fractal, "name", name)
+
+
+            from telegram.keyboards import fractal_created_menu  # adjust import as needed
+
+            await message.answer(
+                f"✨ Fractal '{sanitize_text(fractal_name)}' created!\nid = {fractal_id}",
+                reply_markup=fractal_created_menu(fractal_id),
+                parse_mode=None,
+            )
+        except Exception as e:
+            logger.exception("create_fractal failed")
+            await message.answer(f"Failed to create fractal: {e}", parse_mode=None)
+
+
+@router.message(Command("join"))
+async def cmd_join(
+    message: types.Message,
+    state: FSMContext,
+    fractal_id: Union[str, int] | None = None
+):
+    """
+    /join <fractal_id_or_name>
+    After join, store internal user_id and active fractal in FSM state.
+    """
+    if fractal_id is None:
+        parts = message.text.split(maxsplit=1)
+        if len(parts) < 2:
+            await message.answer("Usage: /join <fractal_id|fractal_name>", parse_mode=None)
+            return
+        fractal_id = parts[1].strip()
+
+    # ✅ Ensure fractal_id is always str
+    if not fractal_id:
+        await message.answer("No fractal ID or name provided.", parse_mode=None)
+        return
+
+    # ✅ SINGLE DB SESSION for entire operation
+    async for db in get_async_session():
+        try:
+            # 1. Lookup fractal by id or name
+            fractal = await get_fractal_from_name_or_id_repo(db=db, fractal_identifier=fractal_id)
+            if not fractal:
+                # ✅ Safe: fractal_id is guaranteed str here
+
+                await message.answer(
+                    f"❌ Fractal '{sanitize_text(str(fractal_id))}' not found.", 
+                    parse_mode=None
+                )
+                return
+
+            # 2. Continue with join logic...
+            fractal_id_int = fractal.id
+            fractal_name = fractal.name
+            
+            user_info = {
+                "username": getattr(message.from_user, "username", ""),
+                "telegram_id": str(message.from_user.id)
+            }
+                    
+            try:
+                user = await join_fractal(db, user_info, fractal_id)
+                await message.answer("✅ Joined!")
+            except ValueError as e:
+                await message.answer(f"❌ {str(e)}")
+                return
+                            
+            # Store in FSM
+            await state.update_data(
+                user_id=user.id,
+                fractal_id=fractal_id_int,
+                fractal_name=fractal_name
+            )
+            
+            await message.answer(
+                f"✅ Welcome to '{sanitize_text(fractal_name)}'!\n",
+                parse_mode=None
+            )
+            
+        except HTTPException as e:
+            await message.answer(f"❌ Cannot join: {sanitize_text(str(e.detail))}", parse_mode=None)
+        except Exception as e:
+            logger.exception("Join failed")
+            await message.answer(f"❌ Failed to join: {sanitize_text(str(e))}", parse_mode=None)
+
+
+@router.message(Command("start_fractal"))
+async def cmd_start_fractal(
+    message: types.Message,
+    state: FSMContext,
+    fractal_id: str | None = None  # can be passed from button
+):
+    """
+    /start_fractal <fractal_id>
+    """
+    if fractal_id is None:
+        # parse from message text if user typed the command manually
+        parts = message.text.split(maxsplit=1)
+        if len(parts) < 2:
+            await message.reply("Usage: /start_fractal <fractal_id>")
+            return
+        fractal_id = parts[1].strip()
+
+    async for db in get_async_session():
+        try:
+            print("start fractal")
+            round = await start_fractal(db, int(fractal_id))            
+        except Exception as e:
+            logger.exception("Failed to start fractal")
+            await message.answer(f"Failed to start fractal: {e}", parse_mode=None)
+            return
+
+    await message.answer(f"🚀 Fractal `{fractal_id}` started!", parse_mode="Markdown", reply_markup=fractal_actions_menu(fractal_id))
+
+@router.message(Command("close_round"))
+async def cmd_close_round(message: types.Message):
+    """
+    Admin command: close_round <round_id>
+    """
+    parts = message.text.split(maxsplit=1)
+    if len(parts) < 2 or not parts[1].isdigit():
+        await message.answer("Usage: /close_round <round_id>", parse_mode=None)
+        return
+    round_id = int(parts[1].strip())
+
+    async for db in get_async_session():
+        try:
+            # close_round signature: async def close_round(db: AsyncSession, round_id: int) -> Round
+            res = await close_round(db=db, round_id=round_id)
+            next_round_id = getattr(res, "id", None)
+            # Optionally broadcast: need to find fractal id for this round, if available
+            fractal_id = getattr(res, "fractal_id", None)
+            await message.answer(f"Round closed for round {round_id}.", parse_mode=None)
+        except Exception as e:
+            logger.exception("close_round failed")
+            await message.answer(f"Failed to close round: {e}", parse_mode=None)
+
+
+
+# -------------------------
+# Proposal FSM: Start + Done
+# -------------------------
+
+@router.message(Command("proposal"))
+async def cmd_proposal_start(
+    message: types.Message,
+    state: FSMContext,
+    fractal_id: str | None = None
+):
+    """
+    Start FSM to create a proposal.
+    Can be called via button (fractal_id) or /proposal command.
+    Supports one-liner: /proposal "Title: Body"
+    """
+    # Save fractal_id and Telegram ID in FSM state
+    await state.update_data(fractal_id=fractal_id)
+    await state.update_data(body="")
+    await state.update_data(telegram_id=str(message.from_user.id))  # important
+
+    text = message.text or ""
+
+    # One-liner support: /proposal "Title: Body"
+    if '"' in text:
+        try:
+            quoted = text.split('"')[1]  # text inside quotes
+            if ":" in quoted:
+                title, body = map(str.strip, quoted.split(":", 1))
+            else:
+                title = quoted.strip()
+                body = ""
+            await state.update_data(title=title, body=body)
+
+            if body:
+                # Directly create proposal if body present
+                await proposal_done(message, state)
+                return
+            else:
+                # Ask for body
+                await state.set_state(ProposalStates.waiting_for_body)
+                await message.answer(
+                    f"Title saved: {title}\nSend body for this proposal (one message).",
+                    reply_markup=cancel_keyboard(), parse_mode=None
+                )
+                return
+        except Exception:
+            pass
+
+    # Normal FSM flow: ask for title first
+    await state.set_state(ProposalStates.waiting_for_title)
+    await message.answer(
+        "Creating a proposal. Send the title as text.",
+        reply_markup=cancel_keyboard()
+    )
+
+
+async def proposal_done(message: types.Message, state: FSMContext):
+    """
+    Complete a proposal creation.
+    Expects FSM state to contain 'title', 'body', 'telegram_id', and optionally 'fractal_id'.
+    """
+    data = await state.get_data()
+    title = data.get("title", "").strip()
+    body = data.get("body", "").strip()
+    telegram_id = data.get("telegram_id")  # fetched from FSM
+
+    if not title or not body:
+        await message.answer("❌ Title or body missing. Proposal canceled.")
+        await state.clear()
+        return
+
+    if len(body) > 2000:
+        await message.answer("❌ Body too long (max 2000 chars). Proposal canceled.")
+        await state.clear()
+        return
+
+    async for db in get_async_session():
+        # Fetch the correct user using saved Telegram ID
+        user_info = await get_user_info(str(telegram_id))
+        if not user_info:
+            await message.answer("❌ You must join a fractal first!")
+            await state.clear()
+            return
+
+        fractal_id = int(user_info.get("fractal_id", 0))
+        group_id = int(user_info.get("group_id", 0))
+        round_id = int(user_info.get("round_id", 0))
+        creator_user_id = int(user_info.get("creator_user_id", 0))
+
+        try:
+            proposal = await create_proposal(
+                db=db,
+                fractal_id=fractal_id,
+                group_id=group_id,
+                round_id=round_id,
+                title=title,
+                body=body,
+                creator_user_id=creator_user_id,
+            )
+            pid = getattr(proposal, "id", None) or (proposal.get("id") if isinstance(proposal, dict) else None)
+
+            # Escape for HTML
+            safe_title = escape(title)
+            safe_creator = escape(str(telegram_id))
+            safe_snippet = escape(body[:200])
+
+            html_text = f"<b>P_{pid}</b> {safe_title}\nBy: {safe_creator}\n{safe_snippet}..."
+            await message.answer(
+                html_text,
+                reply_markup=vote_proposal_keyboard(pid),
+                parse_mode=ParseMode.HTML
+            )        
+        except Exception as e:
+            logger.exception("create_proposal_async failed")
+            await message.answer(f"❌ Failed to create proposal: {escape(str(e))}")
+
+    # Clear FSM state
+    await state.clear()
+
+
+@router.message(lambda msg: msg.text is not None, StateFilter(ProposalStates.waiting_for_title))
+async def proposal_title_received(message: types.Message, state: FSMContext):
+    title = message.text.strip()
+    if not title:
+        await message.answer("Title cannot be empty. Send text for the title.")
+        return
+
+    await state.update_data(title=title)
+    await state.set_state(ProposalStates.waiting_for_body)
+    await message.answer(f"Title saved: {title}\nSend body for this proposal (one message).", reply_markup=cancel_keyboard(), parse_mode=None)
+
+
+@router.message(lambda msg: msg.text is not None, StateFilter(ProposalStates.waiting_for_body))
+async def proposal_body_received(message: types.Message, state: FSMContext):
+    body = message.text.strip()
+    if not body:
+        await message.answer("Body cannot be empty. Send text for the body.")
+        return
+
+    await state.update_data(body=body)
+    await proposal_done(message, state)
+
+
+# -------------------------
+# Comment
+# -------------------------
+@router.message(Command("comment"))
+async def cmd_comment(message: types.Message):
+    """
+    /comment p_<proposal_id> <text>
+    /comment c_<comment_id> <text>
+    """
+    parts = message.text.split(maxsplit=2)
+    if len(parts) < 3:
+        await message.answer("Usage: /comment p_<id> <text>  OR  /comment c_<id> <text>", parse_mode=None)
+        return
+    id_part = parts[1]
+    text = parts[2].strip()
+    if id_part.startswith("p_"):
+        pid = int(id_part[2:])
+        parent = None
+        async for db in get_async_session():
+            try:
+                comment = await create_comment(db=db, proposal_id=pid, user_id=message.from_user.id, text=text, parent_comment_id=None)
+                cid = getattr(comment, "id", None) or (comment.get("id") if isinstance(comment, dict) else None)
+                await message.answer(f"Comment added to proposal P_{pid}: C_{cid}", parse_mode=None)
+            except Exception as e:
+                logger.exception("create_comment_async failed")
+                await message.answer(f"Failed to add comment: {e}")
+    elif id_part.startswith("c_"):
+        cid = int(id_part[2:])
+        # Need to know which proposal this comment belongs to; service should handle parent linkage
+        async for db in get_async_session():
+            try:
+                comment = await create_comment(db=db, proposal_id=0, user_id=message.from_user.id, text=text, parent_comment_id=cid)
+                cid2 = getattr(comment, "id", None) or (comment.get("id") if isinstance(comment, dict) else None)
+                await message.answer(f"Reply added: C_{cid2}")
+            except Exception as e:
+                logger.exception("create_comment_async failed (reply)")
+                await message.answer(f"Failed to add reply: {e}")
+    else:
+        await message.answer("ID must be p_<id> or c_<id>", parse_mode=None)
+
+# -------------------------
+# Vote
+# -------------------------
+@router.message(Command("vote"))
+async def cmd_vote(message: types.Message):
+    """
+    /vote p_<id> 1-10
+    /vote c_<id> yes/no/1/0
+    """
+    parts = message.text.split()
+    if len(parts) < 3:
+        await message.answer("Usage: /vote p_<id> <1-10>  OR  /vote c_<id> <yes|no|1|0>", parse_mode=None)
+        return
+    id_part = parts[1]
+    val = parts[2].lower()
+
+    async for db in get_async_session():
+        try:
+            if id_part.startswith("p_"):
+                pid = int(id_part[2:])
+                score = int(val) if val.isdigit() else None
+                if score is None or not (1 <= score <= 10):
+                    await message.answer("Proposal votes must be 1-10")
+                    return
+                await vote_proposal(db=db, proposal_id=pid, voter_user_id=message.from_user.id, score=score)
+                await message.answer("Proposal vote recorded.")
+            elif id_part.startswith("c_"):
+                cid = int(id_part[2:])
+                vote_bool = True if val in ("yes","y","1","true") else False
+                await vote_comment(db=db, comment_id=cid, voter_user_id=message.from_user.id, vote=vote_bool)
+                await message.answer("Comment vote recorded.")
+            else:
+                await message.answer("ID must be p_<id> or c_<id>", parse_mode=None)
+        except Exception as e:
+            logger.exception("vote failed")
+            await message.answer(f"Failed to record vote: {e}")
+
+# -------------------------
+# Representative
+# -------------------------
+@router.message(Command("representative"))
+async def cmd_rep(message: types.Message):
+    """
+    /representative <id|@username>
+    """
+    parts = message.text.split(maxsplit=1)
+    if len(parts) < 2:
+        await message.answer("Usage: /representative <user_id|@username>")
+        return
+    arg = parts[1].strip()
+    async for db in get_async_session():
+        try:
+            candidate_id = None
+            if arg.startswith("@"):
+                candidate_id = await get_id_from_username(db, arg[1:])
+                if candidate_id is None:
+                    await message.answer("Cannot resolve username to id.")
+                    return
+            else:
+                candidate_id = int(arg)
+            user = get_user(message.from_user_id)
+            await vote_representative(db=db, group_id=user["group_id"], voter_user_id=user["user_id"], candidate_user_id=candidate_id)
+            await message.answer("Representative vote recorded.")
+        except Exception as e:
+            logger.exception("vote representative failed")
+            await message.answer(f"Failed to vote representative: {e}")
+
+# -------------------------
+# Tree display
+# -------------------------
+@router.message(Command("tree"))
+async def cmd_tree(message: types.Message, fractal_id: str | None = None):
+    """
+    /tree                -> proposals tree for active group (requires active fractal)
+    /tree p_<id>         -> specific proposal
+    /tree c_<id>         -> (future) comment subtree
+    """
+
+    print (message.text)
+    parts = message.text.split(maxsplit=1)
+    arg = parts[1].strip() if len(parts) > 1 else None
+    print (arg)
+
+    async for db in get_async_session():
+        try:
+            if arg is None:
+                # need user's active group from FSM or in-memory
+                # quick try: ask user to /join first
+                await message.answer("Showing tree for active group is not implemented unless you have joined a fractal and group. Use /join first.")
+                return
+            if arg.startswith("p_"):
+                pid = int(arg[2:])
+                print("get tree")
+                tree = await get_proposal_comments_tree(db=db, proposal_id=pid)
+                # tree formatting placeholder
+                print(tree)
+                await message.answer(f"Proposal P_{pid} tree (placeholder):\n")
+            elif arg.startswith("c_"):
+                cid = int(arg[2:])
+                await message.answer("Comment subtree not yet implemented.")
+            else:
+                await message.answer("Invalid /tree argument. Use /tree, /tree p_<id> or /tree c_<id>", parse_mode=None)
+        except Exception as e:
+            logger.exception("tree failed")
+            await message.answer(f"Failed to get tree: {e}")
+
+
+# Echo everything in the group
+@router.message()
+async def echo_all(message: types.Message):
+    if message.text:
+        await message.answer(f"Echo: {message.text}")
+    else:
+        await message.answer(f"Received non-text message of type: {message.content_type}")          
+
+

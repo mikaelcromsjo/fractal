@@ -1,117 +1,168 @@
-#~~~{"id":"70513","variant":"standard","title":"Async SQLAlchemy Models"} 
 # app/infrastructure/models.py
-from sqlalchemy import Column, Integer, String, Text, Boolean, DateTime, ForeignKey, JSON, UniqueConstraint
+from sqlalchemy import Column, Integer, String, Text, Boolean, DateTime, ForeignKey, JSON, UniqueConstraint, func
 from sqlalchemy.orm import relationship, backref
 from datetime import datetime, timezone
-from app.infrastructure.db.session import Base
+from infrastructure.db.session import Base
+from sqlalchemy.dialects.postgresql import JSONB
+
+
+# Queue
+
+class QueueItem(Base):
+    __tablename__ = "queue_items"
+
+    id = Column(Integer, primary_key=True)
+
+    group_id = Column(
+        Integer,
+        ForeignKey("groups.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True
+    )
+
+    user_id = Column(
+        Integer,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True
+    )
+
+    # 0 = proposal, 1 = comment
+    item_type = Column(Integer, nullable=False)
+
+    # proposal_id or comment_id
+    item_id = Column(Integer, nullable=False)
+
+    consumed = Column(Boolean, default=False, nullable=False)
+
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    user = relationship("User")
+    group = relationship("Group")
+
+    def __repr__(self):
+        return (
+            f"<QueueItem id={self.id} u={self.user_id} "
+            f"type={self.item_type} item={self.item_id} consumed={self.consumed}>"
+        )
 
 # ----------------------------
 # User
 # ----------------------------
 class User(Base):
     __tablename__ = "users"
-
     id = Column(Integer, primary_key=True)
     username = Column(String(200), nullable=True)
     telegram_id = Column(String(64), nullable=True, index=True)
-    is_ai = Column(Boolean, default=False)
+    other_id = Column(String(64), nullable=True, index=True)
     prefs = Column(JSONB, default=dict)
-    created_at = Column(DateTime(timezone=True), default=now)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    active_fractal_id = Column(Integer)
 
-    # Relationships
+    # Private relationships 
+    """
     fractal_memberships = relationship("FractalMember", back_populates="_user")
-    group_memberships = relationship("GroupMember", back_populates="_user")
-    proposals_created = relationship("Proposal", back_populates="_creator")
-    proposal_votes = relationship("ProposalVote", back_populates="_voter")
-    comments = relationship("Comment", back_populates="_user")
-    comment_votes = relationship("CommentVote", back_populates="_voter")
-    representative_positions = relationship("RepresentativeSelection", back_populates="_representative")
+    _group_memberships = relationship("GroupMember", back_populates="_user")
+    _proposals_created = relationship("Proposal", back_populates="_creator")
+    _proposal_votes = relationship("ProposalVote", back_populates="_voter")
+    _comments = relationship("Comment", back_populates="_user")
+    _comment_votes = relationship("CommentVote", back_populates="_voter")
+    _representative_positions = relationship("RepresentativeSelection", back_populates="_representative")
+"""
 
 # ----------------------------
 # Fractal
 # ----------------------------
 class Fractal(Base):
     __tablename__ = "fractals"
-
     id = Column(Integer, primary_key=True)
     name = Column(String(255), nullable=False)
     description = Column(Text, nullable=True)
     start_date = Column(DateTime(timezone=True), nullable=False)
     status = Column(String(50), default="waiting")
     settings = Column(JSONB, default=dict)
-    created_at = Column(DateTime(timezone=True), default=now)
+    created_at = Column(DateTime(timezone=True), default=func.now())
+    meta = Column(JSON, default=dict)
 
-    # Relationships
-    members = relationship("FractalMember", back_populates="_fractal")
-    rounds = relationship("Round", back_populates="_fractal")
-    proposals = relationship("Proposal", back_populates="_fractal")
+    # Private relationships
+    """
+    _members = relationship("FractalMember", back_populates="_fractal")
+    _rounds = relationship("Round", back_populates="_fractal")
+    _proposals = relationship("Proposal", back_populates="_fractal")
+    _groups = relationship("Group", back_populates="_fractal")
+"""
+
 
 class FractalMember(Base):
     __tablename__ = "fractal_members"
-
     id = Column(Integer, primary_key=True)
     fractal_id = Column(Integer, ForeignKey("fractals.id"), index=True)
     user_id = Column(Integer, ForeignKey("users.id"), index=True)
-    joined_at = Column(DateTime(timezone=True), default=now)
+    joined_at = Column(DateTime(timezone=True), default=func.now())
     left_at = Column(DateTime(timezone=True), nullable=True)
     role = Column(String(50), default="member")
 
-    fractal = relationship("Fractal", back_populates="_members")
-    user = relationship("User", back_populates="_fractal_memberships")
+"""
+    # Private relationships
+    _fractal = relationship("Fractal", back_populates="_members")
+    _user = relationship("User", back_populates="_fractal_memberships")
+"""
 
 # ----------------------------
 # Round
 # ----------------------------
 class Round(Base):
     __tablename__ = "rounds"
-
     id = Column(Integer, primary_key=True)
     fractal_id = Column(Integer, ForeignKey("fractals.id"), index=True)
     level = Column(Integer, default=0)
     started_at = Column(DateTime(timezone=True), nullable=True)
     ended_at = Column(DateTime(timezone=True), nullable=True)
     status = Column(String(50), default="open")
-
-    fractal = relationship("Fractal", back_populates="_rounds")
-    groups = relationship("Group", back_populates="_round")
-    proposals = relationship("Proposal", back_populates="_round")
+"""
+    _fractal = relationship("Fractal", back_populates="_rounds")
+    _groups = relationship("Group", back_populates="_round")
+    _proposals = relationship("Proposal", back_populates="_round")
+"""
 
 # ----------------------------
 # Group
 # ----------------------------
 class Group(Base):
     __tablename__ = "groups"
-
     id = Column(Integer, primary_key=True)
     round_id = Column(Integer, ForeignKey("rounds.id"), index=True)
+    fractal_id = Column(Integer, ForeignKey("fractals.id"), index=True, nullable=False)
     level = Column(Integer, default=0)
     meta = Column(JSONB, default=dict)
-    created_at = Column(DateTime(timezone=True), default=now)
+    created_at = Column(DateTime(timezone=True), default=func.now())
 
-    round = relationship("Round", back_populates="_groups")
-    members = relationship("GroupMember", back_populates="_group")
-    proposals = relationship("Proposal", back_populates="_group")
-    representative_selections = relationship("RepresentativeSelection", back_populates="_group")
+"""
+    _round = relationship("Round", back_populates="_groups")
+    _members = relationship("GroupMember", back_populates="_group")
+    _proposals = relationship("Proposal", back_populates="_group")
+    _representative_selections = relationship("RepresentativeSelection", back_populates="_group")
+    _fractal = relationship("Fractal", back_populates="_groups")
+"""
 
 class GroupMember(Base):
     __tablename__ = "group_members"
-
     id = Column(Integer, primary_key=True)
     group_id = Column(Integer, ForeignKey("groups.id"), index=True)
     user_id = Column(Integer, ForeignKey("users.id"), index=True)
-    joined_at = Column(DateTime(timezone=True), default=now)
+    joined_at = Column(DateTime(timezone=True), default=func.now())
     left_at = Column(DateTime(timezone=True), nullable=True)
     replaced_by = Column(Integer, nullable=True)
-
-    group = relationship("Group", back_populates="_members")
-    user = relationship("User", back_populates="_group_memberships")
+"""
+    _group = relationship("Group", back_populates="_members")
+    _user = relationship("User", back_populates="_group_memberships")
+"""
 
 # ----------------------------
 # Proposal
 # ----------------------------
 class Proposal(Base):
     __tablename__ = "proposals"
-
     id = Column(Integer, primary_key=True)
     fractal_id = Column(Integer, ForeignKey("fractals.id"), index=True)
     group_id = Column(Integer, ForeignKey("groups.id"), index=True, nullable=True)
@@ -121,125 +172,113 @@ class Proposal(Base):
     creator_user_id = Column(Integer, ForeignKey("users.id"))
     type = Column(String(50), default="base")
     meta = Column(JSONB, default=dict)
-    created_at = Column(DateTime(timezone=True), default=now)
-    score_per_level = Column(JSONB, default=dict)
+    created_at = Column(DateTime(timezone=True), default=func.now())
+    score_per_level = Column(JSONB, default=list)
+"""
+    _fractal = relationship("Fractal", back_populates="_proposals")
+    _group = relationship("Group", back_populates="_proposals")
+    _round = relationship("Round", back_populates="_proposals")
+    _creator = relationship("User", back_populates="_proposals_created")
+    _comments = relationship("Comment", back_populates="_proposal")
+    _votes = relationship("ProposalVote", back_populates="_proposal")
+"""
 
-    fractal = relationship("Fractal", back_populates="_proposals")
-    group = relationship("Group", back_populates="_proposals")
-    round = relationship("Round", back_populates="_proposals")
-    creator = relationship("User", back_populates="_proposals_created")
-    comments = relationship("Comment", back_populates="_proposal")
-    votes = relationship("ProposalVote", back_populates="_proposal")
-
-# ----------------------------
-# Proposal Merge
-# ----------------------------
-class ProposalMerge(Base):
-    __tablename__ = "proposal_merges"
-
-    id = Column(Integer, primary_key=True)
-    new_proposal_id = Column(Integer, ForeignKey("proposals.id"))
-    merged_from_proposal_id = Column(Integer, ForeignKey("proposals.id"))
-
-    merged_into = relationship(
-        "Proposal", foreign_keys=[new_proposal_id], back_populates="_merged_from"
-    )
-    merged_from = relationship(
-        "Proposal", foreign_keys=[merged_from_proposal_id], back_populates="_merged_into"
-    )
-
-Proposal.merged_from = relationship(
-    "ProposalMerge", foreign_keys=[ProposalMerge.new_proposal_id], back_populates="_merged_into"
-)
-Proposal.merged_into = relationship(
-    "ProposalMerge", foreign_keys=[ProposalMerge.merged_from_proposal_id], back_populates="_merged_from"
-)
-
-# ----------------------------
+    # ----------------------------
 # Comment
 # ----------------------------
 class Comment(Base):
     __tablename__ = "comments"
-
     id = Column(Integer, primary_key=True)
     proposal_id = Column(Integer, ForeignKey("proposals.id"), index=True)
     parent_comment_id = Column(Integer, ForeignKey("comments.id"), nullable=True)
     user_id = Column(Integer, ForeignKey("users.id"), index=True)
     text = Column(Text, nullable=False)
-    created_at = Column(DateTime(timezone=True), default=now)
-    score_per_level = Column(JSONB, default=dict)
+    created_at = Column(DateTime(timezone=True), default=func.now())
+    score_per_level = Column(JSONB, default=list)
+    group = Column(Integer, ForeignKey("groups.id"), nullable=False)
 
-    proposal = relationship("Proposal", back_populates="_comments")
-    user = relationship("User", back_populates="_comments")
-    replies = relationship("Comment", backref=backref("parent", remote_side=[id]))
-    votes = relationship("CommentVote", back_populates="_comment")
+"""
+    _proposal = relationship("Proposal", back_populates="_comments")
+    _user = relationship("User", back_populates="_comments")
+    _replies = relationship("Comment", backref=backref("_parent", remote_side=[id]))
+    _votes = relationship("CommentVote", back_populates="_comment")
+"""
 
 # ----------------------------
-# Proposal Vote
+# ProposalVote
 # ----------------------------
 class ProposalVote(Base):
     __tablename__ = "proposal_votes"
-
     id = Column(Integer, primary_key=True)
+#    level = Column(Integer, nullable=False)
     proposal_id = Column(Integer, ForeignKey("proposals.id"), index=True)
     voter_user_id = Column(Integer, ForeignKey("users.id"), index=True)
     score = Column(Integer, nullable=False)
-    created_at = Column(DateTime(timezone=True), default=now)
+    created_at = Column(DateTime(timezone=True), default=func.now())
 
-    __table_args__ = (
-        UniqueConstraint("proposal_id", "voter_user_id", name="uq_proposal_voter"),
-    )
-
-    proposal = relationship("Proposal", back_populates="_votes")
-    voter = relationship("User", back_populates="_proposal_votes")
+    __table_args__ = (UniqueConstraint("proposal_id", "voter_user_id", name="uq_proposal_voter"),)
+"""
+    _proposal = relationship("Proposal", back_populates="_votes")
+    _voter = relationship("User", back_populates="_proposal_votes")
+"""
 
 # ----------------------------
-# Comment Vote
+# CommentVote
 # ----------------------------
 class CommentVote(Base):
     __tablename__ = "comment_votes"
-
     id = Column(Integer, primary_key=True)
+#    level = Column(Integer, nullable=False)
     comment_id = Column(Integer, ForeignKey("comments.id"), index=True)
     voter_user_id = Column(Integer, ForeignKey("users.id"), index=True)
     vote = Column(Boolean, nullable=False)
-    created_at = Column(DateTime(timezone=True), default=now)
-    votes_per_level = Column(JSONB, default=dict)
+    created_at = Column(DateTime(timezone=True), default=func.now())
+#    votes_per_level = Column(JSONB, default=dict)
 
-    __table_args__ = (
-        UniqueConstraint("comment_id", "voter_user_id", name="uq_comment_voter"),
-    )
-
-    comment = relationship("Comment", back_populates="_votes")
-    voter = relationship("User", back_populates="_comment_votes")
+    __table_args__ = (UniqueConstraint("comment_id", "voter_user_id", name="uq_comment_voter"),)
+"""
+    _comment = relationship("Comment", back_populates="_votes")
+    _voter = relationship("User", back_populates="_comment_votes")
+"""
 
 # ----------------------------
-# Representative Selection
+# RepresentativeVote
+# ----------------------------
+class RepresentativeVote(Base):
+    __tablename__ = "representative_votes"
+    id = Column(Integer, primary_key=True)
+    group_id = Column(Integer, ForeignKey("groups.id"), index=True)
+    voter_user_id = Column(Integer, ForeignKey("users.id"))
+    candidate_user_id = Column(Integer, ForeignKey("users.id"))
+    created_at = Column(DateTime(timezone=True), default=func.now())
+
+# ----------------------------
+# RepresentativeSelection
 # ----------------------------
 class RepresentativeSelection(Base):
     __tablename__ = "representative_selection"
-
     id = Column(Integer, primary_key=True)
     group_id = Column(Integer, ForeignKey("groups.id"), index=True)
     representative_user_id = Column(Integer, ForeignKey("users.id"))
-    created_at = Column(DateTime(timezone=True), default=now)
+    created_at = Column(DateTime(timezone=True), default=func.now())
     method = Column(String(80), default="vote")
     seed = Column(Integer, nullable=True)
 
-    group = relationship("Group", back_populates="_representative_selections")
-    representative = relationship("User", back_populates="_representative_positions")
+"""
+    _group = relationship("Group", back_populates="_representative_selections")
+    _representative = relationship("User", back_populates="_representative_positions")
+"""
 
 # ----------------------------
-# Audit Log
+# AuditLog
 # ----------------------------
 class AuditLog(Base):
     __tablename__ = "audit_log"
-
     id = Column(Integer, primary_key=True)
     entity_type = Column(String(50))
     entity_id = Column(Integer)
     action = Column(String(50))
     payload = Column(JSONB, default=dict)
     user_id = Column(Integer, nullable=True)
-    timestamp = Column(DateTime(timezone=True), default=now)
+    timestamp = Column(DateTime(timezone=True), default=func.now())
 
