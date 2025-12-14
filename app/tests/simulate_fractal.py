@@ -1,8 +1,10 @@
 import asyncio
 from datetime import datetime, timezone
+
+import asyncpg
+from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 
-from repositories.fractal_repos import create_fractal, get_group_members, create_user
 from services.fractal_service import (
     join_fractal,
     start_fractal,
@@ -13,20 +15,17 @@ from services.fractal_service import (
     vote_comment,
     vote_representative,
     close_round,
+    create_fractal,
+    get_group_members,
     get_proposals_comments_tree,
-    get_proposal_comments_tree,
-    
 )
-from infrastructure.models import ProposalVote, CommentVote
-from sqlalchemy import select, func
-from infrastructure.models import Base
+from infrastructure.models import ProposalVote, CommentVote, Base
 
-import asyncio
-import asyncpg
 
 DATABASE_ADMIN_URL = "postgresql://fractal_user:fractal_pass@db:5432/postgres"
 TEST_DB_NAME = "test_fractal_db"
 DATABASE_URL = f"postgresql+asyncpg://fractal_user:fractal_pass@db:5432/{TEST_DB_NAME}"
+
 
 async def recreate_test_db():
     # Connect to the default 'postgres' database
@@ -38,12 +37,15 @@ async def recreate_test_db():
         FROM pg_stat_activity
         WHERE datname = '{TEST_DB_NAME}' AND pid <> pg_backend_pid();
     """)
+
     # Drop the test DB if exists
     await conn.execute(f"DROP DATABASE IF EXISTS {TEST_DB_NAME};")
+
     # Create a new test DB
     await conn.execute(f"CREATE DATABASE {TEST_DB_NAME};")
     await conn.close()
     print(f"Database '{TEST_DB_NAME}' recreated successfully.")
+
 
 async def create_tables():
     engine = create_async_engine(DATABASE_URL, echo=False)
@@ -53,16 +55,28 @@ async def create_tables():
     await engine.dispose()
     print("Tables created successfully.")
 
+
 # ---------------------------------
 # Setup async engine & session
 # ---------------------------------
 engine = create_async_engine(DATABASE_URL, echo=False)
 AsyncSessionLocal = async_sessionmaker(engine, expire_on_commit=False)
 
+
+async def pause(label: str = ""):
+    """
+    Simple interactive pause: prints a label and waits for Enter.
+    Uses asyncio.to_thread so it doesn't block the event loop.
+    """
+    if label:
+        print(f"\n=== PAUSE: {label} ===")
+    print("Press Enter to continue...")
+    await asyncio.to_thread(input)
+
+
 async def main():
     await recreate_test_db()
     await create_tables()
-
 
     async with AsyncSessionLocal() as db:
         # -------------------------
@@ -76,6 +90,7 @@ async def main():
             status="waiting",
             settings={"group_size": 8},
         )
+        print(f"Created fractal {fractal.id} (status={fractal.status})")
 
         # -------------------------
         # STEP 2: Join 25 users
@@ -88,6 +103,14 @@ async def main():
                 fractal.id,
             )
             users.append(u)
+        print(f"Joined {len(users)} users")
+
+        # -------------------------
+        # PAUSE before start_fractal
+        # -------------------------
+        await pause(
+            "Before start_fractal (you can now login with Telegram and inspect users/fractal state)"
+        )
 
         # -------------------------
         # STEP 3: Start fractal
@@ -111,13 +134,21 @@ async def main():
             group_members_map[g.id] = member_ids
             print(f"Group {g.id} members: {member_ids}")
 
-        # -------------------------
-        # STEP 6: Proposals
-        # -------------------------
+        # STEP 6: Initial proposals (per member)
+        # --------------------------------------
         proposals_by_group = {}
+
+        # Build a quick lookup set of simulation user ids
+        sim_user_ids = {u.id for u in users}
+
         for g in groups:
             proposals_by_group[g.id] = []
             for uid in group_members_map[g.id]:
+                # Skip users that are not part of this simulation (e.g. real test users)
+                if uid not in sim_user_ids:
+                    print(f"[INFO] Skipping non-simulation user {uid} in group {g.id}")
+                    continue
+
                 user_obj = next(u for u in users if u.id == uid)
                 p = await create_proposal(
                     db=db,
@@ -130,19 +161,39 @@ async def main():
                 )
                 proposals_by_group[g.id].append(p)
 
-        print("Proposals created:")
+        print("Proposals created (first batch):")
         for g_id, plist in proposals_by_group.items():
             for p in plist:
                 print(f"Proposal {p.id} in group {g_id} by user {p.creator_user_id}")
 
+
         # -------------------------
-        # STEP 7: Votes and comments
+        # PAUSE before close_round
+        # -------------------------
+        print("\nSummary before voting:")
+        print(f"Fractal {fractal.id}")
+        print(f"Round {round0.id}")
+        print(f"Groups: {[g.id for g in groups]}")
+        for g in groups:
+            print(
+                f"  Group {g.id}: members={group_members_map[g.id]}, "
+                f"proposals={len(proposals_by_group[g.id])}"
+            )
+
+
+
+
+                        # -------------------------
+        # STEP 7: Votes and comments (batch 1)
         # -------------------------
         for g in groups:
             members = group_members_map[g.id]
             for p in proposals_by_group[g.id]:
+                # Everyone votes on proposal
                 for uid in members:
                     await vote_proposal(db, p.id, uid, score=10)
+
+                # One top-level comment
                 commenter_id = members[0]
                 c = await create_comment(
                     db=db,
@@ -150,16 +201,28 @@ async def main():
                     user_id=commenter_id,
                     text=f"Comment on proposal {p.id}",
                     parent_comment_id=None,
+                    group_id=g.id,
                 )
+
+                # Everyone votes on that comment
                 for uid in members:
                     await vote_comment(db, c.id, uid, vote=True)
 
-        # STEP 7: Votes and comments
+        await pause(
+            "Before voting (test Telegram interactions for active round 0 now)"
+        )
+
+
+        # -------------------------
+        # STEP 7 (second block): More proposals + nested comments
+        # -------------------------
         for g in groups:
             members = group_members_map[g.id]
 
-            # Create 5 proposals per group
+            # Reset list; this will now contain only second-batch proposals.
+            # If you want both batches, remove this line.
             proposals_by_group[g.id] = []
+
             for i, uid in enumerate(members):
                 p = await create_proposal(
                     db,
@@ -172,7 +235,7 @@ async def main():
                 )
                 proposals_by_group[g.id].append(p)
 
-                # Comment by first member
+                # Top-level comment by first member
                 commenter_id = members[0]
                 c = await create_comment(
                     db=db,
@@ -180,76 +243,101 @@ async def main():
                     user_id=commenter_id,
                     text=f"Comment on proposal {p.id}",
                     parent_comment_id=None,
+                    group_id=g.id,
                 )
 
                 # Replies from remaining members
-                for reply_uid in members[1:]:
-                    await create_comment(
-                        db=db,
-                        proposal_id=p.id,
-                        user_id=reply_uid,
-                        text=f"Reply by user {reply_uid} on comment for proposal {p.id}",
-                        parent_comment_id=c.id,
-                    )
+#                for reply_uid in members[1:]:
+#                    await create_comment(
+#                        db=db,
+#                        proposal_id=p.id,
+#                        user_id=reply_uid,
+#                        text=(
+#                            f"Reply by user {reply_uid} "
+#                            f"on comment for proposal {p.id}"
+#                        ),
+#                        parent_comment_id=c.id,
+#                        group_id=g.id,
+#                    )
 
                 # Everyone votes on proposal
                 for voter_id in members:
-                    await vote_proposal(db, p.id, voter_id, score=10)
+                    await vote_proposal(db, p.id, voter_id, score=5)
 
                 # Everyone votes on first comment
                 for voter_id in members:
                     await vote_comment(db, c.id, voter_id, vote=True)
+
         # -------------------------
         # STEP 7c: Representative votes
         # -------------------------
         for g in groups:
             members = group_members_map[g.id]
-            candidate_id = members[0]  # first user
+            candidate_id = members[0]  # first user as representative candidate
             for voter_id in members:
                 await vote_representative(db, g.id, voter_id, candidate_id)
 
         # -------------------------
         # STEP 8: Print proposal vote totals
         # -------------------------
-        print("Proposal vote totals:")
+        print("\nProposal vote totals:")
         for g in groups:
             for p in proposals_by_group[g.id]:
-                res = await db.execute(select(func.sum(ProposalVote.score)).where(ProposalVote.proposal_id==p.id))
+                res = await db.execute(
+                    select(func.sum(ProposalVote.score)).where(
+                        ProposalVote.proposal_id == p.id
+                    )
+                )
                 total_votes = res.scalar() or 0
                 print(f"Proposal {p.id} total votes: {total_votes}")
 
+        # -------------------------
+        # PAUSE before close_round
+        # -------------------------
+        print("\nSummary before close_round:")
+        print(f"Fractal {fractal.id}")
+        print(f"Round {round0.id}")
+        print(f"Groups: {[g.id for g in groups]}")
+        for g in groups:
+            print(
+                f"  Group {g.id}: members={group_members_map[g.id]}, "
+                f"proposals={len(proposals_by_group[g.id])}"
+            )
+
+        await pause(
+            "Before close_round (test Telegram interactions for active round 0 now)"
+        )
 
         # -------------------------
         # STEP 9: Close current round and promote to next round
         # -------------------------
-
-        # Close current round (and automatically create next round if applicable)
         next_round = await close_round(db, round0.id)
 
         if next_round is None:
             print(f"\nRound {round0.id} closed. No next round created (not enough groups).")
         else:
-            print(f"\nRound {round0.id} closed. New Round {next_round.id} created, level {next_round.level}")
+            print(
+                f"\nRound {round0.id} closed. "
+                f"New Round {next_round.id} created, level {next_round.level}"
+            )
 
             # Print new groups and members
             new_groups = await get_groups_for_round(db, next_round.id)
-            print(f"New groups for Round {next_round.id}: {[g.id for g in new_groups]}")
+            print(
+                f"New groups for Round {next_round.id}: "
+                f"{[g.id for g in new_groups]}"
+            )
 
             for g in new_groups:
                 members = await get_group_members(db, g.id)
                 member_ids = [m.user_id for m in members]
                 print(f"  Group {g.id} members: {member_ids}")
 
-
         # -------------------------
         # STEP 10: List proposals and comments after closing round 0
         # -------------------------
-
-
-        # Determine which round to display (new round if created, else the closed one)
         round_to_inspect = round0
 
-        # Get groups for this round
         groups_in_round = await get_groups_for_round(db, round_to_inspect.id)
 
         for g in groups_in_round:
@@ -258,9 +346,9 @@ async def main():
             member_ids = [m.user_id for m in members]
             print(f"  Members: {member_ids}")
 
-            # Get proposals with comments tree
             tree = await get_proposals_comments_tree(db, g.id)
             await print_proposals_comments_tree(tree)
+
 
 async def print_proposals_comments_tree(tree):
     """
@@ -274,19 +362,23 @@ async def print_proposals_comments_tree(tree):
             yes_votes = votes.get("yes", 0)
             no_votes = votes.get("no", 0)
             total_votes = yes_votes + no_votes
-            print(" " * indent + f"Comment {c_idx}: ID {c.id}, User {c.user_id}, "
+            print(
+                " " * indent
+                + f"Comment {c_idx}: ID {c.id}, User {c.user_id}, "
                   f"Score per level: {c.score_per_level}, Text: {c.text}, "
-                  f"Yes: {yes_votes}, No: {no_votes}, Total votes: {total_votes}")
-            # Recurse into replies
-            print_comments(c_dict.get("replies", []), indent=indent+2)
+                  f"Yes: {yes_votes}, No: {no_votes}, Total votes: {total_votes}"
+            )
+            print_comments(c_dict.get("replies", []), indent=indent + 2)
 
     for p_idx, p_dict in enumerate(tree):
         p = p_dict["proposal"]
         prop_votes = p_dict.get("votes", {})
         total_prop_votes = prop_votes.get("total", 0)
-        print(f"Proposal {p_idx}: ID {p.id}, Title: {p.title}, Total votes: {total_prop_votes}")
+        print(
+            f"Proposal {p_idx}: ID {p.id}, "
+            f"Title: {p.title}, Total votes: {total_prop_votes}"
+        )
         print_comments(p_dict.get("comments", []))
-
 
 
 if __name__ == "__main__":

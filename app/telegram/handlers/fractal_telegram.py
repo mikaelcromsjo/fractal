@@ -348,75 +348,48 @@ async def cmd_create_fractal(message: types.Message):
 
 
 @router.message(Command("join"))
-async def cmd_join(
-    message: types.Message,
-    state: FSMContext,
-    fractal_id: Union[str, int] | None = None
-):
-    """
-    /join <fractal_id_or_name>
-    After join, store internal user_id and active fractal in FSM state.
-    """
+async def cmd_join(message: types.Message, state: FSMContext, fractal_id: Union[str, int] | None = None):
+    logger.info(f"Join called - fractal_id: {fractal_id}, text: '{message.text}'")
+    
     if fractal_id is None:
         parts = message.text.split(maxsplit=1)
         if len(parts) < 2:
-            await message.answer("Usage: /join <fractal_id|fractal_name>", parse_mode=None)
+            await message.answer("Usage: /join <fractal_id|fractal_name>")
             return
         fractal_id = parts[1].strip()
 
-    # ✅ Ensure fractal_id is always str
     if not fractal_id:
-        await message.answer("No fractal ID or name provided.", parse_mode=None)
+        await message.answer("No fractal ID or name provided.")
         return
 
-    # ✅ SINGLE DB SESSION for entire operation
+    logger.info(f"Looking up fractal: '{fractal_id}'")
+    
     async for db in get_async_session():
         try:
-            # 1. Lookup fractal by id or name
             fractal = await get_fractal_from_name_or_id_repo(db=db, fractal_identifier=fractal_id)
             if not fractal:
-                # ✅ Safe: fractal_id is guaranteed str here
-
-                await message.answer(
-                    f"❌ Fractal '{sanitize_text(str(fractal_id))}' not found.", 
-                    parse_mode=None
-                )
+                await message.answer(f"❌ Fractal '{sanitize_text(str(fractal_id))}' not found.")
+                break
                 return
 
-            # 2. Continue with join logic...
-            fractal_id_int = fractal.id
-            fractal_name = fractal.name
-            
             user_info = {
                 "username": getattr(message.from_user, "username", ""),
                 "telegram_id": str(message.from_user.id)
             }
-                    
-            try:
-                user = await join_fractal(db, user_info, fractal_id)
-                await message.answer("✅ Joined!")
-            except ValueError as e:
-                await message.answer(f"❌ {str(e)}")
-                return
-                            
-            # Store in FSM
+            
+            user = await join_fractal(db, user_info, fractal.id)
             await state.update_data(
                 user_id=user.id,
-                fractal_id=fractal_id_int,
-                fractal_name=fractal_name
+                fractal_id=fractal.id,
+                fractal_name=fractal.name
             )
+            await message.answer(f"✅ Welcome to '{sanitize_text(fractal.name)}'! User ID: {user.id}")
+            break  # ✅ Exit after success
             
-            await message.answer(
-                f"✅ Welcome to '{sanitize_text(fractal_name)}'!\n",
-                parse_mode=None
-            )
-            
-        except HTTPException as e:
-            await message.answer(f"❌ Cannot join: {sanitize_text(str(e.detail))}", parse_mode=None)
         except Exception as e:
             logger.exception("Join failed")
-            await message.answer(f"❌ Failed to join: {sanitize_text(str(e))}", parse_mode=None)
-
+            await message.answer(f"❌ Failed to join: {sanitize_text(str(e))}")
+            break
 
 @router.message(Command("start_fractal"))
 async def cmd_start_fractal(
@@ -584,7 +557,7 @@ async def proposal_done(message: types.Message, state: FSMContext):
                 parse_mode=ParseMode.HTML
             )        
         except Exception as e:
-            logger.exception("create_proposal_async failed")
+            logger.exception("create_proposal failed")
             await message.answer(f"❌ Failed to create proposal: {escape(str(e))}")
 
     # Clear FSM state
@@ -638,7 +611,7 @@ async def cmd_comment(message: types.Message):
                 cid = getattr(comment, "id", None) or (comment.get("id") if isinstance(comment, dict) else None)
                 await message.answer(f"Comment added to proposal P_{pid}: C_{cid}", parse_mode=None)
             except Exception as e:
-                logger.exception("create_comment_async failed")
+                logger.exception("create_comment failed")
                 await message.answer(f"Failed to add comment: {e}")
     elif id_part.startswith("c_"):
         cid = int(id_part[2:])

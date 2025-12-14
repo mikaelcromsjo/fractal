@@ -2,12 +2,12 @@
     <!-- Header: avatar + name + date -->
     <div class="proposal-header-row">
         <div class="proposal-userblock">
-            <img src="${user['avatar']}" alt="${user['username']}" class="proposal-avatar">
+            <img src="${user['avatar']}" alt="${proposal['username']}" class="proposal-avatar">
             <div class="proposal-usertext">
-                <a href="/profile/${user['id']}/"
-                   data-uid="${user['id']}"
+                <a _href="/profile/${proposal['id']}/"
+                   data-uid="${proposal['id']}"
                    class="proposal-username usertooltip">
-                    ${user['username']}
+                    ${proposal['username']}
                 </a>
                 <div class="proposal-date">
                     ${proposal['date']}
@@ -41,7 +41,7 @@
             <span>Rate proposal</span>
             <span class="proposal-rating-value"
                   id="rating-value-${proposal['id']}">
-                ${proposal.get('rating_points', 5)} / 10
+                10 / 10
             </span>
         </div>
         <input

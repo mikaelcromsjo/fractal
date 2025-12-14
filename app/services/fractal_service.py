@@ -6,13 +6,6 @@ from config.settings import settings
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-
-# proposal.created_at comment.created_at - sort by created at,  
-#
-#
-#
-#
-
 from repositories.fractal_repos import (
     get_user_by_telegram_id_repo,
     create_user_repo,
@@ -48,11 +41,21 @@ from repositories.fractal_repos import (
     create_fractal_repo,
     create_user_repo,
     get_fractal_member_repo,
+    get_fractal_members_repo,
     get_fractal_from_name_or_id_repo,
     get_next_unvoted_card_repo,
+    get_or_build_round_tree_repo
 
 )
 from domain import fractal_logic as domain
+
+from typing import Iterable, Protocol
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from telegram.service import send_message_to_telegram_users, send_button_to_telegram_users
+
+class HasUserId(Protocol):
+    user_id: int
 
 
 # Wrapper
@@ -125,7 +128,68 @@ async def start_fractal(db: AsyncSession, fractal_id: int):
     """
     members = await get_active_fractal_members_repo(db, fractal_id)
     round_0 = await start_round(db, fractal_id, level=0, members=members)
+
+    # 1️⃣ Notify all members that the fractal/round has started
+    text = "🚀 Your fractal round has started!"
+    await send_button_to_fractal_members(db, text, "Dashboard", fractal_id)
+
+    groups = await get_groups_for_round(db, round_0.id)
+    for g in groups:
+        text = f"👋 Welcome! You are in group {g.id}."
+        await send_message_to_group(db, g.id, text)
+
+
     return round_0
+
+
+async def send_message_to_members(
+    db: AsyncSession,
+    members: Iterable[HasUserId],
+    text: str,
+) -> None:
+    """
+    Given any member objects with .user_id (FractalMember, GroupMember, etc.),
+    resolve Users and send them a Telegram message.
+    """
+    telegram_ids: list[int] = []
+
+    for member in members:
+        user = await get_user(db, member.user_id)
+        if not user or not user.telegram_id:
+            continue
+        try:
+            telegram_ids.append(int(user.telegram_id))
+        except ValueError:
+            continue
+
+    if telegram_ids:
+        await send_message_to_telegram_users(telegram_ids, text)
+
+async def send_message_to_group(db: AsyncSession, group_id: int, text: str) -> None:
+    members = await get_group_members_repo(db, group_id)
+    await send_message_to_members(db, members, text)
+
+
+async def send_message_to_fractal_members(db: AsyncSession, fractal_id: int, text: str) -> None:
+    members = await get_fractal_members_repo(db, fractal_id)
+    await send_message_to_members(db, members, text)
+
+async def send_button_to_fractal_members(db, text, button, fractal_id, data=0):
+    members = await get_fractal_members_repo(db, fractal_id)
+    telegram_ids: list[int] = []
+
+    for member in members:
+        user = await get_user(db, member.user_id)
+        if not user or not user.telegram_id:
+            continue
+        try:
+            telegram_ids.append(int(user.telegram_id))
+        except ValueError:
+            continue
+
+    if telegram_ids:
+        await send_button_to_telegram_users(telegram_ids, text, button, fractal_id, data)
+
 
 
 # ----------------------------
@@ -202,6 +266,12 @@ async def close_round(db: AsyncSession, round_id: int):
     # Step 4: Promote to next round
     new_round = await promote_to_next_round(db, round_obj.id, round_obj.fractal_id)
 
+    groups = await get_groups_for_round(db, new_round.id)
+    text = f"The Next Round has started, please open the Dashboard"
+    for g in groups:
+        await send_message_to_group(db, g.id, text)
+
+
     # Step 5: Return the new round if created, else the closed round
     return new_round if new_round else round_obj
 
@@ -236,7 +306,7 @@ async def promote_to_next_round(db: AsyncSession, prev_round_id: int, fractal_id
     # Step 4: Divide representatives into new groups
  #   group_size = 8  # can come from fractal settings
 
-    fractal = get_fractal(db, fractal_id)
+    fractal = await get_fractal(db, fractal_id)
     settings_dict = fractal.settings or {}
 
     group_size = settings_dict.get("group_size")
@@ -272,8 +342,8 @@ async def create_proposal(db: AsyncSession, fractal_id: int, group_id: int, roun
 
 
 async def create_comment(db: AsyncSession, proposal_id: int, user_id: int, text: str,
-                               parent_comment_id: Optional[int] = None):
-    return await add_comment_repo(db, proposal_id, user_id, text, parent_comment_id)
+                               parent_comment_id: Optional[int] = None, group_id: Optional[int] = None):
+    return await add_comment_repo(db, proposal_id, user_id, text, parent_comment_id, group_id)
 
 
 # ----------------------------

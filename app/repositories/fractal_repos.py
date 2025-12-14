@@ -6,8 +6,17 @@ from sqlalchemy.future import select
 from sqlalchemy import update, delete, func
 from infrastructure.models import (
     User, Fractal, FractalMember, Group, GroupMember, Proposal, Comment,
-    ProposalVote, CommentVote, Round, RepresentativeSelection, RepresentativeVote, QueueItem
+    ProposalVote, CommentVote, Round, RepresentativeSelection, RepresentativeVote, QueueItem, 
 )
+from typing import Any, Dict, List, Optional
+
+from sqlalchemy import and_, select
+from sqlalchemy.sql import exists
+
+import infrastructure.models as models
+
+from services.fractal_service_tree import build_fractal_tree
+
 from datetime import datetime, timezone
 from typing import List, Dict
 from typing import Optional, Union
@@ -152,6 +161,7 @@ async def create_round_repo(
 
 async def close_round_repo(db: AsyncSession, round_id: int):
     """Mark a round as closed and set the end timestamp, then return the round."""
+    RoundTree = models.RoundTree
     stmt = (
         update(Round)
         .where(Round.id == round_id)
@@ -164,6 +174,17 @@ async def close_round_repo(db: AsyncSession, round_id: int):
     result = await db.execute(stmt)
     await db.commit()
     closed_round = result.scalar_one()  # get the single updated Round object
+
+    tree = await build_fractal_tree(db, fractal_id=closed_round.fractal_id, round_id=closed_round.id)
+
+    # Upsert into RoundTree
+    existing = await db.get(RoundTree, closed_round.id)
+    if existing:
+        existing.tree = tree
+    else:
+        db.add(RoundTree(round_id=closed_round.id, fractal_id=closed_round.fractal_id, tree=tree))
+    await db.flush()
+
     return closed_round
 
 
@@ -242,8 +263,9 @@ async def get_top_proposals_repo(db: AsyncSession, group_id: int, top_count: int
 # ----------------------------
 # Comment
 # ----------------------------
-async def add_comment_repo(db: AsyncSession, proposal_id: int, user_id: int, text: str, parent_comment_id: Optional[int] = None) -> Comment:
-    comment = Comment(proposal_id=proposal_id, user_id=user_id, text=text, parent_comment_id=parent_comment_id,
+
+async def add_comment_repo(db: AsyncSession, proposal_id: int, user_id: int, text: str, parent_comment_id: Optional[int] = None, group_id: Optional[int] = None) -> Comment:
+    comment = Comment(proposal_id=proposal_id, user_id=user_id, text=text, parent_comment_id=parent_comment_id, group_id=group_id,
                       created_at=datetime.now(timezone.utc))
     db.add(comment)
     await db.commit()
@@ -352,6 +374,13 @@ async def cast_proposal_vote_repo(db: AsyncSession, proposal_id: int, voter_user
         pv = ProposalVote(proposal_id=proposal_id, voter_user_id=voter_user_id, score=score, created_at=datetime.now(timezone.utc))
         db.add(pv)
     await db.commit()
+
+    # temporary debug in vote endpoint, after insert
+    print("VOTE INSERTED", {
+        "proposal_id": pv.proposal_id,
+        "voter_user_id": pv.voter_user_id,
+    })
+
     return pv
 
 # ----------------------------
@@ -572,41 +601,31 @@ async def get_group_repo(db: AsyncSession, group_id: int) -> Group | None:
     )
     return result.scalar_one_or_none()
 
-
 async def get_user_info_by_telegram_id_repo(
     db: AsyncSession,
     telegram_id: str
 ) -> Optional[Dict]:
-    
     print("Get user info ", telegram_id)
-    """
-    Given a telegram_id, return all info needed to create a proposal:
-    {
-        "fractal_id": int,
-        "round_id": int,
-        "group_id": int,
-        "creator_user_id": int
-    }
 
-    Returns None if user, round, or group not found.
-    Assumes user's active fractal is stored on User.active_fractal_id.
-    """
     telegram_id = str(telegram_id)
 
     # 1️⃣ Get user
-    result = await db.execute(select(User).where(User.telegram_id == telegram_id))
+    result = await db.execute(
+        select(User).where(User.telegram_id == telegram_id)
+    )
     user: User | None = result.scalar_one_or_none()
     if not user:
-        print("No user")         
+        print("No user")
         return None
 
-    user_id = user.id
+    user_id = int(user.id)
+    print("User", user_id)
 
-    print("User ", user_id)
     fractal_id = getattr(user, "active_fractal_id", None)
     if not fractal_id:
-        print("No active fractal")         
+        print("No active fractal")
         return None
+    fractal_id = int(fractal_id)
     print("Active fractal", fractal_id)
 
     # 2️⃣ Get last round for this fractal
@@ -618,26 +637,77 @@ async def get_user_info_by_telegram_id_repo(
     )
     last_round: Round | None = result.scalar_one_or_none()
     if not last_round:
-        return {
-            "fractal_id": fractal_id
-        }
-    round_id = last_round.id
-    print ("Round id", round_id) 
+        return {"fractal_id": fractal_id}
 
-    # 3️⃣ Find the group for this user in this round
+    round_id = int(last_round.id)
+    print("Round id", round_id)
+
+    print("DEBUG find group", {
+        "user_id": user_id,
+        "fractal_id": fractal_id,
+        "round_id": round_id,
+    })
+
+    # 🔍 A) All GroupMember rows for this user
+    gm_result = await db.execute(
+        select(GroupMember).where(GroupMember.user_id == user_id)
+    )
+    gm_rows = gm_result.scalars().all()
+    print(f"All GroupMember rows for user {user_id}:")
+    for gm in gm_rows:
+        print(
+            f"  GM id={gm.id} group_id={gm.group_id} "
+            f"left_at={gm.left_at}"
+        )
+
+    # 🔍 B) All groups in this fractal that the user is/was in (with round info)
+    dbg_result = await db.execute(
+        select(Group, GroupMember)
+        .join(GroupMember, Group.id == GroupMember.group_id)
+        .where(
+            GroupMember.user_id == user_id,
+            Group.fractal_id == fractal_id,
+        )
+        .order_by(Group.round_id)
+    )
+    rows = dbg_result.all()
+    print(f"All groups in fractal {fractal_id} for user {user_id}:")
+    for g, gm in rows:
+        print(
+            f"  Group id={g.id} round_id={g.round_id} "
+            f"left_at={gm.left_at}"
+        )
+
+    # 🔍 C) Groups for the current round
+    g_result = await db.execute(
+        select(Group).where(
+            Group.fractal_id == fractal_id,
+            Group.round_id == round_id,
+        )
+    )
+    g_rows = g_result.scalars().all()
+    print(f"Groups for round {round_id}:")
+    for g in g_rows:
+        print(f"  Group id={g.id} fractal_id={g.fractal_id} round_id={g.round_id}")
+
+    # 3️⃣ Find the *current* group for this user in this fractal
+    #    If you want to force last_round, keep Group.round_id == round_id.
     result = await db.execute(
         select(Group)
         .join(GroupMember, Group.id == GroupMember.group_id)
         .where(
             Group.fractal_id == fractal_id,
-            Group.round_id == round_id,
             GroupMember.user_id == user_id,
-            GroupMember.left_at.is_(None)  # user is currently in group
+            GroupMember.left_at.is_(None),  # currently in group
         )
+        .order_by(Group.round_id.desc())  # pick latest active group
         .limit(1)
     )
     group: Group | None = result.scalar_one_or_none()
     group_id = group.id if group else None
+    round_id = group.round_id if group else round_id if group else None
+
+    print("Resolved group:", group_id, "round:", round_id)
 
     return {
         "fractal_id": fractal_id,
@@ -645,86 +715,6 @@ async def get_user_info_by_telegram_id_repo(
         "group_id": group_id,
         "user_id": user_id,
     }
-
-
-async def queue_add_single_repo(
-    db: AsyncSession,
-    group_id: int,
-    user_id: int,
-    item_type: int,     # 0 = proposal, 1 = comment
-    item_id: int
-):
-    entry = QueueItem(
-        group_id=group_id,
-        user_id=user_id,
-        item_type=item_type,
-        item_id=item_id
-    )
-
-    db.add(entry)
-    await db.commit()
-    await db.refresh(entry)
-    return entry
-
-def resolve_queue_item_type(obj) -> str:
-    from models import Proposal, Comment
-
-    if isinstance(obj, Proposal):
-        return "proposal"
-    if isinstance(obj, Comment):
-        return "comment"
-    
-    raise ValueError("Unknown queue object type")
-
-async def add_item_to_queue_repo(
-    db: AsyncSession,
-    group_id: int,
-    obj
-):
-    from infrastructure.models import QueueItem
-
-    # Determine queue type
-    item_type = resolve_queue_item_type(obj)
-    item_id = obj.id
-
-    # Fetch users in group
-    members = await get_group_members_repo(db, group_id)
-
-    # Create queue entries for each user
-    for user in members:
-        db.add(QueueItem(
-            group_id=group_id,
-            user_id=user.id,
-            item_type=item_type,
-            item_id=item_id
-        ))
-
-    await db.commit()
-
-async def get_next_queue_item_repo(
-    db: AsyncSession,
-    user_id: int,
-    group_id: int
-):
-    result = await db.execute(
-        select(QueueItem)
-        .where(QueueItem.user_id == user_id)
-        .where(QueueItem.group_id == group_id)
-        .order_by(QueueItem.id.asc())
-        .limit(1)
-    )
-    return result.scalar_one_or_none()
-
-
-async def get_all_queue_items_for_group_repo(db: AsyncSession, user_id: int, group_id: int):
-    result = await db.execute(
-        select(QueueItem)
-        .where(QueueItem.user_id == user_id)
-        .where(QueueItem.group_id == group_id)
-        .order_by(QueueItem.id.asc())
-    )
-    return result.scalars().all()
-
 
 
 async def get_fractal_member_repo(db: AsyncSession, fractal_id: int, user_id: int):
@@ -736,67 +726,105 @@ async def get_fractal_member_repo(db: AsyncSession, fractal_id: int, user_id: in
     )
     return result.scalars().first()
 
+async def get_fractal_members_repo(db: AsyncSession, fractal_id: int):
+    result = await db.execute(
+        select(FractalMember).where(
+            FractalMember.fractal_id == fractal_id
+        )
+    )
+    return result.scalars().all()
+
+
 async def get_next_unvoted_card_repo(
-    db: AsyncSession, 
-    group_id: int, 
+    db: AsyncSession,
+    group_id: int,
     current_user_id: int
 ) -> Optional[Dict]:
-    """
-    Get first proposal OR comment from group that current_user hasn't voted on.
-    - Proposal: Includes ALL comments (unvoted by current_user)
-    - Comment: Includes parent proposal context
-    """
     Proposal = models.Proposal
     Comment = models.Comment
     ProposalVote = models.ProposalVote
     CommentVote = models.CommentVote
-    
-    # 1. Proposals WITHOUT votes from current_user
+
+    print("DEBUG get_next_unvoted_card", {
+        "group_id": group_id,
+        "current_user_id": current_user_id,
+    })
+
+    # --- 1) Proposals WITHOUT votes from current_user, not created by current_user
+
+    vote_exists = (
+        select(ProposalVote.id)
+        .where(
+            and_(
+                ProposalVote.proposal_id == Proposal.id,          # correlate
+                ProposalVote.voter_user_id == current_user_id,
+            )
+        )
+        .exists()
+    )
+
     prop_stmt = (
         select(Proposal)
         .where(
             Proposal.group_id == group_id,
-            ~exists().where(
-                and_(
-                    ProposalVote.proposal_id == Proposal.id,
-                    ProposalVote.voter_user_id == current_user_id
-                )
-            )
+            Proposal.creator_user_id != current_user_id,          # not own proposal
+            ~vote_exists,                                         # NOT EXISTS
         )
         .order_by(Proposal.created_at.asc())
         .limit(1)
     )
-    
+
+    print("DEBUG proposal SQL:", prop_stmt)
+
     prop_result = await db.execute(prop_stmt)
     proposal = prop_result.scalars().first()
-    
+
     if proposal:
+        print("DEBUG picked proposal", {
+            "id": proposal.id,
+            "creator_user_id": proposal.creator_user_id,
+        })
         return await _enrich_proposal_with_comments_repo(db, proposal, current_user_id)
-    
-    # 2. Comments WITHOUT votes from current_user
+
+    # --- 2) Comments WITHOUT votes from current_user, not created by current_user
+
+    comment_vote_exists = (
+        select(CommentVote.id)
+        .where(
+            and_(
+                CommentVote.comment_id == Comment.id,             # correlate
+                CommentVote.voter_user_id == current_user_id,
+            )
+        )
+        .exists()
+    )
+
     comment_stmt = (
         select(Comment)
         .join(Proposal, Comment.proposal_id == Proposal.id)
         .where(
             Proposal.group_id == group_id,
-            Comment.group == group_id,
-            ~exists().where(
-                and_(
-                    CommentVote.comment_id == Comment.id,
-                    CommentVote.voter_user_id == current_user_id
-                )
-            )
+            Comment.group_id == group_id,
+            Comment.user_id != current_user_id,                   # not own comment
+            ~comment_vote_exists,                                 # NOT EXISTS
         )
         .order_by(Comment.created_at.asc())
         .limit(1)
     )
-    
+
+    print("DEBUG comment SQL:", comment_stmt)
+
     comment_result = await db.execute(comment_stmt)
     comment = comment_result.scalars().first()
-    
+
     if comment:
+        print("DEBUG picked comment", {
+            "id": comment.id,
+            "user_id": comment.user_id,
+        })
         return await _enrich_comment_with_proposal_repo(db, comment, current_user_id)
-    
+
+    print("DEBUG no more unvoted cards")
     return None
 
 async def _enrich_proposal_with_comments_repo(
@@ -804,12 +832,12 @@ async def _enrich_proposal_with_comments_repo(
     proposal: Proposal, 
     current_user_id: int
 ) -> Dict:
-    """Enrich proposal + ALL comments (unvoted by current_user)."""
+    """Enrich proposal to match proposal_card.html template exactly."""
     User = models.User
     ProposalVote = models.ProposalVote
     CommentVote = models.CommentVote
     
-    # Proposal creator
+    # Proposal creator info (for 'user' in template)
     creator_result = await db.execute(select(User).where(User.id == proposal.creator_user_id))
     creator = creator_result.scalars().first()
     
@@ -818,41 +846,44 @@ async def _enrich_proposal_with_comments_repo(
     votes = votes_result.scalars().all()
     total_score = sum(v.score for v in votes)
     
-    # ALL comments for this proposal (unvoted by current_user)
+    # ALL comments (matching template structure)
     all_comments = await get_comments_for_proposal_repo(db, proposal.id)
-    enriched_comments = []
+    template_comments = []
     
     for comment in all_comments:
-        # Skip comments already voted by current_user
-        comment_votes_result = await db.execute(
-            select(CommentVote).where(
-                CommentVote.comment_id == comment.id,
-                CommentVote.voter_user_id == current_user_id
-            )
-        )
-        if comment_votes_result.scalars().first():
-            continue
-            
-        enriched_comments.append(await _enrich_single_comment_repo(db, comment, current_user_id))
+        # Get comment author
+        author_result = await db.execute(select(User).where(User.id == comment.user_id))
+        author = author_result.scalars().first()
+        
+        # Comment votes
+        comment_votes_result = await db.execute(select(CommentVote).where(CommentVote.comment_id == comment.id))
+        comment_votes = comment_votes_result.scalars().all()
+        yes_count = sum(1 for v in comment_votes if v.vote)
+        score = yes_count - (len(comment_votes) - yes_count)
+        
+        template_comments.append({
+            "id": comment.id,
+            "username": author.username if author else "Unknown",
+            "avatar": f"/static/img/64_{(author.id if author else comment.id) % 16 + 1}.png",
+            "date": comment.created_at.strftime("%Y-%m-%d %H:%M") if comment.created_at else "just now",
+            "text": comment.text,
+            "score": score  # ✅ Template expects 'score'
+        })
     
+    # ✅ EXACT TEMPLATE STRUCTURE
     card = {
-        "type": "proposal",
+        "username" : creator.username,        
         "id": proposal.id,
         "title": proposal.title,
-        "body": proposal.body or "",
-        "creator": {
-            "id": creator.id if creator else None,
-            "username": creator.username if creator else "Unknown",
-            "avatar": f"/static/img/64_{(creator.id if creator else proposal.id) % 16 + 1}.png"
-        },
-        "created_at": proposal.created_at.isoformat() if proposal.created_at else None,
-        "votes": {
-            "total_score": total_score,
-            "vote_count": len(votes),
-            "my_vote": next((v.score for v in votes if v.voter_user_id == current_user_id), None)
-        },
-        "comments": enriched_comments  # ✅ Full comments list
+        "message": proposal.body or "",  # ✅ Template uses 'message'
+        "date": proposal.created_at.strftime("Wednesday, %B %d%s at %I:%M %p") if proposal.created_at else "just now",
+        "rating_points": total_score or 5,  # ✅ Template slider default
+        "rating_percent": min(100, max(0, (total_score / 10 * 100))),  # 0-100%
+        "tags": proposal.meta.get("tags", []),  # ✅ Template expects 'tags'
+        "score": total_score,  # ✅ Template score pill
+        "comments": template_comments  # ✅ Full comments array
     }
+    
     return card
 
 async def _enrich_comment_with_proposal_repo(
@@ -860,71 +891,68 @@ async def _enrich_comment_with_proposal_repo(
     comment: Comment, 
     current_user_id: int
 ) -> Dict:
-    """Enrich comment + its parent proposal."""
-
+    """Comment card - wraps proposal context to match template."""
+    Proposal = models.Proposal
+    User = models.User
+    CommentVote = models.CommentVote
+    ProposalVote = models.ProposalVote
     
-    # Comment author
-    author_result = await db.execute(select(User).where(User.id == comment.user_id))
-    author = author_result.scalars().first()
-    
-    # Comment votes
-    votes_result = await db.execute(select(CommentVote).where(CommentVote.comment_id == comment.id))
-    votes = votes_result.scalars().all()
-    yes_count = sum(1 for v in votes if v.vote)
-    no_count = len(votes) - yes_count
-    
-    # Parent proposal context
+    # Get parent proposal
     prop_result = await db.execute(select(Proposal).where(Proposal.id == comment.proposal_id))
     proposal = prop_result.scalars().first()
     
-    prop_creator_result = await db.execute(select(User).where(User.id == proposal.creator_user_id))
-    prop_creator = prop_creator_result.scalars().first()
+    # Use proposal enrichment (reuses template logic)
+    proposal_card = await _enrich_proposal_with_comments_repo(db, proposal, current_user_id)
     
-    card = {
-        "type": "comment",
+    # Override with comment as "main content"
+    proposal_card.update({
         "id": comment.id,
-        "text": comment.text,
-        "author": {
-            "id": author.id if author else None,
-            "username": author.username if author else "Unknown",
-            "avatar": f"/static/img/64_{(author.id if author else comment.id) % 16 + 1}.png"
-        },
-        "created_at": comment.created_at.isoformat() if comment.created_at else None,
-        "votes": {
-            "yes": yes_count,
-            "no": no_count,
-            "total": len(votes),
-            "my_vote": next((v.vote for v in votes if v.voter_user_id == current_user_id), None)
-        },
-        "proposal": {
-            "id": proposal.id,
-            "title": proposal.title,
-            "creator": {
-                "id": prop_creator.id if prop_creator else None,
-                "username": prop_creator.username if prop_creator else "Unknown",
-                "avatar": f"/static/img/64_{(prop_creator.id if prop_creator else proposal.id) % 16 + 1}.png"
-            }
-        }
-    }
-    return card
+        "title": "Comment on: " + proposal.title[:50] + "...",
+        "message": comment.text,  # Comment text becomes main content
+        "type": "comment"  # Template can check this if needed
+    })
+    
+    return proposal_card
 
-async def _enrich_single_comment_repo(db: AsyncSession, comment: Comment, current_user_id: int) -> Dict:
-    """Helper: Enrich single comment."""
-    User = models.User
-    CommentVote = models.CommentVote
-    
-    author_result = await db.execute(select(User).where(User.id == comment.user_id))
-    author = author_result.scalars().first()
-    
-    votes_result = await db.execute(select(CommentVote).where(CommentVote.comment_id == comment.id))
-    votes = votes_result.scalars().all()
-    yes_count = sum(1 for v in votes if v.vote)
-    
-    return {
-        "id": comment.id,
-        "username": author.username if author else "Unknown",
-        "avatar": f"/static/img/64_{(author.id if author else comment.id) % 16 + 1}.png",
-        "date": comment.created_at.isoformat() if comment.created_at else None,
-        "text": comment.text,
-        "votes": {"yes": yes_count, "total": len(votes)}
-    }
+async def get_or_build_round_tree_repo(
+    db: AsyncSession,
+    fractal_id: int,
+    round_id: Optional[int] = None,
+) -> Dict[str, Any]:
+    Round = models.Round
+    RoundTree = models.RoundTree
+
+    # 1) Determine round_id (latest if not provided)
+    if round_id is None:
+        res = await db.execute(
+            select(Round)
+            .where(Round.fractal_id == fractal_id)
+            .order_by(Round.level.desc())
+            .limit(1)
+        )
+        r = res.scalar_one_or_none()
+        if not r:
+            # Let caller decide how to handle "no rounds"
+            return {"fractal_id": fractal_id, "rounds": []}
+        round_id = r.id
+
+    # 2) Try cache
+    cached = await db.get(RoundTree, round_id)
+    if cached:
+        return cached.tree
+
+    # 3) Build on demand and store
+    tree = await build_fractal_tree(
+        db,
+        fractal_id=fractal_id,
+        round_id=round_id,
+    )
+
+    existing = await db.get(RoundTree, round_id)
+    if existing:
+        existing.tree = tree
+    else:
+        db.add(RoundTree(round_id=round_id, fractal_id=fractal_id, tree=tree))
+    await db.flush()
+
+    return tree

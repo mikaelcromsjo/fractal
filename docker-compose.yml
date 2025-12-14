@@ -47,7 +47,7 @@ services:
     environment:
       POSTGRES_USER: fractal_user
       POSTGRES_PASSWORD: fractal_pass
-      POSTGRES_DB: fractal_db
+      POSTGRES_DB: test_fractal_db
     ports:
       - "5432:5432"
     volumes:

@@ -2,14 +2,17 @@
 from typing import Any, Dict, List, Optional
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException, status, Request
+from fastapi import APIRouter, Depends, HTTPException, status, Request, Query
 from fastapi.responses import JSONResponse, HTMLResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
-
+from typing import Any, Dict, List, Optional
 from config.settings import settings
 from mako.lookup import TemplateLookup
 from infrastructure.db.session import get_async_session as get_db
+from infrastructure.models import RoundTree
+
+from services.fractal_service_tree import build_fractal_tree
 
 # Service imports - replace direct DB access
 from services.fractal_service import (
@@ -33,6 +36,8 @@ from services.fractal_service import (
     get_fractal,
     get_user,
     get_user_info_by_telegram_id,
+    get_next_card,
+    get_or_build_round_tree_repo
 )
 
 from telegram.bot import process_update
@@ -99,6 +104,7 @@ class CreateCommentRequest(BaseModel):
     proposal_id: int
     parent_comment_id: Optional[int] = None
     user_id: int
+    group_id: int
     text: str
 
     class Config:
@@ -195,28 +201,37 @@ async def dashboard(request: Request):
 @router.get("/load_card")
 async def load_card(
     request: Request,
-    group_id: int,           # Query param ?group_id=123
-    user_id: int,           # Query param ?user_id=456
+    group_id: int = Query(..., description="Current group ID"),
+    user_id: int = Query(..., description="Current user ID"),
     db: AsyncSession = Depends(get_db)
 ):
-    """Load next unvoted card for user in group."""
+    """Load next unvoted card - EXACTLY matches proposal_card.html."""
+    
     card = await get_next_card(db, group_id, user_id)
     
     if not card:
-        # No more cards
-        template = templates.get_template("no_cards.html")
-        return HTMLResponse(template.render(request=request))
-    
-    # Static user/reply for template
-    user = {
+#        template = templates.get_template("no_cards.html")
+#        return HTMLResponse(template.render(request=request))
+        return HTMLResponse()
+     
+    # Static user/reply for template (current user)
+    current_user = {
         "id": user_id,
-        "username": "Current User",
+        "username": "You",  # Or fetch real username
         "avatar": "/static/img/64_5.png"
     }
-    reply = {"avatar": "/static/img/64_6.png"}
+    reply = {
+        "avatar": "/static/img/64_6.png"
+    }
     
+    # ✅ Pass card as 'proposal' - template works unchanged!
     template = templates.get_template("proposal_card.html")
-    html_content = template.render(request=request, user=user, reply=reply, proposal=card)
+    html_content = template.render(
+        request=request, 
+        user=current_user, 
+        reply=reply, 
+        proposal=card  # ✅ Perfect match!
+    )
     
     return HTMLResponse(content=html_content)
 
@@ -346,7 +361,7 @@ async def promote_to_next_round_endpoint(
     new_round = await promote_to_next_round(db, prev_round_id, fractal_id)
     return JSONResponse(content={"ok": True, "new_round": orm_to_dict(new_round) if new_round else None})
 
-@router.post("/create_proposal_async")
+@router.post("/create_proposal")
 async def create_proposal_endpoint(
     payload: CreateProposalRequest, 
     db: AsyncSession = Depends(get_db)
@@ -362,7 +377,7 @@ async def create_proposal_endpoint(
     )
     return JSONResponse(content={"ok": True, "proposal": orm_to_dict(proposal)})
 
-@router.post("/create_comment_async")
+@router.post("/create_comment")
 async def create_comment_endpoint(
     payload: CreateCommentRequest, 
     db: AsyncSession = Depends(get_db)
@@ -372,11 +387,12 @@ async def create_comment_endpoint(
         payload.proposal_id,
         payload.user_id,
         payload.text,
-        payload.parent_comment_id
+        payload.parent_comment_id,
+        payload.group_id,
     )
     return JSONResponse(content={"ok": True, "comment": orm_to_dict(comment)})
 
-@router.post("/vote_proposal_async")
+@router.post("/vote_proposal")
 async def vote_proposal_endpoint(
     payload: VoteProposalRequest, 
     db: AsyncSession = Depends(get_db)
@@ -389,7 +405,7 @@ async def vote_proposal_endpoint(
     )
     return JSONResponse(content={"ok": True, "vote": orm_to_dict(vote)})
 
-@router.post("/vote_comment_async")
+@router.post("/vote_comment")
 async def vote_comment_endpoint(
     payload: VoteCommentRequest, 
     db: AsyncSession = Depends(get_db)
@@ -426,7 +442,7 @@ async def select_representative_endpoint(
     selection = await select_representative_from_vote(db, group_id)
     return JSONResponse(content={"ok": True, "selection": orm_to_dict(selection)})
 
-@router.post("/vote_representative_async")
+@router.post("/vote_representative")
 async def vote_representative_endpoint(
     payload: AnyDictModel, 
     db: AsyncSession = Depends(get_db)
@@ -462,3 +478,15 @@ async def get_user_endpoint(
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     return JSONResponse(content={"ok": True, "user": orm_to_dict(user)})
+
+
+@router.get("/{fractal_id}/tree")
+async def get_fractal_tree(
+    fractal_id: int,
+    round_id: Optional[int] = None,
+    db: AsyncSession = Depends(get_db),
+):
+    tree = await get_or_build_round_tree_repo(db, fractal_id=fractal_id, round_id=round_id)
+    if not tree.get("rounds"):
+        raise HTTPException(status_code=404, detail="No rounds found")
+    return tree

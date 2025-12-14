@@ -195,7 +195,7 @@ class Comment(Base):
     text = Column(Text, nullable=False)
     created_at = Column(DateTime(timezone=True), default=func.now())
     score_per_level = Column(JSONB, default=list)
-    group = Column(Integer, ForeignKey("groups.id"), nullable=False)
+    group_id = Column(Integer, ForeignKey("groups.id"), nullable=False)
 
 """
     _proposal = relationship("Proposal", back_populates="_comments")
@@ -282,3 +282,11 @@ class AuditLog(Base):
     user_id = Column(Integer, nullable=True)
     timestamp = Column(DateTime(timezone=True), default=func.now())
 
+
+class RoundTree(Base):
+    __tablename__ = "round_trees"
+
+    round_id = Column(Integer, ForeignKey("rounds.id"), primary_key=True)
+    fractal_id = Column(Integer, ForeignKey("fractals.id"), index=True)
+    tree = Column(JSONB, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())

@@ -470,7 +470,7 @@ fetch("/api/v1/fractals/auth", {
 .then(res => res.json())
 .then(data => {
     if(data.status === "ok") {
-        statusEl.innerText = "Authenticated as: " + data.first_name;
+        statusEl.innerText = "Name: " + data.first_name + " Fractal: " + data.fractal_id + " Group:" + data.group_id + " Round: " + data.round_id;
         
         // ✅ Set all current context variables
         currentUserId = data.user_id;
@@ -538,7 +538,7 @@ submitBtn.addEventListener("click", function() {
         return;
     }
 
-    fetch("/api/v1/fractals/create_proposal_async", {
+    fetch("/api/v1/fractals/create_proposal", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -554,8 +554,8 @@ submitBtn.addEventListener("click", function() {
     })
     .then(res => res.json())
     .then(data => {
-        if (data.status === "ok") {
-            // you may want to use returned proposal instead of addCard(name, desc)
+        console.log(data)
+        if (data.ok) {
             form.style.display = "none";
             addBtn.style.display = "block";
             nameInput.value = "";
@@ -573,11 +573,19 @@ submitBtn.addEventListener("click", function() {
 function loadNextCard() {
     // Call with current context from auth
     fetch(`/api/v1/fractals/load_card?group_id=${currentGroupId}&user_id=${currentUserId}`)
-        .then(res => res.text())  // HTMLResponse
-        .then(html => {
-            addCard(data);
+        .then(res => {
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            return res.text();
         })
-        .catch(err => console.error(err));
+        .then(html => {
+            if (html.length > 0) {  // ✅ .length (property), not .length()
+                addCard(html);
+            }
+        })
+        .catch(err => {
+            console.error('Load card failed:', err);
+            // Handle error (show message, etc.)
+        });
 }
 
 function addCard(html) {
@@ -609,7 +617,7 @@ function onRatingCommit(proposalId, value) {
         return;
     }
 
-    fetch("/api/v1/fractals/vote_proposal_async", {
+    fetch("/api/v1/fractals/vote_proposal", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -620,7 +628,8 @@ function onRatingCommit(proposalId, value) {
     })
     .then(res => res.json())
     .then(data => {
-        if (data.status === "ok") {
+        if (data.ok) {
+            console.log("vote", data.vote)
             loadNextCard();
         }
     })
@@ -637,12 +646,13 @@ function submitProposalComment(proposalId) {
         return;
     }
 
-    fetch("/api/v1/fractals/create_comment_async", {
+    fetch("/api/v1/fractals/create_comment", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
             proposal_id: proposalId,
             parent_comment_id: null,
+            group_id: currentGroupId,
             user_id: currentUserId,
             text: text
         })
@@ -665,7 +675,7 @@ function voteComment(commentId, delta) {
 
     const vote = delta > 0; // +1 => True, -1 => False
 
-    fetch("/api/v1/fractals/vote_comment_async", {
+    fetch("/api/v1/fractals/vote_comment", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
