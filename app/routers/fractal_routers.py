@@ -214,7 +214,7 @@ async def dashboard(request: Request, fractal_id: int):
     return HTMLResponse(html)
 
 @router.get("/get_next_card")
-async def get_next_card(
+async def get_next_card_router(
     request: Request,
     group_id: int = Query(..., description="Current group ID"),
     user_id: int = Query(..., description="Current user ID"),
@@ -225,8 +225,9 @@ async def get_next_card(
     card = await get_next_card(db, group_id, user_id)
     
     if not card:
-        template = templates.get_template("no_cards.html")
-        response = HTMLResponse(template.render(request=request))
+#        template = templates.get_template("no_cards.html")
+#        response = HTMLResponse(template.render(request=request))
+        response = HTMLResponse()
         response.headers["HX-Trigger"] = "noMoreCards"
         return response
      
@@ -251,45 +252,41 @@ async def get_next_card(
 
 
 @router.get("/get_all_cards")
-async def get_all_cards(
+async def get_all_cards_router(
     request: Request,
     group_id: int = Query(..., description="Current group ID"),
     user_id: int = Query(..., description="Current user ID"),
     db: AsyncSession = Depends(get_db)
 ):
-    """Load all unvoted cards - renders multiple proposal_card.html templates."""
+    """Load all cards in group - renders multiple proposal_card.html templates."""
     
-    # Get list of dicts from your previous function
     cards = await get_all_cards(db, group_id, user_id)
     
     if not cards:
-        template = templates.get_template("no_cards.html")
-        response = HTMLResponse(template.render(request=request))
-        response.headers["HX-Trigger"] = "noMoreCards"
+#        template = templates.get_template("no_cards.html")
+#        html = template.render_unicode(request=request)  # ✅ render_unicode()
+#        response = HTMLResponse(html)
+        response = HTMLResponse()
+        response.headers["HX-Trigger"] = "noCards"
         return response
     
-    # Static user for template (current user)
     avatar_id = (user_id % 16) + 1
     current_user = {
         "id": user_id,
-        "username": "You",  # Or fetch real username
+        "username": "You",
         "avatar": f"/static/img/64_{avatar_id}.png"
     }
     
-    # ✅ Render each card and combine
     template = templates.get_template("proposal_card.html")
     
-    cards_html = []
-    for card in cards:
-        html_content = template.render(
+    combined_html = "".join([
+        template.render_unicode(  # ✅ render_unicode() returns str
             request=request,
             user=current_user,
-            proposal=card  # Each dict becomes a card
+            proposal=card
         )
-        cards_html.append(html_content)
-    
-    # Join all cards into single HTML response
-    combined_html = "".join(cards_html)
+        for card in cards
+    ])
     
     return HTMLResponse(content=combined_html)
 

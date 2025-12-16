@@ -281,6 +281,14 @@ async def close_round(db: AsyncSession, round_id: int):
     Close a round: mark it closed and calculate totals for proposals and comments.
     Saves scores per level as lists in JSONB.
     """
+
+    groups = await get_groups_for_round(db, round_id)
+    text = f"The round has ended. Thanks for your input!"
+    for g in groups:
+        await send_message_to_group(db, g.id, text)
+        await send_message_to_web_app_group(db, g.id, text)
+
+
     # Step 1: Mark round as closed
     round_obj = await close_round_repo(db, round_id)
 
@@ -309,15 +317,25 @@ async def close_round(db: AsyncSession, round_id: int):
 
     # Step 4: Promote to next round
     new_round = await promote_to_next_round(db, round_obj.id, round_obj.fractal_id)
+    if new_round:
 
-    groups = await get_groups_for_round(db, new_round.id)
-    text = f"The Next Round has started!"
-    for g in groups:
-        await send_button_to_group(db, g.id, text, "Dashboard", round_obj.fractal_id)
-        await send_message_to_web_app_group(db, g.id, text)
+        groups = await get_groups_for_round(db, new_round.id)
+        text = f"The Next Round has started! You have been selected to represent your Circle!"
+        for g in groups:
+            await send_button_to_group(db, g.id, text, "Dashboard", round_obj.fractal_id)
+            await send_message_to_web_app_group(db, g.id, text)
+        return new_round
+    else:
 
-    # Step 5: Return the new round if created, else the closed round
-    return new_round if new_round else round_obj
+        groups = await get_groups_for_round(db, round_id)
+        text = f"The Fractal has ended!"
+        for g in groups:
+            await send_message_to_group(db, g.id, text)
+            await send_message_to_web_app_group(db, g.id, text)
+
+
+        # Step 5: Return the new round if created, else the closed round
+        return None
 
 # ----------------------------
 # Promote to Next Round

@@ -7,6 +7,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
     <meta charset="UTF-8">
     <title>Telegram WebApp Dashboard</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
@@ -62,6 +63,7 @@ body {
     flex-direction: column;
     gap: 10px;
     animation: proposal-card-in 0.3s ease-out;
+    margin-bottom: 4px;
 }
 
 @keyframes proposal-card-in {
@@ -332,17 +334,11 @@ body {
             flex-grow: 1;
         }
         .card {
-            background: #fff;
-            padding: 12px;
-            border-radius: 12px;
-            box-shadow: 0 1px 4px rgba(0,0,0,0.1);
             opacity: 0;
-            transform: translateX(50px);
             transition: all 0.4s ease-out;
         }
         .card.show {
             opacity: 1;
-            transform: translateX(0);
         }
         #proposal-form {
             background: #fff;
@@ -456,7 +452,7 @@ fetch("/api/v1/fractals/auth", {
             groupId: currentGroupId
         });
 
-        loadNextCard(); // Start loading cards after auth
+        getNextCard(); // Start loading cards after auth
     } else {
         statusEl.innerText = "Auth failed: " + data.error;
         addCard('You are not in any active group. <a href="#" onclick="window.location.reload(); return false;">Reload</a>');
@@ -495,51 +491,7 @@ fetch("/api/v1/fractals/auth", {
         charCount.innerText = descInput.value.length + " / 2000";
     });
 
-submitBtn.addEventListener("click", function() {
-    const name = nameInput.value.trim();
-    const desc = descInput.value.trim();
-    if (!name || !desc) {
-        alert("Name and description required!");
-        return;
-    }
-    if (!currentUserId) {
-        alert("Cannot create proposal: no user id");
-        return;
-    }
-    if (currentFractalId === null || currentGroupId === null || currentRoundId === null) {
-        alert("Missing fractal/group/round context");
-        return;
-    }
 
-    fetch("/api/v1/fractals/create_proposal", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-            fractal_id: currentFractalId,
-            group_id: currentGroupId,
-            round_id: currentRoundId,
-            title: name,
-            body: desc,
-            creator_user_id: currentUserId,
-            type: "base",
-            meta: {}
-        })
-    })
-    .then(res => res.json())
-    .then(data => {
-        console.log(data)
-        if (data.ok) {
-            form.style.display = "none";
-            addBtn.style.display = "block";
-            nameInput.value = "";
-            descInput.value = "";
-            charCount.innerText = "0 / 2000";
-        } else {
-            alert("Error creating proposal: " + data.error);
-        }
-    })
-    .catch(console.error);
-});
 
 function isAllVoted() {
     const proposalCards = document.querySelectorAll('.proposal-card[data-proposal-id]');
@@ -560,7 +512,7 @@ function isAllVoted() {
 };
 
 // Load a single card from backend
-function loadNextCard() {
+function getNextCard() {
 
     // Call with current context from auth
     fetch(`/api/v1/fractals/get_next_card?group_id=${currentGroupId}&user_id=${currentUserId}`)
@@ -570,7 +522,21 @@ function loadNextCard() {
         })
         .then(html => {
             if (html.length > 0) {
+
+            // ✅ Remove .card.show divs that contain .no-proposals-message
+            const cardShowDivs = document.querySelectorAll('.card.show');
+            cardShowDivs.forEach(div => {
+                // Check if this card contains a no-proposals-message
+                const hasEmptyMessage = div.querySelector('.no-proposals-message');
+                if (hasEmptyMessage) {
+                    div.remove(); // Remove the entire card
+                }
+            });
+
                 addCard(html);
+            }
+            else {
+                getAllCards();
             }
         })
         .catch(err => {
@@ -580,7 +546,16 @@ function loadNextCard() {
 }
 
 // Load a single card from backend
-function loadAllCards() {
+function getAllCards() {
+
+    // Clear all
+
+        // ✅ Remove .card.show divs that contain .no-proposals-message
+        const cardShowDivs = document.querySelectorAll('.card.show');
+        cardShowDivs.forEach(div => {
+                div.remove(); // Remove the entire card
+            });
+
 
     // Call with current context from auth
     fetch(`/api/v1/fractals/get_all_cards?group_id=${currentGroupId}&user_id=${currentUserId}`)
@@ -591,6 +566,9 @@ function loadAllCards() {
         .then(html => {
             if (html.length > 0) {
                 addCard(html);
+            }
+            else{
+                addCard("There is nothing to show..")
             }
         })
         .catch(err => {
@@ -618,7 +596,14 @@ function addCard(html) {
 document.body.addEventListener('noMoreCards', function() {
     noMoreCards = true;
     console.log('No more cards available');
+    getAllCards();
 });
+
+document.body.addEventListener('noCards', function() {
+    noMoreCards = true;
+    addCard("There are no proposals at all..");
+});
+
 
 function onRatingChange(statusId, value) {
     const el = document.getElementById("rating-value-" + statusId);
@@ -648,7 +633,7 @@ function onRatingCommit(proposalId, value) {
         console.log(data)
         if (data.ok) {
             if (isAllVoted())
-                loadNextCard();
+                getNextCard();
         }
     })
     .catch(console.error);
@@ -683,8 +668,8 @@ function submitProposalComment(proposalId) {
             input.value = "";
             const comment = data.comment;
             
-            // Generate avatar filename: 64_(1-15) based on user_id % 15
-            const avatarNum = ((comment.user_id % 16)) + 1; // Ensures 1-15 range
+            // Generate avatar filename: 64_(1-16) based on user_id % 16
+            const avatarNum = ((comment.user_id % 16)) + 1;
             const avatarSrc = `/static/img/64_${avatarNum}.png`;
             
             // Format date
@@ -712,23 +697,145 @@ function submitProposalComment(proposalId) {
                 </div>
             `;
             
-         // Append to correct comments list container
+            // Append to correct comments list container
             const container = document.getElementById("comments-list-" + proposalId);
-            console.log("conatiner ", container)
+            console.log("container ", container)
             console.log("comments-list-" + proposalId)
             if (container) {
-                console.log("html ",commentHtml)  
+                console.log("html ", commentHtml)  
                 container.insertAdjacentHTML('beforeend', commentHtml);
             }
-            // remove text from textarea
+            
+            // Remove text from textarea
             const textarea = document.getElementById("comment-input-" + proposalId);
             textarea.value = "";
 
-            document.querySelector('#comments-list-' + proposalId + ' .proposal-comment-empty').remove()
+            // Remove empty message
+            const emptyMsg = document.querySelector('#comments-list-' + proposalId + ' .proposal-comment-empty');
+            if (emptyMsg) {
+                emptyMsg.remove();
+            }
         }
     })
     .catch(console.error);
 }
+
+submitBtn.addEventListener("click", function() {
+    const name = nameInput.value.trim();
+    const desc = descInput.value.trim();
+    if (!name || !desc) {
+        alert("Name and description required!");
+        return;
+    }
+    if (!currentUserId) {
+        alert("Cannot create proposal: no user id");
+        return;
+    }
+    if (currentFractalId === null || currentGroupId === null || currentRoundId === null) {
+        alert("Missing fractal/group/round context");
+        return;
+    }
+
+    fetch("/api/v1/fractals/create_proposal", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+            fractal_id: currentFractalId,
+            group_id: currentGroupId,
+            round_id: currentRoundId,
+            title: name,
+            body: desc,
+            creator_user_id: currentUserId,
+            type: "base",
+            meta: {}
+        })
+    })
+    .then(res => res.json())
+    .then(data => {
+        console.log(data)
+        if (data.ok) {
+            // Reset form
+            form.style.display = "none";
+            addBtn.style.display = "block";
+            nameInput.value = "";
+            descInput.value = "";
+            charCount.innerText = "0 / 2000";
+            
+            // ✅ Add new proposal card to the list
+            const proposal = data.proposal;
+            
+            // Generate avatar: user_id % 16 + 1
+            const avatarNum = ((parseInt(proposal.creator_user_id) % 16)) + 1;
+            const avatarSrc = `/static/img/64_${avatarNum}.png`;
+            
+            // Create proposal card HTML - exact match to your structure
+            const proposalHtml = `
+                <div class="proposal-card" data-proposal-id="${proposal.id}">
+                    <!-- Header: avatar + name + date -->
+                    <div class="proposal-header-row">
+                        <div class="proposal-userblock">
+                            <img src="${avatarSrc}" alt="You" class="proposal-avatar">
+                            <div class="proposal-usertext">
+                                <a _href="/profile/${proposal.creator_user_id}/" data-uid="${proposal.creator_user_id}" class="proposal-username usertooltip">
+                                    You
+                                </a>
+                                <div class="proposal-date">
+                                    Just now
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Title + description -->
+                    <div class="proposal-main">
+                        <h2 class="proposal-title">${proposal.title}</h2>
+                        <p class="proposal-text">${proposal.body}</p>
+                    </div>
+
+                    <!-- Star Rating -->
+
+                    <!-- Comments list -->
+                    <div class="proposal-comments-block">
+                        <div class="proposal-comments-header">
+                            Comments
+                        </div>
+                        <div class="proposal-comments-list" id="comments-list-${proposal.id}">
+                            <div class="proposal-comment-empty">
+                                No comments yet.
+                            </div>
+                        </div>
+
+                        <!-- Comment input -->
+                        <div class="proposal-comment-input-row">
+                            <textarea class="proposal-comment-input" id="comment-input-${proposal.id}" rows="1" placeholder="Add a comment..." onkeydown="if(event.key==='Enter' && !event.shiftKey){event.preventDefault();submitProposalComment(${proposal.id});}"></textarea>
+                            <button type="button" class="proposal-comment-send-btn" onclick="submitProposalComment(${proposal.id});">
+                                Send
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+                    addCard(proposalHtml);
+
+            
+            // ✅ Remove .card.show divs that contain .no-proposals-message
+            const cardShowDivs = document.querySelectorAll('.card.show');
+            cardShowDivs.forEach(div => {
+                // Check if this card contains a no-proposals-message
+                const hasEmptyMessage = div.querySelector('.no-proposals-message');
+                if (hasEmptyMessage) {
+                    div.remove(); // Remove the entire card
+                }
+            });
+                        
+        } else {
+            alert("Error creating proposal: " + data.error);
+        }
+    })
+    .catch(console.error);
+});
+
 
 function voteComment(commentId, vote) {
     if (!currentUserId) {
@@ -750,7 +857,7 @@ function voteComment(commentId, vote) {
         console.log(data);
         if (data.ok) {
             if (isAllVoted())
-                loadNextCard();
+                getNextCard();
         }
     })
     .catch(console.error);
@@ -848,10 +955,9 @@ async function connectWS() {
                 }
 
                 if (data.type === 'refresh' && data.message) {
-                    loadNextCard();
                     console.log(data.message);
                     if (noMoreCards)
-                        loadNextCard();
+//                        getNextCard();
                         noMoreCards = false;
                 }
 

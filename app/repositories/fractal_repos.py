@@ -745,33 +745,39 @@ async def get_next_card_repo(
     return None
 
 
+import asyncio
+from typing import Optional, List, Dict
+
 async def get_all_cards_repo(
     db: AsyncSession,
     group_id: int,
     current_user_id: int
-) -> Optional[Dict]:
+) -> Optional[List[Dict[str, any]]]:
+    """Load all cards in group and return as list of dicts."""
     Proposal = models.Proposal
-
-    # --- 3) Load all cards in group.
 
     prop_stmt = (
         select(Proposal)
-        .where(
-            Proposal.group_id == group_id,
-        )
+        .where(Proposal.group_id == group_id)
         .order_by(Proposal.created_at.asc())
     )
 
     prop_result = await db.execute(prop_stmt)
     proposals = prop_result.scalars().all()
 
-    proposals_html = []
-    for proposal in proposals:
-        enriched = await _enrich_proposal_with_comments_repo(db, proposal, current_user_id)
-        if enriched:
-            proposals_html.append(enriched)
+    if not proposals:
+        return None
+
+    # ✅ Process all proposals in parallel
+    proposals_data = await asyncio.gather(*[
+        _enrich_proposal_with_comments_repo(db, proposal, current_user_id)
+        for proposal in proposals
+    ])
     
-    return "".join(proposals_html) if proposals_html else None
+    # Filter out None values
+    proposals_data = [p for p in proposals_data if p]
+    
+    return proposals_data if proposals_data else None
 
 
 async def _enrich_proposal_with_comments_repo(
