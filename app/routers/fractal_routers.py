@@ -45,6 +45,7 @@ from services.fractal_service import (
     get_user,
     get_user_info_by_telegram_id,
     get_next_card,
+    get_all_cards,
     get_or_build_round_tree_repo
 )
 
@@ -54,7 +55,6 @@ from telegram_init_data import validate, parse
 JWT_SECRET_KEY = "a-supersecret-jwt-key"
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 1600
-
 
 from states import connected_clients
 
@@ -213,8 +213,8 @@ async def dashboard(request: Request, fractal_id: int):
     html = template.render(request=request, default_name="Guest", settings=settings)
     return HTMLResponse(html)
 
-@router.get("/load_card")
-async def load_card(
+@router.get("/get_next_card")
+async def get_next_card(
     request: Request,
     group_id: int = Query(..., description="Current group ID"),
     user_id: int = Query(..., description="Current user ID"),
@@ -226,8 +226,9 @@ async def load_card(
     
     if not card:
         template = templates.get_template("no_cards.html")
-        return HTMLResponse(template.render(request=request))
-#        return HTMLResponse()
+        response = HTMLResponse(template.render(request=request))
+        response.headers["HX-Trigger"] = "noMoreCards"
+        return response
      
     # Static user/reply for template (current user)
     avatar_id = (user_id % 16) + 1
@@ -247,6 +248,50 @@ async def load_card(
     )
     
     return HTMLResponse(content=html_content)
+
+
+@router.get("/get_all_cards")
+async def get_all_cards(
+    request: Request,
+    group_id: int = Query(..., description="Current group ID"),
+    user_id: int = Query(..., description="Current user ID"),
+    db: AsyncSession = Depends(get_db)
+):
+    """Load all unvoted cards - renders multiple proposal_card.html templates."""
+    
+    # Get list of dicts from your previous function
+    cards = await get_all_cards(db, group_id, user_id)
+    
+    if not cards:
+        template = templates.get_template("no_cards.html")
+        response = HTMLResponse(template.render(request=request))
+        response.headers["HX-Trigger"] = "noMoreCards"
+        return response
+    
+    # Static user for template (current user)
+    avatar_id = (user_id % 16) + 1
+    current_user = {
+        "id": user_id,
+        "username": "You",  # Or fetch real username
+        "avatar": f"/static/img/64_{avatar_id}.png"
+    }
+    
+    # ✅ Render each card and combine
+    template = templates.get_template("proposal_card.html")
+    
+    cards_html = []
+    for card in cards:
+        html_content = template.render(
+            request=request,
+            user=current_user,
+            proposal=card  # Each dict becomes a card
+        )
+        cards_html.append(html_content)
+    
+    # Join all cards into single HTML response
+    combined_html = "".join(cards_html)
+    
+    return HTMLResponse(content=combined_html)
 
 
 # ---------- Service-backed API Endpoints ----------
@@ -389,6 +434,10 @@ async def vote_proposal_endpoint(
     payload: VoteProposalRequest, 
     db: AsyncSession = Depends(get_db)
 ):
+    
+    import os
+    print(f"[PID {os.getpid()}]")
+
     vote = await vote_proposal(
         db,
         payload.proposal_id,

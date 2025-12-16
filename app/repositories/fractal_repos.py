@@ -675,7 +675,7 @@ async def get_fractal_members_repo(db: AsyncSession, fractal_id: int):
     return result.scalars().all()
 
 
-async def get_next_unvoted_card_repo(
+async def get_next_card_repo(
     db: AsyncSession,
     group_id: int,
     current_user_id: int
@@ -742,8 +742,37 @@ async def get_next_unvoted_card_repo(
     if comment:
         return await _enrich_comment_with_proposal_repo(db, comment, current_user_id)
 
-    print("DEBUG no more unvoted cards")
     return None
+
+
+async def get_all_cards_repo(
+    db: AsyncSession,
+    group_id: int,
+    current_user_id: int
+) -> Optional[Dict]:
+    Proposal = models.Proposal
+
+    # --- 3) Load all cards in group.
+
+    prop_stmt = (
+        select(Proposal)
+        .where(
+            Proposal.group_id == group_id,
+        )
+        .order_by(Proposal.created_at.asc())
+    )
+
+    prop_result = await db.execute(prop_stmt)
+    proposals = prop_result.scalars().all()
+
+    proposals_html = []
+    for proposal in proposals:
+        enriched = await _enrich_proposal_with_comments_repo(db, proposal, current_user_id)
+        if enriched:
+            proposals_html.append(enriched)
+    
+    return "".join(proposals_html) if proposals_html else None
+
 
 async def _enrich_proposal_with_comments_repo(
     db: AsyncSession, 
@@ -762,7 +791,7 @@ async def _enrich_proposal_with_comments_repo(
     # take away users own vote
     if (proposal.creator_user_id == current_user_id):
         proposal_vote = -1
-    else:        
+    else:
         # Comment vote
         vote_result = await db.execute(
             select(ProposalVote)
@@ -772,7 +801,6 @@ async def _enrich_proposal_with_comments_repo(
         vote_record = vote_result.scalars().first()
         proposal_vote = vote_record.score if vote_record else 0
         print("proposal_vote ", proposal_vote)
-
 
     # ALL comments (matching template structure)
     all_comments = await get_comments_for_proposal_repo(db, proposal.id)

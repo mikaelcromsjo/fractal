@@ -246,7 +246,7 @@ async def cmd_invite_group(message: types.Message):
         reply_markup=join_menu,
         parse_mode="Markdown",
     )
-    
+
 @router.message(CommandStart())
 async def cmd_start(message: types.Message):
     from telegram.bot import init_bot
@@ -500,7 +500,7 @@ async def cmd_start_fractal(
         # parse from message text if user typed the command manually
         parts = message.text.split(maxsplit=1)
         if len(parts) < 2:
-            await message.reply("Usage: /start_fractal <fractal_id>")
+            await message.reply("Usage: /start_fractal <fractal_id>", parse_mode=None)
             return
         fractal_id = parts[1].strip()
 

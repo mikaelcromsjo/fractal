@@ -44,7 +44,8 @@ from repositories.fractal_repos import (
     get_fractal_member_repo,
     get_fractal_members_repo,
     get_fractal_from_name_or_id_repo,
-    get_next_unvoted_card_repo,
+    get_next_card_repo,
+    get_all_cards_repo,
     get_or_build_round_tree_repo
 
 )
@@ -169,7 +170,12 @@ async def send_message_to_web_app_members(
     db: AsyncSession,
     members: Iterable[HasUserId],
     text: str,
+    type: str,
 ) -> None:
+    
+
+    print ("send_message_to_web_app_members")
+
     """
     Given any member objects with .user_id (FractalMember, GroupMember, etc.),
     resolve Users and send them a Telegram message.
@@ -186,16 +192,12 @@ async def send_message_to_web_app_members(
             continue
 
     if telegram_ids:
-        await send_message_to_web_app_users(telegram_ids, text)
+        await send_message_to_web_app_users(telegram_ids, text, type)
 
 
 async def send_message_to_group(db: AsyncSession, group_id: int, text: str) -> None:
     members = await get_group_members_repo(db, group_id)
     await send_message_to_members(db, members, text)
-
-async def send_message_to_web_app_group(db: AsyncSession, group_id: int, text: str) -> None:
-    members = await get_group_members_repo(db, group_id)
-    await send_message_to_web_app_members(db, members, text)
 
 async def send_button_to_group(db: AsyncSession, group_id: int, text: str, button, fractal_id, data=0) -> None:
     print("send to group", group_id)
@@ -206,11 +208,14 @@ async def send_message_to_fractal_members(db: AsyncSession, fractal_id: int, tex
     members = await get_fractal_members_repo(db, fractal_id)
     await send_message_to_members(db, members, text)
 
-async def send_message_to_fractal_web_app_members(db: AsyncSession, fractal_id: int, text: str) -> None:
-    members = await get_fractal_members_repo(db, fractal_id)
-    print("mes", text)
-    await send_message_to_web_app_members(db, members, text)
 
+async def send_message_to_web_app_group(db: AsyncSession, group_id: int, text: str, event_type="message") -> None:
+    members = await get_group_members_repo(db, group_id)
+    await send_message_to_web_app_members(db, members, text, event_type)
+
+async def send_message_to_fractal_web_app_members(db: AsyncSession, fractal_id: int, text: str, event_type="") -> None:
+    members = await get_fractal_members_repo(db, fractal_id)
+    await send_message_to_web_app_members(db, members, text, event_type)
 
 async def send_button_to_fractal_members(db, text, button, fractal_id, data=0):
     members = await get_fractal_members_repo(db, fractal_id)
@@ -376,11 +381,14 @@ async def promote_to_next_round(db: AsyncSession, prev_round_id: int, fractal_id
 # ----------------------------
 async def create_proposal(db: AsyncSession, fractal_id: int, group_id: int, round_id: int,
                                 title: str, body: str, creator_user_id: int):
+    # send ws to group about new proposal
+    await send_message_to_web_app_group(db, group_id, "new proposals ready", "refresh")
     return await add_proposal_repo(db, fractal_id, group_id, round_id, title, body, creator_user_id)
 
 
 async def create_comment(db: AsyncSession, proposal_id: int, user_id: int, text: str,
                                parent_comment_id: Optional[int] = None, group_id: Optional[int] = None):
+    await send_message_to_web_app_group(db, group_id, "new comments ready", "refresh")    
     return await add_comment_repo(db, proposal_id, user_id, text, parent_comment_id, group_id)
 
 
@@ -511,28 +519,29 @@ async def get_fractal_member(db: AsyncSession, user_id: int):
 
 async def get_next_card(db: AsyncSession, group_id: int, current_user_id: int) -> Optional[Dict]:
     """Service: Get next unvoted card for user."""
-    return await get_next_unvoted_card_repo(db, group_id, current_user_id)
+    return await get_next_card_repo(db, group_id, current_user_id)
+
+async def get_all_cards(db: AsyncSession, group_id: int, current_user_id: int) -> Optional[Dict]:
+    """Service: Get next unvoted card for user."""
+    return await get_all_cards_repo(db, group_id, current_user_id)
 
 
-async def send_message_to_web_app_users(telegram_ids: list[int], text: str):
+async def send_message_to_web_app_users(telegram_ids: list[int], text: str, event_type="message"):
     for user_id in telegram_ids:
         if(int(user_id)>=20000 and int(user_id)<300000):
             continue
         try:
             """Call this from your bot/game logic"""
-            print("try to send")
-
-
-            # Debug: Print ALL connected clients
-            print("=== ALL CONNECTED CLIENTS ===sending fractal_service")
-            print(f"Total users: {len(connected_clients)}")
-            for user_id, websockets in connected_clients.items():
-                print(f"User {user_id}: {len(websockets)} connections")
-            print("==============================")
-
+            user_id = str(user_id)
+            print("Sending")
+            print(f"DEBUG: user_id type: {type(user_id)}, value: {repr(user_id)}")
+            print(f"DEBUG: connected_clients type: {type(connected_clients)}")
+            print(f"DEBUG: connected_clients keys: {list(connected_clients.keys())}")
+            print(f"DEBUG: connected_clients keys types: {[type(k) for k in connected_clients.keys()]}")
+            print(f"DEBUG: user_id in connected_clients: {user_id in connected_clients}")
             if user_id in connected_clients:
-                print("in connected")
-                event = {"type": "message", "message": text, "timestamp": datetime.now(timezone.utc).isoformat()}
+                print ("Sent")
+                event = {"type": event_type, "message": text, "timestamp": datetime.now(timezone.utc).isoformat()}
                 disconnected = []
                 
                 for ws in connected_clients[user_id][:]:  # Copy list

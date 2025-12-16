@@ -416,6 +416,8 @@ body {
     tg.ready();
     tg.expand();
 
+    let noMoreCards = false;
+
     const initDataUnsafe = tg.initDataUnsafe || {};
     const defaultName = "${default_name}";
     const userName = (initDataUnsafe.user && initDataUnsafe.user.first_name)
@@ -561,13 +563,13 @@ function isAllVoted() {
 function loadNextCard() {
 
     // Call with current context from auth
-    fetch(`/api/v1/fractals/load_card?group_id=${currentGroupId}&user_id=${currentUserId}`)
+    fetch(`/api/v1/fractals/get_next_card?group_id=${currentGroupId}&user_id=${currentUserId}`)
         .then(res => {
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
             return res.text();
         })
         .then(html => {
-            if (html.length > 0) {  // ✅ .length (property), not .length()
+            if (html.length > 0) {
                 addCard(html);
             }
         })
@@ -576,6 +578,27 @@ function loadNextCard() {
             // Handle error (show message, etc.)
         });
 }
+
+// Load a single card from backend
+function loadAllCards() {
+
+    // Call with current context from auth
+    fetch(`/api/v1/fractals/get_all_cards?group_id=${currentGroupId}&user_id=${currentUserId}`)
+        .then(res => {
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            return res.text();
+        })
+        .then(html => {
+            if (html.length > 0) {
+                addCard(html);
+            }
+        })
+        .catch(err => {
+            console.error('Load card failed:', err);
+            // Handle error (show message, etc.)
+        });
+}
+
 
 function addCard(html) {
     var card = document.createElement("div");
@@ -591,6 +614,11 @@ function addCard(html) {
     // Scroll to the new card
     card.scrollIntoView({ behavior: "smooth" });
 }
+
+document.body.addEventListener('noMoreCards', function() {
+    noMoreCards = true;
+    console.log('No more cards available');
+});
 
 function onRatingChange(statusId, value) {
     const el = document.getElementById("rating-value-" + statusId);
@@ -809,15 +837,25 @@ async function connectWS() {
         // ✅ THEN set handlers on the created instance
         ws.onmessage = (event) => {
             try {
-                console.log("ws data", event.data);
+                console.log("data", event.data);
                 const data = JSON.parse(event.data);
-                console.log(data);
-                console.log(data.type);
-                console.log(data.message);
+                console.log("data ", data);
+                console.log("type ", data.type);
+                console.log("message ", data.message);
 
                 if (data.type === 'message' && data.message) {
                     Telegram.WebApp.showAlert(data.message);
                 }
+
+                if (data.type === 'refresh' && data.message) {
+                    loadNextCard();
+                    console.log(data.message);
+                    if (noMoreCards)
+                        loadNextCard();
+                        noMoreCards = false;
+                }
+
+
             } catch (e) {
                 console.error('Failed to parse WebSocket message:', e);
             }
@@ -863,20 +901,6 @@ async function connectWS() {
 
 // Initial connection
 connectWS();
-
-// Event handlers (add these functions)
-function showNewRound(data) {
-    Telegram.WebApp.showAlert(`New round started! Round ${data.round_num}`);
-}
-
-function endCircle(data) {
-    Telegram.WebApp.showAlert('Circle ended!');
-    // Update UI, maybe show results
-}
-
-function loadNewCards(cards) {
-    cards.forEach(cardHtml => addCard(cardHtml)); // Your existing function
-}
 
 
 function setViewportHeight() {
