@@ -205,8 +205,8 @@ async def main():
                 )
 
                 # Everyone votes on that comment
-                for uid in members:
-                    await vote_comment(db, c.id, uid, vote=True)
+#                for uid in members:
+#                    await vote_comment(db, c.id, uid, vote=True)
 
         await pause(
             "Before voting (test Telegram interactions for active round 0 now)"
@@ -261,12 +261,12 @@ async def main():
 #                    )
 
                 # Everyone votes on proposal
-                for voter_id in members:
-                    await vote_proposal(db, p.id, voter_id, score=5)
+  #              for voter_id in members:
+  #                  await vote_proposal(db, p.id, voter_id, score=5)
 
                 # Everyone votes on first comment
-                for voter_id in members:
-                    await vote_comment(db, c.id, voter_id, vote=True)
+   #             for voter_id in members:
+   #                 await vote_comment(db, c.id, voter_id, vote=True)
 
         # -------------------------
         # STEP 7c: Representative votes

@@ -305,11 +305,7 @@ async def get_comments_tree_repo(
     # voter_user_id: the current user for "my_vote"
     vote_stmt = select(
         CommentVote.comment_id,
-        func.sum(case(
-            (CommentVote.vote == True, 1),
-            (CommentVote.vote == False, -1),
-            else_=0
-        )).label("vote_total"),
+        func.sum().label("vote_total"),
         func.max(
             case(
                 (CommentVote.voter_user_id == voter_user_id, cast(CommentVote.vote, Integer)),
@@ -360,7 +356,7 @@ async def get_comments_tree_repo(
 # ----------------------------
 # Proposal Vote
 # ----------------------------
-async def cast_proposal_vote_repo(db: AsyncSession, proposal_id: int, voter_user_id: int, score: int):
+async def vote_proposal_repo(db: AsyncSession, proposal_id: int, voter_user_id: int, score: int):
     # do I need level?
     result = await db.execute(
         select(ProposalVote).where(ProposalVote.proposal_id == proposal_id, ProposalVote.voter_user_id == voter_user_id)
@@ -386,7 +382,7 @@ async def cast_proposal_vote_repo(db: AsyncSession, proposal_id: int, voter_user
 # ----------------------------
 # Comment Vote
 # ----------------------------
-async def cast_comment_vote_repo(db: AsyncSession, comment_id: int, voter_user_id: int, vote: bool):
+async def vote_comment_repo(db: AsyncSession, comment_id: int, voter_user_id: int, vote: int):
     result = await db.execute(
         select(CommentVote).where(CommentVote.comment_id == comment_id, CommentVote.voter_user_id == voter_user_id)
     )
@@ -605,11 +601,9 @@ async def get_user_info_by_telegram_id_repo(
     db: AsyncSession,
     telegram_id: str
 ) -> Optional[Dict]:
-    print("Get user info ", telegram_id)
 
     telegram_id = str(telegram_id)
 
-    # 1️⃣ Get user
     result = await db.execute(
         select(User).where(User.telegram_id == telegram_id)
     )
@@ -619,14 +613,11 @@ async def get_user_info_by_telegram_id_repo(
         return None
 
     user_id = int(user.id)
-    print("User", user_id)
 
     fractal_id = getattr(user, "active_fractal_id", None)
     if not fractal_id:
-        print("No active fractal")
         return None
     fractal_id = int(fractal_id)
-    print("Active fractal", fractal_id)
 
     # 2️⃣ Get last round for this fractal
     result = await db.execute(
@@ -640,65 +631,14 @@ async def get_user_info_by_telegram_id_repo(
         return {"fractal_id": fractal_id}
 
     round_id = int(last_round.id)
-    print("Round id", round_id)
 
-    print("DEBUG find group", {
-        "user_id": user_id,
-        "fractal_id": fractal_id,
-        "round_id": round_id,
-    })
-
-    # 🔍 A) All GroupMember rows for this user
-    gm_result = await db.execute(
-        select(GroupMember).where(GroupMember.user_id == user_id)
-    )
-    gm_rows = gm_result.scalars().all()
-    print(f"All GroupMember rows for user {user_id}:")
-    for gm in gm_rows:
-        print(
-            f"  GM id={gm.id} group_id={gm.group_id} "
-            f"left_at={gm.left_at}"
-        )
-
-    # 🔍 B) All groups in this fractal that the user is/was in (with round info)
-    dbg_result = await db.execute(
-        select(Group, GroupMember)
-        .join(GroupMember, Group.id == GroupMember.group_id)
-        .where(
-            GroupMember.user_id == user_id,
-            Group.fractal_id == fractal_id,
-        )
-        .order_by(Group.round_id)
-    )
-    rows = dbg_result.all()
-    print(f"All groups in fractal {fractal_id} for user {user_id}:")
-    for g, gm in rows:
-        print(
-            f"  Group id={g.id} round_id={g.round_id} "
-            f"left_at={gm.left_at}"
-        )
-
-    # 🔍 C) Groups for the current round
-    g_result = await db.execute(
-        select(Group).where(
-            Group.fractal_id == fractal_id,
-            Group.round_id == round_id,
-        )
-    )
-    g_rows = g_result.scalars().all()
-    print(f"Groups for round {round_id}:")
-    for g in g_rows:
-        print(f"  Group id={g.id} fractal_id={g.fractal_id} round_id={g.round_id}")
-
-    # 3️⃣ Find the *current* group for this user in this fractal
-    #    If you want to force last_round, keep Group.round_id == round_id.
     result = await db.execute(
         select(Group)
         .join(GroupMember, Group.id == GroupMember.group_id)
         .where(
             Group.fractal_id == fractal_id,
             GroupMember.user_id == user_id,
-            GroupMember.left_at.is_(None),  # currently in group
+#            GroupMember.left_at.is_(None),  # currently in group
         )
         .order_by(Group.round_id.desc())  # pick latest active group
         .limit(1)
@@ -707,13 +647,13 @@ async def get_user_info_by_telegram_id_repo(
     group_id = group.id if group else None
     round_id = group.round_id if group else round_id if group else None
 
-    print("Resolved group:", group_id, "round:", round_id)
 
     return {
         "fractal_id": fractal_id,
         "round_id": round_id,
         "group_id": group_id,
         "user_id": user_id,
+        "username": user.username,
     }
 
 
@@ -745,11 +685,6 @@ async def get_next_unvoted_card_repo(
     ProposalVote = models.ProposalVote
     CommentVote = models.CommentVote
 
-    print("DEBUG get_next_unvoted_card", {
-        "group_id": group_id,
-        "current_user_id": current_user_id,
-    })
-
     # --- 1) Proposals WITHOUT votes from current_user, not created by current_user
 
     vote_exists = (
@@ -774,30 +709,20 @@ async def get_next_unvoted_card_repo(
         .limit(1)
     )
 
-    print("DEBUG proposal SQL:", prop_stmt)
-
     prop_result = await db.execute(prop_stmt)
     proposal = prop_result.scalars().first()
 
     if proposal:
-        print("DEBUG picked proposal", {
-            "id": proposal.id,
-            "creator_user_id": proposal.creator_user_id,
-        })
         return await _enrich_proposal_with_comments_repo(db, proposal, current_user_id)
 
     # --- 2) Comments WITHOUT votes from current_user, not created by current_user
 
-    comment_vote_exists = (
-        select(CommentVote.id)
-        .where(
-            and_(
-                CommentVote.comment_id == Comment.id,             # correlate
-                CommentVote.voter_user_id == current_user_id,
-            )
+    comment_vote_exists = exists().where(
+        and_(
+            CommentVote.comment_id == Comment.id,
+            CommentVote.voter_user_id == current_user_id,
         )
-        .exists()
-    )
+    ).correlate(Comment)
 
     comment_stmt = (
         select(Comment)
@@ -805,23 +730,16 @@ async def get_next_unvoted_card_repo(
         .where(
             Proposal.group_id == group_id,
             Comment.group_id == group_id,
-            Comment.user_id != current_user_id,                   # not own comment
-            ~comment_vote_exists,                                 # NOT EXISTS
+            Comment.user_id != current_user_id,
+            ~comment_vote_exists,  # Now boolean!
         )
         .order_by(Comment.created_at.asc())
         .limit(1)
     )
-
-    print("DEBUG comment SQL:", comment_stmt)
-
     comment_result = await db.execute(comment_stmt)
     comment = comment_result.scalars().first()
 
     if comment:
-        print("DEBUG picked comment", {
-            "id": comment.id,
-            "user_id": comment.user_id,
-        })
         return await _enrich_comment_with_proposal_repo(db, comment, current_user_id)
 
     print("DEBUG no more unvoted cards")
@@ -839,36 +757,57 @@ async def _enrich_proposal_with_comments_repo(
     
     # Proposal creator info (for 'user' in template)
     creator_result = await db.execute(select(User).where(User.id == proposal.creator_user_id))
-    creator = creator_result.scalars().first()
-    
-    # Proposal votes
-    votes_result = await db.execute(select(ProposalVote).where(ProposalVote.proposal_id == proposal.id))
-    votes = votes_result.scalars().all()
-    total_score = sum(v.score for v in votes)
-    
+    creator = creator_result.scalars().first()    
+
+    # take away users own vote
+    if (proposal.creator_user_id == current_user_id):
+        proposal_vote = -1
+    else:        
+        # Comment vote
+        vote_result = await db.execute(
+            select(ProposalVote)
+            .where(ProposalVote.proposal_id == proposal.id)
+            .where(ProposalVote.voter_user_id == current_user_id)
+        )
+        vote_record = vote_result.scalars().first()
+        proposal_vote = vote_record.score if vote_record else 0
+        print("proposal_vote ", proposal_vote)
+
+
     # ALL comments (matching template structure)
     all_comments = await get_comments_for_proposal_repo(db, proposal.id)
     template_comments = []
-    
+
     for comment in all_comments:
         # Get comment author
         author_result = await db.execute(select(User).where(User.id == comment.user_id))
         author = author_result.scalars().first()
-        
-        # Comment votes
-        comment_votes_result = await db.execute(select(CommentVote).where(CommentVote.comment_id == comment.id))
-        comment_votes = comment_votes_result.scalars().all()
-        yes_count = sum(1 for v in comment_votes if v.vote)
-        score = yes_count - (len(comment_votes) - yes_count)
-        
-        template_comments.append({
+
+        # Comment vote
+        # take away users own vote
+        if (comment.user_id == current_user_id):
+            vote = -1
+        else:        
+            vote_result = await db.execute(
+                select(CommentVote)
+                .where(CommentVote.comment_id == comment.id)
+                .where(CommentVote.voter_user_id == current_user_id)
+            )
+            vote_record = vote_result.scalars().first()
+            vote = vote_record.vote if vote_record else 0
+        # ADD THIS: Build and append comment structure
+        comment_card = {
             "id": comment.id,
-            "username": author.username if author else "Unknown",
-            "avatar": f"/static/img/64_{(author.id if author else comment.id) % 16 + 1}.png",
-            "date": comment.created_at.strftime("%Y-%m-%d %H:%M") if comment.created_at else "just now",
+            "message": comment.text,
+            "username": author.username,
+            "avatar": f"/static/img/64_{(author.id) % 16 + 1}.png",
+            "date": comment.created_at.strftime("%Y-%m-%d %H:%M"),
+            "vote": vote,
             "text": comment.text,
-            "score": score  # ✅ Template expects 'score'
-        })
+            # Add other template fields
+        }
+        template_comments.append(comment_card)        
+
     
     # ✅ EXACT TEMPLATE STRUCTURE
     card = {
@@ -876,11 +815,11 @@ async def _enrich_proposal_with_comments_repo(
         "id": proposal.id,
         "title": proposal.title,
         "message": proposal.body or "",  # ✅ Template uses 'message'
-        "date": proposal.created_at.strftime("Wednesday, %B %d%s at %I:%M %p") if proposal.created_at else "just now",
-        "rating_points": total_score or 5,  # ✅ Template slider default
-        "rating_percent": min(100, max(0, (total_score / 10 * 100))),  # 0-100%
+        "date": proposal.created_at.strftime("%Y-%m-%d %H:%M") if proposal.created_at else "just now",
+        "rating_points": 0,  # ✅ Template slider default
+        "rating_percent": 0,  # 0-100%
         "tags": proposal.meta.get("tags", []),  # ✅ Template expects 'tags'
-        "score": total_score,  # ✅ Template score pill
+        "vote": proposal_vote,  # ✅ Template score pill
         "comments": template_comments  # ✅ Full comments array
     }
     
@@ -904,14 +843,7 @@ async def _enrich_comment_with_proposal_repo(
     # Use proposal enrichment (reuses template logic)
     proposal_card = await _enrich_proposal_with_comments_repo(db, proposal, current_user_id)
     
-    # Override with comment as "main content"
-    proposal_card.update({
-        "id": comment.id,
-        "title": "Comment on: " + proposal.title[:50] + "...",
-        "message": comment.text,  # Comment text becomes main content
-        "type": "comment"  # Template can check this if needed
-    })
-    
+
     return proposal_card
 
 async def get_or_build_round_tree_repo(

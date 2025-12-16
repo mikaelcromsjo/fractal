@@ -11,43 +11,47 @@
     <title>Telegram WebApp Dashboard</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
+
+html {
+    height: -webkit-fill-available; /* Safari iOS fix */
+    height: 100%; /* Fallback */
+}
+
+body {
+    height: var(--tg-viewport-stable-height, -webkit-fill-available);
+    min-height: 100%;
+    height: -webkit-fill-available; /* Mobile WebKit priority */
+}
+
 .proposal-comment-vote {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    font-size: 10px;
-    margin-left: 6px;
+    display: flex;
+    gap: 2px;
+    cursor: pointer;
 }
 
 .comment-vote-btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 14px;
-    height: 14px;
-    border-radius: 50%;
-    border: 1px solid #ddd;
-    cursor: pointer;
+    font-size: 15px;
+    color: #ddd;
+    opacity: 0.3;
+    transition: all 0.2s ease;
     user-select: none;
-    line-height: 1;
 }
 
-.comment-vote-minus {
-    color: #c0392b;
-    background: #fdecea;
+.comment-vote-btn:hover {
+    color: #ffd700;
+    opacity: 1;
 }
 
-.comment-vote-plus {
-    color: #1e8449;
-    background: #eafaf1;
+.comment-vote-btn.active {
+    color: #ffd700;
+    opacity: 1;
 }
 
-.comment-vote-score {
-    min-width: 16px;
-    text-align: center;
-    font-weight: 600;
-    color: #555;
+.comment-vote-btn.faded {
+    color: #ddd;
+    opacity: 0.3;
 }
+
 
 .proposal-card {
     background: #fff;
@@ -71,7 +75,6 @@
     }
 }
 
-/* Header row: avatar + name + date + optional score */
 .proposal-header-row {
     display: flex;
     align-items: center;
@@ -113,14 +116,6 @@
     color: #888;
 }
 
-.proposal-score-pill {
-    padding: 4px 8px;
-    border-radius: 999px;
-    background: rgba(0,136,204,0.08);
-    color: #0088cc;
-    font-size: 12px;
-    font-weight: 500;
-}
 
 /* Main content */
 .proposal-main {
@@ -156,82 +151,54 @@
     color: #4a6fdc;
 }
 
-/* Rating slider */
 .proposal-rating-block {
-    margin-top: 8px;
-    padding: 8px 10px;
-    border-radius: 10px;
-    background: #f6f7fb;
+    margin: 10px 0;
 }
 
-.proposal-rating-top {
+.comment-rating-block {
+    margin: 10px 0;
+}
+
+
+.proposal-star-rating {
     display: flex;
-    justify-content: space-between;
-    font-size: 13px;
-    margin-bottom: 6px;
-    color: #555;
-}
-
-.proposal-rating-value {
-    font-weight: 600;
-    color: #0088cc;
-}
-
-/* Simple visible slider */
-.proposal-slider {
-    width: 100%;
-    margin: 0;
-    -webkit-appearance: none;
-    appearance: none;
-    height: 6px;
-    border-radius: 999px;
-    background: #d0e4f7;
-    outline: none;
-}
-
-/* Chrome / Safari / Edge */
-.proposal-slider::-webkit-slider-thumb {
-    -webkit-appearance: none;
-    appearance: none;
-    width: 18px;
-    height: 18px;
-    border-radius: 50%;
-    background: #fff;
-    border: 2px solid #0088cc;
-    box-shadow: 0 0 0 3px rgba(0,136,204,0.2);
+    gap: 2px;
     cursor: pointer;
 }
 
-/* Firefox */
-.proposal-slider::-moz-range-thumb {
-    width: 18px;
-    height: 18px;
-    border-radius: 50%;
-    background: #fff;
-    border: 2px solid #0088cc;
-    box-shadow: 0 0 0 3px rgba(0,136,204,0.2);
+.comment-star-rating {
+    display: flex;
+    gap: 2px;
     cursor: pointer;
 }
 
-.proposal-slider::-moz-range-track {
-    height: 6px;
-    border-radius: 999px;
-    background: #d0e4f7;
+.star {
+    font-size: 20px;
+    color: #ddd;
+    opacity: 0.3;
+    transition: all 0.2s ease;
+    user-select: none;
 }
 
-.proposal-slider:active::-webkit-slider-thumb,
-.proposal-slider:active::-moz-range-thumb {
-    transform: scale(1.05);
+.comment-star {
+    font-size: 15px;
+
 }
 
-/* scale labels 1–10 */
-.proposal-rating-scale {
-    margin-top: 4px;
-    display: flex;
-    justify-content: space-between;
-    font-size: 11px;
-    color: #999;
+.star.faded {
+    opacity: 0.3;
 }
+
+.star.active {
+    color: #ffd700;
+    opacity: .7;
+}
+
+.star:hover {
+    color: #ffd700;
+    opacity: 1;
+}
+
 
 /* Comments section */
 .proposal-comments-block {
@@ -441,10 +408,9 @@
     <button id="cancel-proposal" style="background:#ccc;color:#000;">Cancel</button>
 </div>
 
-<%text>
 <script>
-
-
+    const public_base_wss_url = "${settings.public_base_wss_url}"
+<%text>
 
     const tg = window.Telegram.WebApp;
     tg.ready();
@@ -456,7 +422,7 @@
         ? initDataUnsafe.user.first_name
         : defaultName;
 
-    let currentUserId = initDataUnsafe.user ? initDataUnsafe.user.id : null;
+    let currentTelegramUserId = initDataUnsafe.user ? initDataUnsafe.user.id : null;
 
 
     const statusEl = document.getElementById("status");
@@ -470,13 +436,16 @@ fetch("/api/v1/fractals/auth", {
 .then(res => res.json())
 .then(data => {
     if(data.status === "ok") {
-        statusEl.innerText = "Name: " + data.first_name + " Fractal: " + data.fractal_id + " Group:" + data.group_id + " Round: " + data.round_id;
+//        const statusPanel = document.getElementById('status-panel');
+//        statusPanel.style.display = 'none'
+        statusEl.innerText = "Name: " + data.username + " Fractal: " + data.fractal_id + " Group:" + data.group_id + " Round: " + data.round_id;
         
         // ✅ Set all current context variables
         currentUserId = data.user_id;
         currentFractalId = data.fractal_id;
         currentRoundId = data.round_id;
         currentGroupId = data.group_id;
+        currentUserName = data.username
         
         console.log("Auth context:", {
             userId: currentUserId,
@@ -484,10 +453,11 @@ fetch("/api/v1/fractals/auth", {
             roundId: currentRoundId,
             groupId: currentGroupId
         });
-        
+
         loadNextCard(); // Start loading cards after auth
     } else {
         statusEl.innerText = "Auth failed: " + data.error;
+        addCard('You are not in any active group. <a href="#" onclick="window.location.reload(); return false;">Reload</a>');
     }
 })
 .catch(err => {
@@ -509,6 +479,7 @@ fetch("/api/v1/fractals/auth", {
         form.style.display = "flex";
         addBtn.style.display = "none";
     });
+
 
     cancelBtn.addEventListener("click", function() {
         form.style.display = "none";
@@ -568,9 +539,27 @@ submitBtn.addEventListener("click", function() {
     .catch(console.error);
 });
 
+function isAllVoted() {
+    const proposalCards = document.querySelectorAll('.proposal-card[data-proposal-id]');
+    
+    return Array.from(proposalCards).every(card => {
+        const proposalId = card.dataset.proposalId;
+        
+        // Proposal voted? (any active star)
+        const proposalStars = card.querySelector(`#star-rating-${proposalId} .star.active`);
+        if (!proposalStars) return false;
+        
+        // All comments voted? (every comment has active star)
+        const commentRatings = card.querySelectorAll('.comment-star-rating');
+        return Array.from(commentRatings).every(rating => 
+            rating.querySelector('.star.active')
+        );
+    });
+};
 
 // Load a single card from backend
 function loadNextCard() {
+
     // Call with current context from auth
     fetch(`/api/v1/fractals/load_card?group_id=${currentGroupId}&user_id=${currentUserId}`)
         .then(res => {
@@ -628,9 +617,10 @@ function onRatingCommit(proposalId, value) {
     })
     .then(res => res.json())
     .then(data => {
+        console.log(data)
         if (data.ok) {
-            console.log("vote", data.vote)
-            loadNextCard();
+            if (isAllVoted())
+                loadNextCard();
         }
     })
     .catch(console.error);
@@ -645,6 +635,7 @@ function submitProposalComment(proposalId) {
         console.warn("No current user id, cannot comment");
         return;
     }
+    console.log("Send");
 
     fetch("/api/v1/fractals/create_comment", {
         method: "POST",
@@ -659,21 +650,63 @@ function submitProposalComment(proposalId) {
     })
     .then(res => res.json())
     .then(data => {
-        if (data.status === "ok") {
+        console.log(data)
+        if (data.ok) {
             input.value = "";
-            // optionally: append new comment based on data.comment
+            const comment = data.comment;
+            
+            // Generate avatar filename: 64_(1-15) based on user_id % 15
+            const avatarNum = ((comment.user_id % 16)) + 1; // Ensures 1-15 range
+            const avatarSrc = `/static/img/64_${avatarNum}.png`;
+            
+            // Format date
+            const date = "Just now";
+            
+            // Create comment HTML
+            const commentHtml = `
+                <div class="proposal-comment-row" id="comment-${comment.id}">
+                    <img src="${avatarSrc}" alt="" class="proposal-comment-avatar">
+                    <div class="proposal-comment-content">
+                        <div class="proposal-comment-top">
+                            <span>
+                                <div class="proposal-comment-username">
+                                    ${comment.username || `user_${comment.user_id}`}
+                                </div>
+                                <div class="proposal-comment-date">
+                                    ${date}
+                                </div>
+                            </span>
+                        </div>
+                        <div class="proposal-comment-text">
+                            ${comment.text}
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+         // Append to correct comments list container
+            const container = document.getElementById("comments-list-" + proposalId);
+            console.log("conatiner ", container)
+            console.log("comments-list-" + proposalId)
+            if (container) {
+                console.log("html ",commentHtml)  
+                container.insertAdjacentHTML('beforeend', commentHtml);
+            }
+            // remove text from textarea
+            const textarea = document.getElementById("comment-input-" + proposalId);
+            textarea.value = "";
+
+            document.querySelector('#comments-list-' + proposalId + ' .proposal-comment-empty').remove()
         }
     })
     .catch(console.error);
 }
 
-function voteComment(commentId, delta) {
+function voteComment(commentId, vote) {
     if (!currentUserId) {
         console.warn("No current user id, cannot vote");
         return;
     }
-
-    const vote = delta > 0; // +1 => True, -1 => False
 
     fetch("/api/v1/fractals/vote_comment", {
         method: "POST",
@@ -686,13 +719,171 @@ function voteComment(commentId, delta) {
     })
     .then(res => res.json())
     .then(data => {
-        if (data.status === "ok" && typeof data.new_score !== "undefined") {
-            const el = document.getElementById("comment-vote-score-" + commentId);
-            if (el) el.textContent = data.new_score;
+        console.log(data);
+        if (data.ok) {
+            if (isAllVoted())
+                loadNextCard();
         }
     })
     .catch(console.error);
 }
+
+function onStarRatingClick(proposalId, rating) {
+    const stars = document.querySelectorAll(`#star-rating-${proposalId} .star`);
+    
+    // Update all stars based on clicked rating
+    stars.forEach((star, index) => {
+        if (index < rating) {
+            star.classList.add('active');
+            star.classList.remove('faded');
+        } else {
+            star.classList.remove('active');
+            star.classList.add('faded');
+        }
+    });
+    
+    // Update rating value (if you still have it elsewhere)
+    const ratingValue = document.getElementById(`rating-value-${proposalId}`);
+    if (ratingValue) {
+        ratingValue.textContent = `${rating} / 10`;
+    }
+    
+    // Commit rating - replace with your existing function
+    onRatingCommit(proposalId, rating);
+}
+
+function onStarRatingCommentClick(commentId, rating) {
+    const stars = document.querySelectorAll(`#comment-star-rating-${commentId} .star`);
+    
+    // Update all stars based on clicked rating
+    stars.forEach((star, index) => {
+        if (index < rating) {
+            star.classList.add('active');
+            star.classList.remove('faded');
+        } else {
+            star.classList.remove('active');
+            star.classList.add('faded');
+        }
+    });
+        
+    // Commit rating - replace with your existing function
+    voteComment(commentId, rating);
+
+}
+// WebSocket connection with reconnect
+let ws = null;
+let wsToken;
+let reconnectAttempts = 0;
+const maxReconnects = 5;
+let reconnectTimeout = 1000;
+
+async function fetchToken() {
+    const res = await fetch(`get-ws-token?user_id=${currentTelegramUserId}`, {
+        credentials: "include"
+    });
+    const data = await res.json();
+    wsToken = data.ws_token;
+}
+
+function createWebSocket(url) {
+
+
+
+    return new Promise((resolve, reject) => {
+        const socket = new WebSocket(url);
+        socket.onopen = () => resolve(socket);
+        socket.onerror = () => reject(new Error('WebSocket connection failed'));
+        socket.onclose = () => reject(new Error('WebSocket closed unexpectedly'));
+    });
+}
+
+async function connectWS() {
+    try {
+        await fetchToken();
+        
+        const url = `${public_base_wss_url}/api/v1/fractals/ws?token=${encodeURIComponent(wsToken)}&user_id=${currentTelegramUserId}`;
+        
+        // ✅ Create WS first
+        ws = await createWebSocket(url);
+        
+        // ✅ THEN set handlers on the created instance
+        ws.onmessage = (event) => {
+            try {
+                console.log("ws data", event.data);
+                const data = JSON.parse(event.data);
+                console.log(data);
+                console.log(data.type);
+                console.log(data.message);
+
+                if (data.type === 'message' && data.message) {
+                    Telegram.WebApp.showAlert(data.message);
+                }
+            } catch (e) {
+                console.error('Failed to parse WebSocket message:', e);
+            }
+        };
+        
+        ws.onclose = (event) => {
+            console.log('WebSocket closed:', event.code, event.reason);
+            ws = null;
+            if (reconnectAttempts < maxReconnects) {
+                reconnectAttempts++;
+                reconnectTimeout = Math.min(reconnectTimeout * 2, 30000);
+                console.log(`Reconnecting in ${reconnectTimeout}ms... (attempt ${reconnectAttempts}/${maxReconnects})`);
+                setTimeout(connectWS, reconnectTimeout);
+            } else {
+                console.error('Max reconnection attempts reached');
+            }
+        };
+        
+        ws.onerror = (error) => {
+            console.error('WebSocket error:', error);
+        };
+        
+        console.log('WebSocket connected!');
+
+
+        // ✅ PING EVERY 30 SECONDS - KEEPS CONNECTION ALIVE
+        const pingInterval = setInterval(() => {
+            if (ws?.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({type: "ping"}));
+                console.log("🏓 Ping sent");
+            } else {
+                clearInterval(pingInterval); // Stop if closed
+            }
+        }, 30000); // 30 seconds
+        
+        reconnectAttempts = 0;
+        reconnectTimeout = 1000;
+        
+    } catch (error) {
+        console.error('Connection failed:', error);
+    }
+}
+
+// Initial connection
+connectWS();
+
+// Event handlers (add these functions)
+function showNewRound(data) {
+    Telegram.WebApp.showAlert(`New round started! Round ${data.round_num}`);
+}
+
+function endCircle(data) {
+    Telegram.WebApp.showAlert('Circle ended!');
+    // Update UI, maybe show results
+}
+
+function loadNewCards(cards) {
+    cards.forEach(cardHtml => addCard(cardHtml)); // Your existing function
+}
+
+
+function setViewportHeight() {
+    document.documentElement.style.setProperty('--vh', `${window.innerHeight * 0.01}px`);
+}
+window.addEventListener('resize', setViewportHeight);
+setViewportHeight();
 
     </script>
 </%text>

@@ -12,7 +12,34 @@ from mako.lookup import TemplateLookup
 from fastapi.staticfiles import StaticFiles
 import os
 
-app = FastAPI(title="Fractal Governance Backend")
+
+from contextlib import asynccontextmanager
+from telegram.bot import init_bot
+from aiogram.types import BotCommand, MenuButtonCommands
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup - runs FIRST
+    print("🚀 Starting bot...")
+    bot, _ = init_bot()
+    
+    commands = [
+        BotCommand(command="start", description="Show menu"),
+        BotCommand(command="help", description="Help"),
+        BotCommand(command="join", description="Join fractal"),
+        BotCommand(command="menu", description="Main menu")
+    ]
+    await bot.set_my_commands(commands)
+    print("✅ Menu commands set!")
+    
+    yield  # App runs here
+    
+    # Shutdown
+    print("🛑 Shutting down bot...")
+    await bot.session.close()
+
+# Apply lifespan to your app
+app = FastAPI(lifespan=lifespan)
 
 STATIC_DIR = "/app/static"  # inside your Docker container
 

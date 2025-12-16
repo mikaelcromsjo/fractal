@@ -30,6 +30,8 @@ def get_bot_and_dispatcher() -> tuple[Bot, Dispatcher]:
     bot = Bot(token=settings.bot_token, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
     dp = Dispatcher(storage=MemoryStorage())  # do not bind bot here
     dp.include_router(fractal_router)
+
+    
 #    dp.include_router(proposal_router)
 #    dp.include_router(callback_router)
     return bot, dp

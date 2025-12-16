@@ -14,11 +14,7 @@
                 </div>
             </div>
         </div>
-        % if proposal.get("score"):
-            <div class="proposal-score-pill">
-                Score: ${proposal['score']}
-            </div>
-        % endif
+
     </div>
 
     <!-- Title + description -->
@@ -35,27 +31,22 @@
         % endif
     </div>
 
-    <!-- Slider -->
-    <div class="proposal-rating-block">
-        <div class="proposal-rating-top">
-            <span>Rate proposal</span>
-            <span class="proposal-rating-value"
-                  id="rating-value-${proposal['id']}">
-                10 / 10
-            </span>
-        </div>
-        <input
-            type="range"
-            min="1"
-            max="10"
-            step="1"
-            value="${proposal.get('rating_points', 5)}"
-            class="proposal-slider"
-            id="rating-slider-${proposal['id']}"
-            oninput="onRatingChange(${proposal['id']}, this.value)"
-            onchange="onRatingCommit(${proposal['id']}, this.value)"
-        >
+
+<!-- Star Rating -->
+        % if proposal['vote'] != -1:        
+<div class="proposal-rating-block">
+    <div class="proposal-star-rating" id="star-rating-${proposal['id']}">
+
+            % for i in range(10):
+                % if i < proposal['vote']:
+                <span class="star active" data-rating="${i+1}" onclick="onStarRatingClick(${proposal['id']}, ${i+1})">⭐</span>
+                % else:
+                <span class="star faded" data-rating="${i+1}" onclick="onStarRatingClick(${proposal['id']}, ${i+1})">⭐</span>
+             % endif
+         % endfor
     </div>
+</div>
+% endif
 
     <!-- Comments list -->
     <div class="proposal-comments-block">
@@ -71,28 +62,33 @@
                              class="proposal-comment-avatar">
                         <div class="proposal-comment-content">
 <div class="proposal-comment-top">
-    <span class="proposal-comment-username">
+    <span>
+    <div class="proposal-comment-username">
         ${comment['username']}
-    </span>
-    <span class="proposal-comment-date">
+    </div>
+    <div class="proposal-comment-date">
         ${comment['date']}
+    </div>
     </span>
-    <span class="proposal-comment-vote">
-        <span
-            class="comment-vote-btn comment-vote-minus"
-            onclick="voteComment(${comment['id']}, -1)"
-        >−</span>
-        <span
-            class="comment-vote-score"
-            id="comment-vote-score-${comment['id']}"
-        >
-            ${comment.get('score', 0)}
-        </span>
-        <span
-            class="comment-vote-btn comment-vote-plus"
-            onclick="voteComment(${comment['id']}, 1)"
-        >+</span>
-    </span>
+
+
+
+    
+<!-- Star Rating Comment -->
+        % if comment['vote'] != -1:
+<div class="comment-rating-block">
+    <div class="comment-star-rating" id="comment-star-rating-${comment['id']}">
+            % for i in range(3):
+                % if i < comment['vote']:
+                <span class="star comment-star active" data-rating="${i+1}" onclick="onStarRatingCommentClick(${comment['id']}, ${i+1})">⭐</span>
+                % else:
+                <span class="star comment-star faded" data-rating="${i+1}" onclick="onStarRatingCommentClick(${comment['id']}, ${i+1})">⭐</span>
+                % endif
+            % endfor
+    </div>
+</div>
+        % endif
+
 </div>
             <div class="proposal-comment-text">
                 ${comment['text']}

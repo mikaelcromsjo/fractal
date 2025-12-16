@@ -10,15 +10,30 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from html import escape
 from aiogram.enums import ParseMode
 from fastapi import HTTPException
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.utils.keyboard import InlineKeyboardBuilder
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
+from aiogram import F
+from aiogram.enums import ChatType
+from aiogram import F, Router
+from aiogram.enums import ChatType
+from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
+from aiogram.filters import Command
+from config.settings import settings
 
 from infrastructure.db.session import get_async_session
+
+from telegram.service import send_message_to_telegram_users, send_button_to_telegram_users
+
 from services.fractal_service import (
     create_fractal,
     join_fractal,
     start_fractal,
     close_round,
     get_fractal_from_name_or_id_repo,
-    set_active_fractal_repo
+    send_message_to_group,
+    get_group_members_repo,
+    get_user,
 )
 
 from infrastructure.db.session import get_async_session
@@ -201,16 +216,76 @@ def sanitize_text(s: str) -> str:
 
 
 from telegram.keyboards import default_menu  # adjust import to your structure
+from aiogram.types import BotCommand, MenuButtonCommands
 
+@router.message(Command("invite"), F.chat.type.in_([ChatType.GROUP, ChatType.SUPERGROUP]))
+async def cmd_invite_group(message: types.Message):
+    fractal_id = int(message.text.split()[1])
+
+    # in groups: NO web_app button, only URL buttons
+    join_menu = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text=f"🎯 Join Fractal {fractal_id}",
+                    url=f"https://t.me/{settings.bot_username}?start=fractal_{fractal_id}",
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="🚀 Open Dashboard",
+                    url=f"{settings.public_base_url}/api/v1/fractals/dashboard?fractal_id={fractal_id}",
+                )
+            ],
+        ]
+    )
+
+    await message.answer(
+        f"🚀 *Fractal {fractal_id} ready for group!*\n\n"
+        f"👆 Click button to join via private chat",
+        reply_markup=join_menu,
+        parse_mode="Markdown",
+    )
+    
 @router.message(CommandStart())
 async def cmd_start(message: types.Message):
+    from telegram.bot import init_bot
+    bot, _ = init_bot()
+    # Set commands EVERY TIME (works instantly)
+    commands = [
+        BotCommand(command="start", description="Show menu"),
+        BotCommand(command="help", description="Help"),
+    ]
+    await bot.set_my_commands(commands)
+    
+    # Set chat-specific menu button
+    # Only set menu button for PRIVATE chats
+    if message.chat.type == ChatType.PRIVATE:
+        await bot.set_chat_menu_button(
+            chat_id=message.chat.id,
+            menu_button=MenuButtonCommands()
+        )
+
+    args = message.text.split()
+    if len(args) > 1 and args[1].startswith("fractal_"):
+        fractal_id = int(args[1].replace("fractal_", ""))
+
+        builder = InlineKeyboardBuilder()
+
+        builder.button(
+            text=f"🙋 Join Fractal",
+            callback_data=f"join:{fractal_id}"
+        )
+        builder.adjust(1, 1)
+        button = builder.as_markup()
+
+        await message.answer(f"🎉 Join fractal {fractal_id}", reply_markup=button)
+
     await message.answer(
-        "👋 Fractal bot online!\n"
-        "Use the menu below or type /help for available commands.\n"
-        "Make sure the bot is a *group admin*.",
-        reply_markup=default_menu(),
-        parse_mode="Markdown"
+        "👋 Fractal bot ready for action!"
     )
+
+
 
 @router.message(Command("help"))
 async def cmd_help(message: types.Message):
@@ -269,16 +344,37 @@ async def fsm_get_start_date(message: types.Message, state: FSMContext):
 
             from telegram.keyboards import fractal_created_menu
 
-            await message.answer(
-                f"✨ Fractal '{sanitize_text(fractal_name)}' created!\nid = {fractal_id}",
-                reply_markup=fractal_created_menu(fractal_id),
-                parse_mode=None,
-            )
+
+            share_text = (
+                    f"🚀 *Fractal {fractal_id} created!*\n\n"
+                    f"👥 Share with friends:\n"
+                    f"`/join {fractal_id}`"
+                )
+
+            if message.chat.type == ChatType.PRIVATE:    
+                await message.answer(
+                        share_text,
+                        parse_mode="Markdown",
+                        reply_markup=fractal_actions_menu(fractal_id)
+                    )
+            else:
+                await message.answer(
+                        share_text,
+                    )
+
+
+#            await message.answer(
+#                f"✨ Fractal '{sanitize_text(fractal_name)}' created!\nid = {fractal_id}",
+#                reply_markup=fractal_created_menu(fractal_id),
+#                parse_mode=None,
+#            )
         except Exception as e:
             logger.exception("FSM create_fractal failed")
             await message.answer(f"Failed to create fractal: {e}")
 
     await state.clear()
+
+    
 
 @router.message(Command("create_fractal"))
 async def cmd_create_fractal(message: types.Message):
@@ -354,7 +450,7 @@ async def cmd_join(message: types.Message, state: FSMContext, fractal_id: Union[
     if fractal_id is None:
         parts = message.text.split(maxsplit=1)
         if len(parts) < 2:
-            await message.answer("Usage: /join <fractal_id|fractal_name>")
+            await message.answer("Usage: /join <fractal_id|fractal_name>", parse_mode=None)
             return
         fractal_id = parts[1].strip()
 
@@ -734,12 +830,111 @@ async def cmd_tree(message: types.Message, fractal_id: str | None = None):
             await message.answer(f"Failed to get tree: {e}")
 
 
-# Echo everything in the group
+message_history = {} 
+
+@router.message(lambda m: m.reply_to_message and m.reply_to_message.from_user.is_bot)
+async def handle_reply(message: types.Message):
+    replied_text = message.reply_to_message.text or ""
+    if not replied_text:
+        return
+
+    last_line = replied_text.splitlines()[-1].strip()
+
+    original_sender = None
+    original_message = last_line
+
+    # Case 1: plain "Name: text"
+    if "💬 " in last_line and not last_line.startswith("💬 Reply:"):
+        original_sender, original_message = last_line.split("💬 ", 1)
+
+    # Case 2: our own "💬 Reply: text"
+    elif last_line.startswith("💬 Reply:"):
+        original_message = last_line.replace("💬 Reply:", "", 1).strip()
+        # Extract sender from the header line instead of using bot username
+        header = replied_text.splitlines()[0] if replied_text.splitlines() else ""
+        # header looks like: "➡️ MikaelAnanda replied to MikaelAnanda:" or similar
+        if " replied to " in header:
+            h = header.replace("➡️", "").strip()
+            parts = h.split(" replied to ")
+            # parts[0] is replier, parts[1] ends with ':'
+            original_sender = parts[0].strip()
+
+    # Fallback: if still no sender, use the current user (never the bot)
+    if not original_sender:
+        original_sender = message.from_user.username or "User"
+
+    user_info = await get_user_info(str(message.from_user.id))
+    if not user_info:
+        return
+
+    group_id = int(user_info.get("group_id", 0))
+    if group_id == 0:
+        return
+
+    async for db in get_async_session():
+        try:
+            telegram_ids = []
+            members = await get_group_members_repo(db, group_id)
+            for member in members:
+                user = await get_user(db, member.user_id)
+                if not user or not user.telegram_id:
+                    continue
+                try:
+                    telegram_ids.append(int(user.telegram_id))
+                except ValueError:
+                    continue
+        except Exception:
+            return
+
+    if original_message:
+        reply_text = (
+            f"➡️ {user_info.get('username', 'User')} replied to {original_sender}:\n"
+            f"📝 Original: {original_message}\n"
+            f"💬 Reply: {message.text}"
+        )
+    else:
+        reply_text = (
+            f"➡️ {user_info.get('username', 'User')} replied to {original_sender}:\n"
+            f"💬 Reply: {message.text}"
+        )
+
+    await send_message_to_telegram_users(telegram_ids, reply_text)
+
+# 2) SECOND: catch‑all echo
 @router.message()
 async def echo_all(message: types.Message):
-    if message.text:
-        await message.answer(f"Echo: {message.text}")
-    else:
-        await message.answer(f"Received non-text message of type: {message.content_type}")          
+    if not message.text:
+        await message.answer(
+            f"Received non-text message of type: {message.content_type}"
+        )
+        return
 
+    user_info = await get_user_info(str(message.from_user.id))
+    if not user_info:
+        await message.answer("User not found in database.")
+        return
 
+    group_id = int(user_info.get("group_id", 0))
+    if group_id == 0:
+        await message.answer("No group assigned to user.")
+        return
+
+    message_text = f"👋 {user_info.get('username', 'User')} wrote:\n💬 {message.text}"
+
+    async for db in get_async_session():
+        try:
+            telegram_ids = []
+            members = await get_group_members_repo(db, group_id)
+            for member in members:
+                user = await get_user(db, member.user_id)
+                if not user or not user.telegram_id:
+                    continue
+                try:
+                    telegram_ids.append(int(user.telegram_id))
+                except ValueError:
+                    continue
+        except Exception as e:
+            await message.answer(f"Error getting members: {e}")
+            return
+
+    await send_message_to_telegram_users(telegram_ids, message_text)

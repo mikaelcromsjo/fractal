@@ -1,7 +1,9 @@
 # app/routers/fractal_routers.py
 from typing import Any, Dict, List, Optional
 from datetime import datetime
-
+from jose import jwt, JWTError
+from datetime import datetime, timedelta
+import json
 from fastapi import APIRouter, Depends, HTTPException, status, Request, Query
 from fastapi.responses import JSONResponse, HTMLResponse
 from pydantic import BaseModel, Field
@@ -11,8 +13,14 @@ from config.settings import settings
 from mako.lookup import TemplateLookup
 from infrastructure.db.session import get_async_session as get_db
 from infrastructure.models import RoundTree
+from datetime import datetime, timezone
 
 from services.fractal_service_tree import build_fractal_tree
+
+from fastapi import WebSocket, WebSocketDisconnect
+import json
+from typing import Dict, List
+
 
 # Service imports - replace direct DB access
 from services.fractal_service import (
@@ -42,6 +50,13 @@ from services.fractal_service import (
 
 from telegram.bot import process_update
 from telegram_init_data import validate, parse
+
+JWT_SECRET_KEY = "a-supersecret-jwt-key"
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 1600
+
+
+from states import connected_clients
 
 router = APIRouter()
 
@@ -82,7 +97,7 @@ class VoteProposalRequest(BaseModel):
 class VoteCommentRequest(BaseModel):
     comment_id: int
     voter_user_id: int
-    vote: bool
+    vote: int
 
     class Config:
         extra = "forbid"
@@ -153,7 +168,6 @@ async def telegram_webhook(token: str, request: Request):
 @router.post("/auth")
 async def fractals_auth(request: AuthRequest, db: AsyncSession = Depends(get_db)):
     try:
-        print(f"🔍 Raw init_data: {request.init_data[:100]}...")  # Debug
         
         # Validate Telegram data
         validate(request.init_data, settings.bot_token)
@@ -193,9 +207,10 @@ templates = TemplateLookup(
 )
 
 @router.get("/dashboard", response_class=HTMLResponse)
-async def dashboard(request: Request):
+async def dashboard(request: Request, fractal_id: int):
+    print ("fractal_id", fractal_id)
     template = templates.get_template("dashboard.html")
-    html = template.render(request=request, default_name="Guest")
+    html = template.render(request=request, default_name="Guest", settings=settings)
     return HTMLResponse(html)
 
 @router.get("/load_card")
@@ -210,52 +225,29 @@ async def load_card(
     card = await get_next_card(db, group_id, user_id)
     
     if not card:
-#        template = templates.get_template("no_cards.html")
-#        return HTMLResponse(template.render(request=request))
-        return HTMLResponse()
+        template = templates.get_template("no_cards.html")
+        return HTMLResponse(template.render(request=request))
+#        return HTMLResponse()
      
     # Static user/reply for template (current user)
+    avatar_id = (user_id % 16) + 1
     current_user = {
         "id": user_id,
         "username": "You",  # Or fetch real username
-        "avatar": "/static/img/64_5.png"
-    }
-    reply = {
-        "avatar": "/static/img/64_6.png"
+        "avatar": "/static/img/64_" + str(avatar_id) + ".png"
     }
     
     # ✅ Pass card as 'proposal' - template works unchanged!
     template = templates.get_template("proposal_card.html")
+    
     html_content = template.render(
         request=request, 
         user=current_user, 
-        reply=reply, 
         proposal=card  # ✅ Perfect match!
     )
     
     return HTMLResponse(content=html_content)
 
-
-@router.get("/test_load_card", response_class=HTMLResponse)
-def show_proposal(request: Request):
-    status_id = 1
-    user = {"id": 404, "username": "titanjah@web.de", "avatar": "/static/img/64_5.png"}
-    reply = {"avatar": "/static/img/64_6.png"}
-    proposal = {
-        "id": status_id, "title": "Love", "message": "Love is all there is :)",
-        "tags": ["attention"], "date": "Wednesday, November 19th 2025 at 9:02 pm",
-        "rating_points": 5, "rating_percent": 44.4444
-    }
-    proposal["comments"] = [
-        {"id": 1, "username": "alice", "avatar": "/static/img/64_3.png", "date": "2025-11-18 21:15", "text": "Interesting idea, feels very positive."},
-        {"id": 2, "username": "bob", "avatar": "/static/img/64_12.png", "date": "2025-11-19 08:42", "text": "I like this proposal, would support it."},
-        {"id": 3, "username": "charlie", "avatar": "/static/img/64_7.png", "date": "2025-11-20 13:05", "text": "Curious how this could work in a bigger group."},
-        {"id": 4, "username": "diana", "avatar": "/static/img/64_1.png", "date": "2025-11-21 19:27", "text": "Love the message, very aligned with the fractal spirit."},
-        {"id": 5, "username": "eve", "avatar": "/static/img/64_15.png", "date": "2025-11-22 10:03", "text": "Would be nice to see a concrete example of this in action. When is this going to be a reality?\nMaybe I can buy some carrots?"},
-    ]
-    template = templates.get_template("proposal_card.html")
-    html_content = template.render(request=request, user=user, reply=reply, proposal=proposal)
-    return HTMLResponse(content=html_content)
 
 # ---------- Service-backed API Endpoints ----------
 @router.post("/create_fractal")
@@ -490,3 +482,102 @@ async def get_fractal_tree(
     if not tree.get("rounds"):
         raise HTTPException(status_code=404, detail="No rounds found")
     return tree
+
+@router.get("/get-ws-token")
+def get_ws_token(request: Request, user_id: str):
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Not logged in")
+    
+    expire = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    token = jwt.encode({"sub": user_id, "exp": expire}, JWT_SECRET_KEY, algorithm=ALGORITHM)
+    return {"ws_token": token}
+
+
+@router.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    token = websocket.query_params.get("token")
+    
+    try:
+        await websocket.accept()
+    except Exception:
+        return
+    
+    if not token:
+        await websocket.close(code=1008)
+        return
+    
+    try:
+        payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=[ALGORITHM])
+        user_id = payload.get("sub")
+    except Exception:
+        await websocket.close(code=1008)
+        return
+    
+    # ADD CLIENT ✅ (your code is correct here)
+    if user_id not in connected_clients:
+        connected_clients[user_id] = []
+    connected_clients[user_id].append(websocket)
+    
+    print("=== CLIENT CONNECTED ===")
+    print(f"User {user_id} added: {len(connected_clients[user_id])} connections")
+    
+    # Send welcome message
+    event = {"type": "info", "message": "Hello from server! Connection established."}
+    await websocket.send_json(event)
+    
+    # FIXED: Proper disconnect handling
+    try:
+        while True:
+            data = await websocket.receive_text()  # This is correct
+            print("📨 Message received:", repr(data))
+            
+    except WebSocketDisconnect:
+        print(f"👋 User {user_id} DISCONNECTED")
+    except Exception as e:
+        print(f"❌ WS error {user_id}: {e}")
+    finally:
+        # CLEANUP (your code is correct)
+        if user_id in connected_clients and websocket in connected_clients[user_id]:
+            connected_clients[user_id].remove(websocket)
+            print(f"✅ Removed WS for user {user_id}. Remaining: {len(connected_clients[user_id])}")
+            if not connected_clients[user_id]:
+                del connected_clients[user_id]
+            
+            
+async def _websocket_endpoint(websocket: WebSocket):
+    await websocket.accept()
+
+    token = websocket.query_params.get("token")
+    user_id = websocket.query_params.get("user_id")
+
+    print("Received token:", token)    
+    if not token:
+        await websocket.close(code=1008)
+        return
+    
+    try:
+        payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=[ALGORITHM])
+        print("Payload:", payload)
+        user_id = payload.get("sub")
+        if not user_id:
+            raise JWTError()
+    except JWTError as e:
+        print("JWTError:", e)
+        await websocket.close(code=1008)
+        return
+
+    print("User ID", user_id)
+
+    if user_id not in connected_clients:
+        connected_clients[user_id] = []
+    connected_clients[user_id].append(websocket)
+    
+    try:
+        while True:
+            # Optional: handle client messages
+            data = await websocket.receive_text()
+#            await handle_client_message(websocket, json.loads(data))
+    except WebSocketDisconnect:
+        connected_clients[user_id].remove(websocket)
+        if not connected_clients[user_id]:
+            del connected_clients[user_id]

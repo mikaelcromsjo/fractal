@@ -12,3 +12,4 @@ typing_extensions>=4.12
 aiogram>=3.2
 mako 	
 telegram-init-data
+python-jose[cryptography]

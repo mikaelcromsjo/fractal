@@ -157,6 +157,11 @@ async def simulate_round(
         2) after half sim users have created proposals/comments
         3) before close_round
     """
+
+
+    recreate_test_db()
+    create_tables()
+
     print(f"\n--- Simulating Round {round_obj.level} (id={round_obj.id}) ---")
 
     groups = await get_groups_for_round(db, round_obj.id)
@@ -202,7 +207,7 @@ async def simulate_round(
             proposals_by_group[g.id].append(p)
 
             # 20% chance user comments on own proposal
-            if random.random() < 0.2:
+            if random.random() < 0.6:
                 await create_comment(
                     db=db,
                     proposal_id=p.id,
@@ -233,6 +238,8 @@ async def simulate_round(
                 # Determine score:
                 # - If this is test user's own proposal, give it a high fixed score from everyone.
                 # - Otherwise, random score 1–10.
+                if (p.id > 30000):
+                    continue
                 if p.creator_user_id == test_user.id:
                     score = 10
                 else:

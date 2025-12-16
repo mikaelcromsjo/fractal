@@ -231,7 +231,7 @@ class CommentVote(Base):
 #    level = Column(Integer, nullable=False)
     comment_id = Column(Integer, ForeignKey("comments.id"), index=True)
     voter_user_id = Column(Integer, ForeignKey("users.id"), index=True)
-    vote = Column(Boolean, nullable=False)
+    vote = Column(Integer, nullable=False)
     created_at = Column(DateTime(timezone=True), default=func.now())
 #    votes_per_level = Column(JSONB, default=dict)
 

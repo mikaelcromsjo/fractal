@@ -70,6 +70,7 @@ from aiogram.types import InlineKeyboardButton
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
 
 
+
 def default_menu():
     builder = InlineKeyboardBuilder()
 
@@ -111,27 +112,21 @@ def fractal_actions_menu(fractal_id: int):
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text="Open Fractal Dashboard",
-                    web_app=WebAppInfo(url=f"{settings.public_base_url}/api/v1/fractals/dashboard?fractal_id="+fractal_id)
-                    )
+                    text="🚀 Open Fractal Dashboard",
+                    web_app=WebAppInfo(url=f"{settings.public_base_url}/api/v1/fractals/dashboard?fractal_id={fractal_id}")
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="👥 Share Join Link",
+                    switch_inline_query=f"Join fractal {fractal_id}: t.me/{settings.bot_username}?start=fractal_{fractal_id}"
+                )
+            ],
+            [
+                InlineKeyboardButton(text="📋 Copy Link", url=f"https://t.me/{settings.bot_username}?start=fractal_{fractal_id}")
             ]
         ]
     )
-
-
-def old_fractal_actions_menu(fractal_id: int):
-    builder = InlineKeyboardBuilder()
-    builder.button(
-        text="📝 Write Proposal",
-        callback_data=f"proposal:{fractal_id}"
-    )
-    builder.button(
-        text="🌳 View Tree",
-        callback_data=f"tree:{fractal_id}"
-    )
-
-    builder.adjust(1, 1)
-    return builder.as_markup()
 
 
 def cancel_keyboard():

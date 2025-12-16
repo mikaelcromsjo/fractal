@@ -9,14 +9,15 @@ from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
 bot = Bot(token=settings.bot_token)
 
 async def send_message_to_telegram_users(telegram_ids: list[int], text: str):
-    for chat_id in telegram_ids:
-        if(int(chat_id)>=20000 and int(chat_id)<300000):
+    for user_id in telegram_ids:
+        if(int(user_id)>=20000 and int(user_id)<300000):
             continue
         try:
             print("Sending message to telegram")
-            await bot.send_message(chat_id=chat_id, text=text)
+            await bot.send_message(chat_id=user_id, text=text)
         except Exception as e:
-            print(f"Failed to send to {chat_id}: {e}")
+            print(f"Failed to send to {user_id}: {e}")
+
 
 async def send_button_to_telegram_users(
     telegram_ids: Iterable[int],
@@ -39,16 +40,16 @@ async def send_button_to_telegram_users(
     else:  
         return
 
-    for chat_id in telegram_ids:
-        if(int(chat_id)>=20000 and int(chat_id)<300000): # test users
+    for user_id in telegram_ids:
+        if(int(user_id)>=20000 and int(user_id)<300000): # test users
             continue
 
         try:
             await bot.send_message(
-                chat_id=chat_id,
+                chat_id=user_id,
                 text=text,
                 reply_markup=keyboard,
             )
 
         except Exception as e:
-            print(f"Failed to send to {chat_id}: {e}")
+            print(f"Failed to send to {user_id}: {e}")
