@@ -142,7 +142,7 @@ async def create_round_repo(
     fractal_id: int,
     level: int = 0,
     status: str = "open",
-    started_at: Optional[datetime] = None,
+    started_at: Optional[datetime] = datetime.now(timezone.utc),
     ended_at: Optional[datetime] = None
 ) -> Round:
     """
@@ -563,6 +563,13 @@ async def get_waiting_fractals_repo(db, now: datetime):
     fractals = result.scalars().all()
 
     return fractals
+
+async def get_open_rounds_repo(db: AsyncSession):
+    """Get all rounds with status='open'"""
+    result = await db.execute(
+        select(Round).where(Round.status == "open")
+    )
+    return result.scalars().all()
 
 # New function for scheduled ("waiting") fractals
 async def get_fractals_repo(db):

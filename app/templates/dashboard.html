@@ -458,12 +458,12 @@ fetch("/api/v1/fractals/auth", {
 
 
         if (!currentGroupId){
-            addCard('<div class="proposal-card no-proposals-message">You are not in any active group at the moment. <p>'+fractalName+'<p>'+fractalDescription+'<p>Start Date: '+fractalStartDate+'</div>');
+            addCardDiv('You are not in any active group at the moment. <p>'+fractalName+'<p>'+fractalDescription+'<p>Start Date: '+fractalStartDate+'');
         }
         getNextCard(); // Start loading cards after auth
     } else {
         statusEl.innerText = "Auth failed: " + data.error;
-            addCard('<div class="proposal-card no-proposals-message">You are not in any active group at the moment.');
+            addCardDiv('You are not in any active group at the moment.');
     }
 })
 .catch(err => {
@@ -576,7 +576,7 @@ function getAllCards() {
                 addCard(html);
             }
             else{
-                addCard("<div class='proposal-card no-proposals-message'>Welcome to the Fractal Meeting<p>"+fractalName+"<p>"+fractalDescription+"<p>Things are warming up slowly. You can write a proposal or wait for other group members to write one.<p>You can also return to the fractal bot and chat with your group members and share ideas. <a href='https://t.me/FractalCircleBot'>Go to Telegram</a> </div>")
+                addCardDiv("Welcome to the Fractal Meeting<p>"+fractalName+"<p>"+fractalDescription+"<p>Things are warming up slowly. You can write a proposal or wait for other group members to write one.<p>You can also return to the fractal bot and chat with your group members and share ideas. <a href='https://t.me/FractalCircleBot'>Go to Telegram</a>")
             }
         })
         .catch(err => {
@@ -600,6 +600,22 @@ function addCard(html) {
     // Scroll to the new card
     card.scrollIntoView({ behavior: "smooth" });
 }
+
+function addCardDiv(html) {
+    var card = document.createElement("div");
+    card.className = "proposal-card no-proposals-message";
+    card.innerHTML = html; // Insert full HTML from backend
+    cardsContainer.appendChild(card);
+
+    // Trigger animation
+    requestAnimationFrame(function() {
+        card.classList.add("show");
+    });
+
+    // Scroll to the new card
+    card.scrollIntoView({ behavior: "smooth" });
+}
+
 
 document.body.addEventListener('noMoreCards', function() {
     noMoreCards = true;
@@ -959,14 +975,28 @@ async function connectWS() {
                 console.log("message ", data.message);
 
                 if (data.type === 'message' && data.message) {
-                    Telegram.WebApp.showAlert(data.message);
+                    addCardDiv(data.message)
+//                    Telegram.WebApp.showAlert(data.message);
                 }
+
+                if (data.type === 'start' && data.message) {
+//                    Telegram.WebApp.showAlert(data.message);
+                    addCardDiv(data.message)
+                    getNextCard();
+                }
+
 
                 if (data.type === 'refresh' && data.message) {
                     console.log(data.message);
                     if (noMoreCards)
 //                        getNextCard();
                         noMoreCards = false;
+                }
+
+                if (data.type === 'half_time' && data.message) {
+                    console.log(data.message);
+                    addCardDiv(data.message)
+//                    Telegram.WebApp.showAlert(data.message);
                 }
 
 

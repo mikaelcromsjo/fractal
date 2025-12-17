@@ -56,7 +56,8 @@ from repositories.fractal_repos import (
     get_waiting_fractals_repo,
     get_open_fractals_repo,
     get_or_build_round_tree_repo,
-    get_fractals_repo
+    get_fractals_repo,
+    get_open_rounds_repo
 
 )
 from domain import fractal_logic as domain
@@ -150,7 +151,7 @@ async def start_fractal(db: AsyncSession, fractal_id: int):
     print ("🚀 Your fractal has started!")
     text = f"🚀 Fractal '{fractal.name}' has started!\n\n💬 Now you can chat with your group members in this private chat. Try writing 'Hi!'\n\n📝 And you can write and vote on proposlas in the Fractal Dashboard!"
     await send_button_to_fractal_members(db, text, "Dashboard", fractal_id)
-    await send_message_to_fractal_web_app_members(db, fractal_id, text)
+    await send_message_to_fractal_web_app_members(db, fractal_id, text, "start")
     await open_fractal_repo(db, fractal_id)
     return round_0
 
@@ -213,8 +214,6 @@ async def send_message_to_web_app_members(
 ) -> None:
     
 
-    print ("send_message_to_web_app_members")
-
     """
     Given any member objects with .user_id (FractalMember, GroupMember, etc.),
     resolve Users and send them a Telegram message.
@@ -251,7 +250,7 @@ async def send_message_to_web_app_group(db: AsyncSession, group_id: int, text: s
     members = await get_group_members_repo(db, group_id)
     await send_message_to_web_app_members(db, members, text, event_type)
 
-async def send_message_to_fractal_web_app_members(db: AsyncSession, fractal_id: int, text: str, event_type="") -> None:
+async def send_message_to_fractal_web_app_members(db: AsyncSession, fractal_id: int, text: str, event_type="message") -> None:
     members = await get_fractal_members_repo(db, fractal_id)
     await send_message_to_web_app_members(db, members, text, event_type)
 
@@ -628,66 +627,72 @@ async def send_message_to_web_app_users(telegram_ids: list[int], text: str, even
 
 # ----------------- POLL LOOP -----------------
 
-async def poll_worker(db, poll_interval: int = 60):
-    """
-    Background loop that periodically checks for fractals to start or update.
-    Runs indefinitely with a sleep between checks.
-    """
+from sqlalchemy.ext.asyncio import AsyncSession
 
+async def poll_worker(async_session_maker, poll_interval: int = 60):
+    print("🌀 Poll worker loop started.")
     while True:
-        await check_fractals(db)
+        try:
+            async with async_session_maker() as db:  # ✅ this creates AsyncSession
+                assert isinstance(db, AsyncSession)
+                now = datetime.now(timezone.utc)
+                print(f"🔁 Poll iteration @ {now.isoformat()}")
+                await check_fractals(db)
+                print("✅ Poll iteration done")
+        except Exception as e:
+            import traceback
+            print("💥 UNHANDLED poll error in poll_worker:", e)
+            traceback.print_exc()
         await asyncio.sleep(poll_interval)
-
 
 # ----------------- MAIN CHECK -----------------
 
 async def check_fractals(db):
     """
     1. Starts waiting fractals whose start_date <= now.
-    2. Checks open fractals for halfway and round-close times.
+    2. Checks OPEN ROUNDS (not fractals) for half/close times.
     """
     now = datetime.now(timezone.utc)
     print(f"\n🕓 [Poll @ {now.isoformat()}] Checking fractals...")
     
-    # 1. Handle fractals that should start now
-#    waiting_fractals = await get_fractals_repo(db)
+    # 1. Start waiting fractals ✅ (UNCHANGED - WORKING)
     waiting_fractals = await get_waiting_fractals_repo(db, now)
     for fractal in waiting_fractals:
-        print(f"   → id={fractal.id}, name='{fractal.name}', start={fractal.start_date}, status={fractal.status}")
+        print(f"   → WAITING id={fractal.id}, name='{fractal.name}', start={fractal.start_date}")
         if fractal.start_date <= now:
+            print(f"   🚀 STARTING {fractal.id}")
             await start_fractal(db, fractal.id)
 
-# 2. Handle active fractals
-    open_fractals = await get_open_fractals_repo(db, now)
-    for fractal in open_fractals:
-        print(f"   → id={fractal.id}, name='{fractal.name}', start={fractal.start_date}, status={fractal.status}")
-        if not fractal.meta or "round_time" not in fractal.meta:
+    # 2. NEW: Check OPEN ROUNDS (status='open')
+    print(f"   → Checking OPEN rounds...")
+    open_rounds = await get_open_rounds_repo(db)  # NEW REPO NEEDED
+    for round_obj in open_rounds:
+        fractal = await get_fractal_repo(db, round_obj.fractal_id)  # Get fractal for meta
+        if not fractal or not fractal.meta or "round_time" not in fractal.meta:
+            print(f"   ⏭️ Skipping round {round_obj.id} (no meta)")
             continue
+            
+        round_time_secs = int(fractal.meta["round_time"])
+        round_start = round_obj.started_at  # ✅ Round-specific timing!
+        half_way_time = round_start + timedelta(seconds=round_time_secs / 2)
+        close_time = round_start + timedelta(seconds=round_time_secs)
         
-        # ✅ FIX: seconds → timedelta
-        round_time = timedelta(seconds=int(fractal.meta["round_time"]))  # 300s
-        half_time = round_time / 2
-        start_date = fractal.start_date
-        elapsed = now - start_date
+        print(f"   🔍 Round {round_obj.id} (fractal {fractal.id}):")
+        print(f"      started={round_start}, half={half_way_time}, close={close_time}")
         
-        print(f"  → {fractal.name}: elapsed={elapsed}, round_time={round_time}")
+        # ✅ WIDE 5min windows
+        half_window_start = half_way_time - timedelta(minutes=2)
+        half_window_end = half_way_time + timedelta(minutes=3)
+        close_window_start = close_time - timedelta(minutes=2)
+        close_window_end = close_time + timedelta(minutes=3)
         
-        round_index = int(elapsed // round_time)
-        round_start = start_date + round_index * round_time
-        half_way_time = round_start + half_time
-        round_close_time = round_start + round_time
-        
-        print(f"     Round {round_index}: half={half_way_time}, close={round_close_time}")
-        
-        # ✅ 59s window
-        if half_way_time <= now <= half_way_time + timedelta(seconds=59):
-            print(f"  🟡 HALFWAY → {fractal.id}")
+        if half_window_start <= now <= half_window_end:
+            print(f"   🟡 HALFWAY Round {round_obj.id} → fractal {fractal.id}")
             await round_half_way_service(db, fractal.id)
         
-        if round_close_time <= now <= round_close_time + timedelta(seconds=59):
-            print(f"  🔴 CLOSE → {fractal.id}")
+        if close_window_start <= now <= close_window_end:
+            print(f"   🔴 CLOSING Round {round_obj.id} → fractal {fractal.id}")
             await close_round(db, fractal.id)
-
 
 # ----------------- FRACTAL SERVICES -----------------
 
@@ -723,7 +728,7 @@ async def round_half_way_service(db, fractal_id: int):
         await send_message_to_web_app_group(
             db=db,
             group_id=g.id,
-            text=text,
+            text=text, event_type = "half_time"
         )
 
     await set_round_status_repo(db, last_round.id, "vote")

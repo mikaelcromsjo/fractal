@@ -18,10 +18,10 @@ from telegram.bot import init_bot
 from aiogram.types import BotCommand, MenuButtonCommands
 
 from services.fractal_service import poll_worker
+from infrastructure.db.session import AsyncSessionLocal
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # --- Startup ---
     print("🚀 Starting bot...")
     bot, _ = init_bot()
 
@@ -33,22 +33,21 @@ async def lifespan(app: FastAPI):
     await bot.set_my_commands(commands)
     print("✅ Bot menu commands set!")
 
-    # --- Start poll worker ---
-    async def start_poller():
-        from infrastructure.db.session import AsyncSessionLocal
-        async with AsyncSessionLocal() as db:
-            await poll_worker(db, poll_interval=60)
-
-    # Run poller in background
-    asyncio.create_task(start_poller())
+    # Start poller with sessionmaker factory
+    poll_task = asyncio.create_task(poll_worker(AsyncSessionLocal, poll_interval=60))
     print("🌀 Poll worker started in background.")
 
-    yield  # --- App runs here (FastAPI lifecycle main body runs) ---
-
-    # --- Shutdown ---
-    print("🛑 Shutting down bot...")
-    await bot.session.close()
-    print("✅ Bot shutdown complete.")
+    try:
+        yield
+    finally:
+        print("🛑 Shutting down bot...")
+        poll_task.cancel()
+        try:
+            await poll_task
+        except asyncio.CancelledError:
+            pass
+        await bot.session.close()
+        print("✅ Bot shutdown complete.")
 
 
 # Apply lifespan to your app
