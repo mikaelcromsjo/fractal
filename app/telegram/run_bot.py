@@ -42,7 +42,7 @@ async def main():
 #    await recreate_test_db()
 #    await create_tables()
 #    await start_polling()
-    print("No polling")
+    print("")
 
 if __name__ == "__main__":
     asyncio.run(main())

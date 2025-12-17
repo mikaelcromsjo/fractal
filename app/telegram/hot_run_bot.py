@@ -10,9 +10,10 @@ def start_bot():
     ])
 
 if __name__ == "__main__":
-    process = start_bot()
+    print("")
+#    process = start_bot()
 
-    for changes in watch("."):
-        print("Changes detected, restarting bot…")
-        process.kill()
-        process = start_bot()
+#    for changes in watch("."):
+#        print("Changes detected, restarting bot…")
+#        process.kill()
+#        process = start_bot()

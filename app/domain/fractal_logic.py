@@ -3,6 +3,7 @@
 from typing import List, Dict, Optional
 import random
 from datetime import datetime, timezone
+from datetime import datetime, timedelta
 
 # ----------------------------
 # Grouping Logic
@@ -34,7 +35,21 @@ def divide_into_groups(user_ids: List[int], group_size: int) -> List[List[int]]:
     return groups
 
 
+def get_round_index(fractal, now=None):
+    """Returns how many full rounds have elapsed since start_date."""
+    now = now or datetime.utcnow()
+    if not fractal.start_date or "round_time" not in fractal.meta:
+        return None
+    round_time = timedelta(days=fractal.meta["round_time"])
+    elapsed = now - fractal.start_date
+    full_rounds = int(elapsed // round_time)
+    return full_rounds
 
+def get_round_times(fractal):
+    """Returns round_time as timedelta and half_time as timedelta"""
+    round_time = timedelta(days=fractal.meta["round_time"])
+    half_time = round_time / 2
+    return round_time, half_time
 
 # ----------------------------
 # Comment Tree
@@ -55,3 +70,4 @@ def build_comment_tree(comments: List[Dict]) -> List[Dict]:
         else:
             tree.append(c)
     return tree
+

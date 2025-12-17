@@ -21,24 +21,7 @@ services:
       - db
     command: uvicorn main:app --host 0.0.0.0 --port 8030 --reload
 
-  telegram-bot:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: fractal_bot
-    volumes:
-      - ./app:/app
-      - ./scripts:/app/scripts
-      - ./data:/dbdata
-    environment:
-      - PYTHONPATH=/app
-      - DATABASE_URL=${DATABASE_URL}
-      - TEST_DATABASE_URL=${TEST_DATABASE_URL}
-      - BOT_TOKEN=${BOT_TOKEN}
-    depends_on:
-      - db
-    command: python -u -m telegram.hot_run_bot
-    restart: always
+
 
   db:
     image: postgres:15

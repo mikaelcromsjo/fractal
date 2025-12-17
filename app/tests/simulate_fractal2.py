@@ -299,7 +299,7 @@ async def simulate_round(
     await pause(f"Before closing round {round_obj.level}")
 
     # STEP E: Close round and create next, if any
-    next_round = await close_round(db, round_obj.id)
+    next_round = await close_round(db, fractal.id)
 
     if not next_round:
         print(f"Round {round_obj.id} closed. No next round created.")
@@ -325,17 +325,18 @@ async def simulate_round(
 # Main simulation (up to 3 rounds)
 # -------------------------------------------------------------------
 
+from datetime import datetime, timezone, timedelta
+
 async def main():
     await recreate_test_db()
     await create_tables()
-
     async with AsyncSessionLocal() as db:
         # Create fractal
         fractal = await create_fractal(
             db,
             name="Demo Fractal",
             description="Demo simulation with 3 rounds",
-            start_date=datetime.now(timezone.utc),
+            start_date=datetime.now(timezone.utc)  + timedelta(minutes=30),
             status="waiting",
             settings={"group_size": 8},
         )

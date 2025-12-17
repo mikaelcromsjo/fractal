@@ -311,7 +311,7 @@ async def main():
         # -------------------------
         # STEP 9: Close current round and promote to next round
         # -------------------------
-        next_round = await close_round(db, round0.id)
+        next_round = await close_round(db, fractal.id)
 
         if next_round is None:
             print(f"\nRound {round0.id} closed. No next round created (not enough groups).")

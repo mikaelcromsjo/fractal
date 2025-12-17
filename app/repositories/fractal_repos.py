@@ -12,6 +12,7 @@ from typing import Any, Dict, List, Optional
 
 from sqlalchemy import and_, select
 from sqlalchemy.sql import exists
+from config.settings import settings
 
 import infrastructure.models as models
 
@@ -98,7 +99,13 @@ async def get_active_fractal_members_repo(db: AsyncSession, fractal_id: int) -> 
 
 ## ROUND/FRACTAL
 
+def build_default_fractal_meta() -> dict:
+    return {
+        "group_size": settings.GROUP_SIZE_DEFAULT,
+        "proposals_per_user": settings.PROPOSALS_PER_USER_DEFAULT,
+        "round_time": settings.ROUND_TIME_DEFAULT,
 
+    }
 
 async def create_fractal_repo(
     db: AsyncSession,
@@ -111,12 +118,17 @@ async def create_fractal_repo(
     """
     Create a new Fractal in the database.
     """
+
+    default_settings = build_default_fractal_meta()
+    # shallow merge: meta overrides defaults
+    meta = {**default_settings, **(settings or {})}
+
     fractal = Fractal(
         name=name,
         description=description,
         start_date=start_date,
         status=status,
-        meta=settings or {}
+        meta=meta
     )
     db.add(fractal)
     await db.commit()
@@ -159,8 +171,19 @@ async def create_round_repo(
     await db.refresh(round_obj)
     return round_obj
 
-async def close_round_repo(db: AsyncSession, round_id: int):
+async def set_round_status_repo(db, round_id: int, status: str):
+    """Update a round's status and commit."""
+    round_obj = await db.get(Round, round_id)
+    if not round_obj:
+        return None
+    round_obj.status = status
+    await db.commit()
+    await db.refresh(round_obj)
+    return round_obj
+
+async def close_round_repo(db: AsyncSession, fractal_id: int):
     """Mark a round as closed and set the end timestamp, then return the round."""
+    round_id = await get_last_round_repo(fractal_id)
     RoundTree = models.RoundTree
     stmt = (
         update(Round)
@@ -495,7 +518,6 @@ async def get_votes_for_comment_repo(db: AsyncSession, comment_id: int) -> List[
 # ----------------------------
 
 async def get_user_by_telegram_id_repo(db: AsyncSession, telegram_id: str) -> Optional[User]:
-    print("id", telegram_id)
     result = await db.execute(select(User).where(User.telegram_id == telegram_id))
     return result.scalars().first()
 
@@ -518,6 +540,42 @@ async def set_active_fractal_repo(db: AsyncSession, user_id: int, fractal_id: in
     await db.commit()
     user = result.scalar_one()  # get the single updated Round object
     return user
+    
+async def get_open_fractals_repo(db, now: datetime):
+    """Return all open fractals whose start date has already passed."""
+    result = await db.execute(
+        select(Fractal)
+        .where(Fractal.status == "open")
+    )
+    return result.scalars().all()
+
+# New function for scheduled ("waiting") fractals
+async def get_waiting_fractals_repo(db, now: datetime):
+    """
+    Return all fractals that are waiting to start (status='waiting').
+    The caller decides if start_date has passed.
+    """
+    result = await db.execute(
+        select(Fractal)
+        .where(Fractal.status == "waiting")
+        .order_by(Fractal.start_date.asc())
+    )
+    fractals = result.scalars().all()
+
+    return fractals
+
+# New function for scheduled ("waiting") fractals
+async def get_fractals_repo(db):
+    """
+    Return all fractals that are waiting to start (status='waiting')
+    and have a start_date in the future.
+    """
+    result = await db.execute(
+        select(Fractal)
+        .order_by(Fractal.start_date.asc())
+    )
+    return result.scalars().all()
+
 
 async def get_fractal_repo(
     db: AsyncSession,
@@ -527,6 +585,37 @@ async def get_fractal_repo(
     q = select(Fractal).where(Fractal.id == fractal_id)
     result = await db.execute(q)
     return result.scalars().first()
+
+async def open_fractal_repo(db, fractal_id: int):
+    """
+    Set a fractal from 'waiting' to 'open' and mark start_date to now if not set.
+    """
+    fractal = await db.get(Fractal, fractal_id)
+    if not fractal:
+        return None
+
+    fractal.status = "open"
+    if not fractal.start_date:
+        fractal.start_date = datetime.utcnow()
+
+    await db.commit()
+    await db.refresh(fractal)
+    return fractal
+
+
+async def close_fractal_repo(db, fractal_id: int):
+    """
+    Set a fractal from 'open' to 'closed'.
+    """
+    fractal = await db.get(Fractal, fractal_id)
+    if not fractal:
+        return None
+
+    fractal.status = "closed"
+    fractal.closed_at = datetime.utcnow()
+    await db.commit()
+    await db.refresh(fractal)
+    return fractal
 
 async def get_fractal_from_name_or_id_repo(
     db: AsyncSession,
@@ -561,15 +650,6 @@ async def get_fractal_from_name_or_id_repo(
     return result.scalars().first()
 
 
-async def get_last_round_repo(db: AsyncSession, fractal_id) -> Round | None:
-    """
-    Fetch the Round object with the highest level.
-    Returns None if no rounds exist.
-    """
-    result = await db.execute(
-        select(Round).where(Round.fractal_id==fractal_id).order_by(Round.level.desc()).limit(1)
-    )
-    return result.scalar_one_or_none()
 
 async def get_round_repo(db: AsyncSession, round_id: int) -> Round | None:
     """
@@ -579,7 +659,7 @@ async def get_round_repo(db: AsyncSession, round_id: int) -> Round | None:
     result = await db.execute(
         select(Round).where(Round.id == round_id)
     )
-    return result.scalar_one_or_none()
+    return result.scalars().one_or_none()
 
 async def get_group_member_repo(db: AsyncSession, user_id: int, group_id: int) -> GroupMember | None:
     result = await db.execute(
@@ -589,13 +669,23 @@ async def get_group_member_repo(db: AsyncSession, user_id: int, group_id: int) -
         )
 
     )
-    return result.scalar_one_or_none()
+    return result.scalars().one_or_none()
+
+async def get_last_round_repo(db: AsyncSession, fractal_id: int) -> Round | None:
+    result = await db.execute(
+        select(Round)
+        .where(Round.fractal_id == fractal_id)
+        .order_by(desc(Round.level))
+        .limit(1)
+    )
+    return result.scalars().one_or_none()
+
 
 async def get_group_repo(db: AsyncSession, group_id: int) -> Group | None:
     result = await db.execute(
         select(Group).where(Group.id == group_id)
     )
-    return result.scalar_one_or_none()
+    return result.scalars().one_or_none()
 
 async def get_user_info_by_telegram_id_repo(
     db: AsyncSession,
@@ -607,7 +697,7 @@ async def get_user_info_by_telegram_id_repo(
     result = await db.execute(
         select(User).where(User.telegram_id == telegram_id)
     )
-    user: User | None = result.scalar_one_or_none()
+    user: User | None = result.scalars().one_or_none()
     if not user:
         print("No user")
         return None
@@ -619,14 +709,10 @@ async def get_user_info_by_telegram_id_repo(
         return None
     fractal_id = int(fractal_id)
 
+
     # 2️⃣ Get last round for this fractal
-    result = await db.execute(
-        select(Round)
-        .where(Round.fractal_id == fractal_id)
-        .order_by(desc(Round.level))
-        .limit(1)
-    )
-    last_round: Round | None = result.scalar_one_or_none()
+    result = await get_last_round_repo(db, fractal_id)
+    last_round: Round | None = result
     if not last_round:
         return {"fractal_id": fractal_id}
 
@@ -643,7 +729,7 @@ async def get_user_info_by_telegram_id_repo(
         .order_by(Group.round_id.desc())  # pick latest active group
         .limit(1)
     )
-    group: Group | None = result.scalar_one_or_none()
+    group: Group | None = result.scalars().one_or_none()
     group_id = group.id if group else None
     round_id = group.round_id if group else round_id if group else None
 
@@ -890,13 +976,13 @@ async def get_or_build_round_tree_repo(
 
     # 1) Determine round_id (latest if not provided)
     if round_id is None:
-        res = await db.execute(
+        result = await db.execute(
             select(Round)
             .where(Round.fractal_id == fractal_id)
             .order_by(Round.level.desc())
             .limit(1)
         )
-        r = res.scalar_one_or_none()
+        r = result.scalars().one_or_none()
         if not r:
             # Let caller decide how to handle "no rounds"
             return {"fractal_id": fractal_id, "rounds": []}

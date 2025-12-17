@@ -74,11 +74,19 @@ from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
 def default_menu():
     builder = InlineKeyboardBuilder()
 
-    builder.button(text="✨ Create Fractal", callback_data="cmd:create_fractal")
-    builder.button(text="❓ Help", callback_data="cmd:help")
+    builder.button(text="Get more information", callback_data="cmd:help")
 
     builder.adjust(1, 1, 1)
     return builder.as_markup()
+
+def help_menu():
+    builder = InlineKeyboardBuilder()
+
+    builder.button(text="✨ Create Fractal", callback_data="cmd:create_fractal")
+
+    builder.adjust(1, 1, 1)
+    return builder.as_markup()
+
 
 def create_keyboard():
     builder = InlineKeyboardBuilder()
@@ -107,15 +115,29 @@ def fractal_created_menu(fractal_id: int):
 
 from config.settings import settings
 
-def fractal_actions_menu(fractal_id: int):
+
+def share_to_group_button(fractal_id: int) -> InlineKeyboardMarkup:
+    """Button shown in private chat with Join + Share options."""
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text="🚀 Open Fractal Dashboard",
-                    web_app=WebAppInfo(url=f"{settings.public_base_url}/api/v1/fractals/dashboard?fractal_id={fractal_id}")
+                    text="🚀 Join Fractal",
+                    url=f"https://t.me/{settings.bot_username}?start=fractal_{fractal_id}"
                 )
             ],
+            [
+                InlineKeyboardButton(
+                    text="📢 Share to Group",
+                    switch_inline_query=f"share fractal_{fractal_id}"
+                )
+            ]
+        ]
+    )
+
+def fractal_actions_menu(fractal_id: int):
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
             [
                 InlineKeyboardButton(
                     text="👥 Share Join Link",
@@ -123,15 +145,36 @@ def fractal_actions_menu(fractal_id: int):
                 )
             ],
             [
-                InlineKeyboardButton(text="📋 Copy Link", url=f"https://t.me/{settings.bot_username}?start=fractal_{fractal_id}")
+                InlineKeyboardButton(text="📋 Join fractal", url=f"https://t.me/{settings.bot_username}?start=fractal_{fractal_id}")
             ]
         ]
     )
 
+def default_menu():
+    builder = InlineKeyboardBuilder()
+
+    # Button 1: Open Telegram Web App dashboard
+    builder.button(
+        text="🚀 Open Dashboard",
+        web_app=WebAppInfo(
+            url=f"{settings.public_base_url}/api/v1/fractals/dashboard"
+        )
+    )
+
+    # Button 2: Show help menu via callback
+    builder.button(
+        text="ℹ️ Get more information",
+        callback_data="cmd:help"
+    )
+
+    # 1 column (stacked) or set to (2,) for side-by-side
+    builder.adjust(1, 1)
+
+    return builder.as_markup()
 
 def cancel_keyboard():
     builder = InlineKeyboardBuilder()
-    builder.button(text="❌ Cancel", callback_data="cmd:cancel")
+    builder.button(text="Cancel", callback_data="cmd:cancel")
     return builder.as_markup()
 
 

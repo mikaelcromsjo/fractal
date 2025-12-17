@@ -2,6 +2,7 @@
 import logging
 from datetime import datetime, timedelta, timezone
 import re
+from datetime import datetime
 from typing import Optional, Dict, Any, Union
 from aiogram import types, Router
 from aiogram.filters import Command, CommandStart, StateFilter
@@ -50,7 +51,7 @@ from services.fractal_service import (
 )
 
 from telegram.states import ProposalStates, CreateFractal
-from telegram.keyboards import create_keyboard, vote_comment_keyboard, vote_proposal_keyboard, list_more_keyboard, show_hidden_keyboard, cancel_keyboard, fractal_actions_menu
+from telegram.keyboards import share_to_group_button, create_keyboard, vote_comment_keyboard, vote_proposal_keyboard, list_more_keyboard, show_hidden_keyboard, cancel_keyboard, fractal_actions_menu, help_menu
 from aiogram.filters import CommandStart
 
 
@@ -73,6 +74,84 @@ COMMANDS = [
 #    ("tree", "Show proposals/comments tree"),
 ]
 
+
+from aiogram.types import (
+    InlineQuery,
+    InlineQueryResultArticle,
+    InputTextMessageContent,
+    InlineKeyboardMarkup,
+    InlineKeyboardButton
+)
+from aiogram.utils import markdown
+
+@router.inline_query()
+async def handle_inline_share(query: InlineQuery):
+    """Creates a 'Join Fractal' button to share to groups."""
+    print("INLINE QUERY RECEIVED:", query.query)
+
+    q = query.query.strip()
+
+    if not q.startswith("share fractal_"):
+        return
+
+    fractal_id = q.split("_", 1)[1]
+
+    async for db in get_async_session():
+        try:
+            fractal = await get_fractal_from_name_or_id_repo(
+                db=db,
+                fractal_identifier=fractal_id
+            )
+
+            if not fractal:
+                return
+            now = datetime.now(timezone.utc)
+            if fractal.start_date < now or fractal.status.lower() != "waiting":
+                return
+
+        except Exception as e:
+            # Print the full traceback to understand what went wrong
+            print(f"[ERROR] Failed to process fractal {fractal_id}: {e}")
+            break
+
+
+
+    bot_username = settings.bot_username
+    join_url = f"https://t.me/{bot_username}?start=fractal_{fractal_id}"
+
+    join_button = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="🚀 Join Fractal", url=join_url)]
+        ]
+    )
+    start_date = fractal.start_date.strftime("%A %H:%M, %B %d, %Y")
+    minutes = int(fractal.meta["round_time"]) / 60
+    round_time = f"{int(minutes)} minutes" if minutes.is_integer() else f"{minutes} minutes"
+
+    share_text = (
+                   f"🎉 Click to Join Fractal Meeting: \"{sanitize_text(fractal.name)}\"\n\n"
+                    f"📝 {sanitize_text(fractal.description)}\n\n"
+                    f"📅 {start_date}\n\n"
+                    f"⏰ {round_time} rounds"
+    )
+
+    await query.answer(
+        results=[
+            InlineQueryResultArticle(
+                id=f"share_{fractal_id}",
+                title="Share Fractal to Group",
+                description="Send a join button to your group",
+                input_message_content=InputTextMessageContent(
+                    message_text=share_text,
+                    parse_mode="Markdown",
+                ),
+                reply_markup=join_button,
+            )
+        ],
+        cache_time=0,
+        is_personal=True,  # Ensures fresh results for each user
+    )
+
 # Callbacks
 
 @router.callback_query(lambda c: c.data == "cmd:help")
@@ -82,20 +161,15 @@ async def cb_help(call: types.CallbackQuery):
 
 @router.callback_query(lambda c: c.data.startswith("join:"))
 async def cb_join(call: types.CallbackQuery, state: FSMContext):
-    await call.answer()  # stop spinner
-
-    fractal_id = call.data.split(":", 1)[1]  # get the id from "join:42"
-
-    # optionally convert to int
-    try:
-        fractal_id = int(fractal_id)
-    except ValueError:
-        await call.message.answer("Invalid fractal ID.")
-        return
-
-    # call your existing join command logic
-    await cmd_join(call.message, fractal_id=fractal_id, state=state)
+    await call.answer()
     
+    fractal_id = int(call.data.split(":", 1)[1])
+    
+    # ✅ Use call.message (works perfectly) + pass real user via state
+    await cmd_join(call.message, state=state, fractal_id=fractal_id, 
+                   user_id=str(call.from_user.id),  # ✅ Real user ID
+                   username=getattr(call.from_user, "username", ""))
+
 
 @router.callback_query(lambda c: c.data.startswith("tree:"))
 async def cb_tree(call: types.CallbackQuery, state: FSMContext):
@@ -122,7 +196,7 @@ async def cb_start_fractal(call: types.CallbackQuery, state: FSMContext):
 @router.callback_query(lambda c: c.data == "cmd:create_fractal")
 async def cb_start_create_fractal(call: types.CallbackQuery, state: FSMContext):
     await call.answer()
-    await call.message.answer("📝 Please enter the *fractal name*:", parse_mode="Markdown", reply_markup=cancel_keyboard())
+    await call.message.answer("📝 Please enter name of the meeting:", parse_mode="Markdown", reply_markup=cancel_keyboard())
     await state.set_state(CreateFractal.name)
 
 
@@ -248,51 +322,89 @@ async def cmd_invite_group(message: types.Message):
     )
 
 @router.message(CommandStart())
-async def cmd_start(message: types.Message):
+async def cmd_start(message: types.Message, state: FSMContext):
+    print(f"📱 /start from {message.chat.id}: '{repr(message.text)}'")
+    
     from telegram.bot import init_bot
     bot, _ = init_bot()
-    # Set commands EVERY TIME (works instantly)
+    
+    # Commands
     commands = [
-        BotCommand(command="start", description="Show menu"),
-        BotCommand(command="help", description="Help"),
+        BotCommand(command="start", description="Start Menu"),
+        BotCommand(command="help", description="Information"),
     ]
     await bot.set_my_commands(commands)
     
-    # Set chat-specific menu button
-    # Only set menu button for PRIVATE chats
     if message.chat.type == ChatType.PRIVATE:
-        await bot.set_chat_menu_button(
-            chat_id=message.chat.id,
-            menu_button=MenuButtonCommands()
-        )
+        await bot.set_chat_menu_button(chat_id=message.chat.id, menu_button=MenuButtonCommands())
 
-    args = message.text.split()
+    # ✅ FIXED LOGIC
+    args = message.text.split(maxsplit=1)
+    print(f"📱 args: {args}")
+    
     if len(args) > 1 and args[1].startswith("fractal_"):
-        fractal_id = int(args[1].replace("fractal_", ""))
+        print(f"🔗 Deep link: {args[1]}")
+        try:
+            fractal_id = int(args[1].replace("fractal_", ""))
+        except ValueError:
+            await message.answer("❌ Invalid fractal ID.")
+            return
 
-        builder = InlineKeyboardBuilder()
+        async for db in get_async_session():
+            try:
+                fractal = await get_fractal_from_name_or_id_repo(db=db, fractal_identifier=fractal_id)
+                print(f"🔍 Fractal {fractal_id}: {fractal}")
+                
+                if not fractal:
+                    await message.answer(f"❌ Fractal '{sanitize_text(str(fractal_id))}' not found.")
+                    break
+                
+                now = datetime.now(timezone.utc)
+                if not fractal.start_date or fractal.start_date < now or fractal.status.lower() != "waiting":
+                    await message.answer(f"❌ Fractal '{sanitize_text(fractal.name or 'Unknown')}' not ready.")
+                    break
 
-        builder.button(
-            text=f"🙋 Join Fractal",
-            callback_data=f"join:{fractal_id}"
-        )
-        builder.adjust(1, 1)
-        button = builder.as_markup()
+                # SAFE - fractal exists + valid
+                builder = InlineKeyboardBuilder()
+                builder.button(text=f"🙋 Join Fractal", callback_data=f"join:{fractal_id}")
+                button = builder.as_markup()
+                
+                start_date = fractal.start_date.strftime("%A %H:%M, %B %d, %Y")
+                minutes = fractal.meta["round_time"] / 60
+                round_time = f"{int(minutes)} minutes" if minutes.is_integer() else f"{minutes:.1f} minutes"
+                
+                await message.answer(
+                    f"🎉 Click to Join Fractal Meeting: \"{sanitize_text(fractal.name)}\"\n\n"
+                    f"📝 {sanitize_text(fractal.description)}\n\n"
+                    f"📅 {start_date}\n\n"
+                    f"⏰ {round_time} rounds", 
+                    reply_markup=button, parse_mode=None
+                )
+                break  # Success - exit loop
+                
+            except Exception as e:
+                print(f"[ERROR] Fractal {fractal_id}: {e}")
+                await message.answer("❌ Error loading fractal.")
+                break
+        return
 
-        await message.answer(f"🎉 Join fractal {fractal_id}", reply_markup=button)
-
-    await message.answer(
-        "👋 Fractal bot ready for action!"
-    )
-
+    # ✅ DEFAULT /start
+    print("✅ Showing default menu")
+    await message.answer("👋 Hi, I am the Fractal Circle Bot!", reply_markup=default_menu())
 
 
 @router.message(Command("help"))
 async def cmd_help(message: types.Message):
 
-    help_text = "Available commands:\n\n" + "\n".join(f"/{cmd} — {desc}" for cmd, desc in COMMANDS)
-    # send plain text, safe
-    await message.answer(help_text, parse_mode=None)
+    help_text = (
+        "🤖 **Fractal Circle Bot** helps you organize fractal meetings in large groups.\n\n"
+        "💌 In most cases, you'll be invited to join a fractal meeting that someone else created. "
+        "You'll receive an invite link when that happens.\n\n"
+        "🧩 If you’re a group organizer, you can also create your own fractal and invite others to join. \n\n"
+        "🎯 A Fractal meeting is divided into separate rounds in which breakout groups create proposals, discuss them, and vote on them. Most participants attend only one round; only the selected representatives continue to the next round. "
+        "Collaborate, connect, and grow your circle!\n\nRead more on https://FractalCircles.org"
+    )
+    await message.answer(help_text, reply_markup=help_menu(), parse_mode="Markdown")
 
 
 @router.message(CreateFractal.name)
@@ -324,7 +436,9 @@ async def fsm_get_start_date(message: types.Message, state: FSMContext):
     start_date = parse_start_date(start_date_raw)
 
     if not start_date:
-        await message.answer("❌ Couldn't parse start_date.\nTry again (minutes or YYYYMMDDHHMM).")
+        await message.answer(
+            "❌ Couldn't parse start_date.\nTry again (minutes or YYYYMMDDHHMM)."
+        )
         return
 
     data = await state.get_data()
@@ -339,38 +453,32 @@ async def fsm_get_start_date(message: types.Message, state: FSMContext):
                 description=description,
                 start_date=start_date,
             )
+
             fractal_id = getattr(fractal, "id", None)
             fractal_name = getattr(fractal, "name", name)
 
-            from telegram.keyboards import fractal_created_menu
-
-
             share_text = (
-                    f"🚀 *Fractal {fractal_id} created!*\n\n"
-                    f"👥 Share with friends:\n"
-                    f"`/join {fractal_id}`"
+                f"🚀 Fractal *{fractal_name}* created!\n\n"
+                f"👥 You can invite others to join:\n"
+                f"`https://t.me/{settings.bot_username}?start=fractal_{fractal_id}`"
+            )
+
+            await message.answer(share_text, parse_mode="Markdown")
+
+            # Private vs Group context
+            if message.chat.type == ChatType.PRIVATE:
+                # In private chat: show the share-to-group button
+                await message.answer(
+                    text="📢 Join and Share your Fractal to a group:",
+                    reply_markup=share_to_group_button(fractal_id),
                 )
-
-            if message.chat.type == ChatType.PRIVATE:    
-                await message.answer(
-                        share_text,
-                        parse_mode="Markdown",
-                        reply_markup=fractal_actions_menu(fractal_id)
-                    )
             else:
-                await message.answer(
-                        share_text,
-                    )
+                # If command ran in group
+                await message.answer(share_text, parse_mode="Markdown")
 
-
-#            await message.answer(
-#                f"✨ Fractal '{sanitize_text(fractal_name)}' created!\nid = {fractal_id}",
-#                reply_markup=fractal_created_menu(fractal_id),
-#                parse_mode=None,
-#            )
         except Exception as e:
             logger.exception("FSM create_fractal failed")
-            await message.answer(f"Failed to create fractal: {e}")
+            await message.answer(f"⚠️ Failed to create fractal: {e}")
 
     await state.clear()
 
@@ -443,10 +551,18 @@ async def cmd_create_fractal(message: types.Message):
             await message.answer(f"Failed to create fractal: {e}", parse_mode=None)
 
 
-@router.message(Command("join"))
-async def cmd_join(message: types.Message, state: FSMContext, fractal_id: Union[str, int] | None = None):
-    logger.info(f"Join called - fractal_id: {fractal_id}, text: '{message.text}'")
+async def cmd_join(message: types.Message, state: FSMContext, 
+                  fractal_id: Union[str, int] | None = None,
+                  user_id: str = None,  # ✅ From callback
+                  username: str = None): # ✅ From callback
     
+    # ✅ Use callback params FIRST, fallback to message.from_user
+    telegram_id = user_id or str(message.from_user.id)
+
+    username = username or getattr(message.from_user, "username", "")
+    
+    user_info = {"username": username, "telegram_id": telegram_id}
+
     if fractal_id is None:
         parts = message.text.split(maxsplit=1)
         if len(parts) < 2:
@@ -466,12 +582,6 @@ async def cmd_join(message: types.Message, state: FSMContext, fractal_id: Union[
             if not fractal:
                 await message.answer(f"❌ Fractal '{sanitize_text(str(fractal_id))}' not found.")
                 break
-                return
-
-            user_info = {
-                "username": getattr(message.from_user, "username", ""),
-                "telegram_id": str(message.from_user.id)
-            }
             
             user = await join_fractal(db, user_info, fractal.id)
             await state.update_data(
@@ -479,7 +589,7 @@ async def cmd_join(message: types.Message, state: FSMContext, fractal_id: Union[
                 fractal_id=fractal.id,
                 fractal_name=fractal.name
             )
-            await message.answer(f"✅ Welcome to '{sanitize_text(fractal.name)}'! User ID: {user.id}")
+            await message.answer(f"🤝 Welcome to Fractal '{sanitize_text(fractal.name)}'!\n\n⚡ You will get a telegram message when the meeting starts!")
             break  # ✅ Exit after success
             
         except Exception as e:
@@ -513,23 +623,22 @@ async def cmd_start_fractal(
             await message.answer(f"Failed to start fractal: {e}", parse_mode=None)
             return
 
-    await message.answer(f"🚀 Fractal `{fractal_id}` started!", parse_mode="Markdown", reply_markup=fractal_actions_menu(fractal_id))
+    await message.answer(f"🚀 Fractal `{fractal_id}` started!", parse_mode="None")
 
 @router.message(Command("close_round"))
 async def cmd_close_round(message: types.Message):
     """
-    Admin command: close_round <round_id>
+    Admin command: close_round <f>
     """
     parts = message.text.split(maxsplit=1)
     if len(parts) < 2 or not parts[1].isdigit():
-        await message.answer("Usage: /close_round <round_id>", parse_mode=None)
+        await message.answer("Usage: /close_round <fractal_id>", parse_mode=None)
         return
     round_id = int(parts[1].strip())
 
     async for db in get_async_session():
         try:
-            # close_round signature: async def close_round(db: AsyncSession, round_id: int) -> Round
-            res = await close_round(db=db, round_id=round_id)
+            res = await close_round(db=db, fractal_id=fractal_id)
             next_round_id = getattr(res, "id", None)
             # Optionally broadcast: need to find fractal id for this round, if available
             fractal_id = getattr(res, "fractal_id", None)
@@ -905,18 +1014,18 @@ async def handle_reply(message: types.Message):
 async def echo_all(message: types.Message):
     if not message.text:
         await message.answer(
-            f"Received non-text message of type: {message.content_type}"
+#            f"Received non-text message of type: {message.content_type}"
         )
         return
 
     user_info = await get_user_info(str(message.from_user.id))
     if not user_info:
-        await message.answer("User not found in database.")
+#        await message.answer("User not found in database.")
         return
 
     group_id = int(user_info.get("group_id", 0))
     if group_id == 0:
-        await message.answer("No group assigned to user.")
+ #       await message.answer("No group assigned to user.")
         return
 
     message_text = f"👋 {user_info.get('username', 'User')} wrote:\n💬 {message.text}"

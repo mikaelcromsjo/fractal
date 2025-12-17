@@ -443,7 +443,11 @@ fetch("/api/v1/fractals/auth", {
         currentFractalId = data.fractal_id;
         currentRoundId = data.round_id;
         currentGroupId = data.group_id;
-        currentUserName = data.username
+        currentUserName = data.username;
+        fractalName = data.fractal_name;
+        fractalDescription = data.fractal_description; 
+        fractalStartDate = data.fractal_start_date; 
+        
         
         console.log("Auth context:", {
             userId: currentUserId,
@@ -452,10 +456,14 @@ fetch("/api/v1/fractals/auth", {
             groupId: currentGroupId
         });
 
+
+        if (!currentGroupId){
+            addCard('<div class="proposal-card no-proposals-message">You are not in any active group at the moment. <p>'+fractalName+'<p>'+fractalDescription+'<p>Start Date: '+fractalStartDate+'</div>');
+        }
         getNextCard(); // Start loading cards after auth
     } else {
         statusEl.innerText = "Auth failed: " + data.error;
-        addCard('You are not in any active group. <a href="#" onclick="window.location.reload(); return false;">Reload</a>');
+            addCard('<div class="proposal-card no-proposals-message">You are not in any active group at the moment.');
     }
 })
 .catch(err => {
@@ -568,7 +576,7 @@ function getAllCards() {
                 addCard(html);
             }
             else{
-                addCard("There is nothing to show..")
+                addCard("<div class='proposal-card no-proposals-message'>Welcome to the Fractal Meeting<p>"+fractalName+"<p>"+fractalDescription+"<p>Things are warming up slowly. You can write a proposal or wait for other group members to write one.<p>You can also return to the fractal bot and chat with your group members and share ideas. <a href='https://t.me/FractalCircleBot'>Go to Telegram</a> </div>")
             }
         })
         .catch(err => {

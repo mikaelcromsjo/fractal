@@ -179,6 +179,9 @@ async def fractals_auth(request: AuthRequest, db: AsyncSession = Depends(get_db)
         user_context = await get_user_info_by_telegram_id(db, str(user["id"]))
         print(f"🔍 Service response: {user_context}")  # Debug - SEE WHAT IT RETURNS
         
+        # get fractal
+        fractal = await get_fractal(db, user_context.get("fractal_id"))
+
         # Manual response (bypass Pydantic for now)
         response_data = {
             "status": "ok",
@@ -187,7 +190,10 @@ async def fractals_auth(request: AuthRequest, db: AsyncSession = Depends(get_db)
             "round_id": user_context.get("round_id"),
             "group_id": user_context.get("group_id"),
             "first_name": user["first_name"],
-            "username": user.get("username", "")
+            "username": user.get("username", ""),
+            "fractal_name": fractal.name,
+            "fractal_description": fractal.description,
+            "fractal_start_date": fractal.start_date.strftime("%Y-%m-%d %H:%M")
         }
         print(f"📤 Sending response: {response_data}")  # Debug
         
@@ -207,8 +213,7 @@ templates = TemplateLookup(
 )
 
 @router.get("/dashboard", response_class=HTMLResponse)
-async def dashboard(request: Request, fractal_id: int):
-    print ("fractal_id", fractal_id)
+async def dashboard(request: Request):
     template = templates.get_template("dashboard.html")
     html = template.render(request=request, default_name="Guest", settings=settings)
     return HTMLResponse(html)
@@ -372,12 +377,12 @@ async def get_groups_for_round_endpoint(
     groups = await get_groups_for_round(db, round_id)
     return JSONResponse(content={"ok": True, "groups": [orm_to_dict(g) for g in groups]})
 
-@router.post("/close_round/{round_id}")
+@router.post("/close_round/{fractal_id}")
 async def close_round_endpoint(
-    round_id: int, 
+    fractal_id: int, 
     db: AsyncSession = Depends(get_db)
 ):
-    result = await close_round(db, round_id)
+    result = await close_round(db, fractal_id)
     return JSONResponse(content={"ok": True, "result": orm_to_dict(result)})
 
 @router.post("/promote_to_next_round")

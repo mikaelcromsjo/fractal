@@ -6,8 +6,12 @@ from config.settings import settings
 from fastapi.websockets import WebSocketState
 from sqlalchemy.ext.asyncio import AsyncSession
 from states import connected_clients
+from datetime import datetime, timedelta
+import asyncio
+
 
 from repositories.fractal_repos import (
+    set_round_status_repo,
     get_user_by_telegram_id_repo,
     create_user_repo,
     get_user_repo,
@@ -46,7 +50,13 @@ from repositories.fractal_repos import (
     get_fractal_from_name_or_id_repo,
     get_next_card_repo,
     get_all_cards_repo,
-    get_or_build_round_tree_repo
+    get_last_round_repo,
+    close_fractal_repo,
+    open_fractal_repo,
+    get_waiting_fractals_repo,
+    get_open_fractals_repo,
+    get_or_build_round_tree_repo,
+    get_fractals_repo
 
 )
 from domain import fractal_logic as domain
@@ -119,6 +129,9 @@ async def join_fractal(db: AsyncSession, user_info: Dict, fractal_id: int):
         raise ValueError("User is already a member of this fractal")
     
     # 4. Execute operations
+    print ("added user:", telegram_id)
+    print ("active fractal:", fractal_id)
+
     await add_fractal_member_repo(db, fractal_id, user.id)
     await set_active_fractal_repo(db, user.id, fractal_id)
 
@@ -132,13 +145,13 @@ async def start_fractal(db: AsyncSession, fractal_id: int):
     """
     members = await get_active_fractal_members_repo(db, fractal_id)
     round_0 = await start_round(db, fractal_id, level=0, members=members)
+    fractal = await get_fractal_repo(db, fractal_id)
     # 1️⃣ Notify all members that the fractal/round has started
-    print ("🚀 Your fractal round has started!")
-    text = "🚀 Your fractal round has started!"
+    print ("🚀 Your fractal has started!")
+    text = f"🚀 Fractal '{fractal.name}' has started!\n\n💬 Now you can chat with your group members in this private chat. Try writing 'Hi!'\n\n📝 And you can write and vote on proposlas in the Fractal Dashboard!"
     await send_button_to_fractal_members(db, text, "Dashboard", fractal_id)
-    print ("🚀 Your fractal round has started!")
     await send_message_to_fractal_web_app_members(db, fractal_id, text)
-
+    await open_fractal_repo(db, fractal_id)
     return round_0
 
 
@@ -164,6 +177,32 @@ async def send_message_to_members(
 
     if telegram_ids:
         await send_message_to_telegram_users(telegram_ids, text)
+
+async def send_button_to_members(
+    db: AsyncSession,
+    members: Iterable[HasUserId],
+    text: str,
+    button,
+    fractal_id,
+    data
+) -> None:
+    """
+    Given any member objects with .user_id (FractalMember, GroupMember, etc.),
+    resolve Users and send them a Telegram message.
+    """
+    telegram_ids: list[int] = []
+
+    for member in members:
+        user = await get_user(db, member.user_id)
+        if not user or not user.telegram_id:
+            continue
+        try:
+            telegram_ids.append(int(user.telegram_id))
+        except ValueError:
+            continue
+
+    if telegram_ids:
+        await send_button_to_telegram_users(telegram_ids, text, button, fractal_id, data)
 
 
 async def send_message_to_web_app_members(
@@ -200,9 +239,8 @@ async def send_message_to_group(db: AsyncSession, group_id: int, text: str) -> N
     await send_message_to_members(db, members, text)
 
 async def send_button_to_group(db: AsyncSession, group_id: int, text: str, button, fractal_id, data=0) -> None:
-    print("send to group", group_id)
     members = await get_group_members_repo(db, group_id)
-    await send_button_to_fractal_members(db, text, button, fractal_id, data=0)
+    await send_button_to_members(db, members, text, button, fractal_id, data=0)
 
 async def send_message_to_fractal_members(db: AsyncSession, fractal_id: int, text: str) -> None:
     members = await get_fractal_members_repo(db, fractal_id)
@@ -276,11 +314,13 @@ async def get_groups_for_round(db: AsyncSession, round_id: int):
 # ----------------------------
 # Close Round
 # ----------------------------
-async def close_round(db: AsyncSession, round_id: int):
+async def close_round(db: AsyncSession, fractal_id: int):
     """
     Close a round: mark it closed and calculate totals for proposals and comments.
     Saves scores per level as lists in JSONB.
     """
+
+    round_id = await get_last_round_repo(db, fractal_id)
 
     groups = await get_groups_for_round(db, round_id)
     text = f"The round has ended. Thanks for your input!"
@@ -290,7 +330,7 @@ async def close_round(db: AsyncSession, round_id: int):
 
 
     # Step 1: Mark round as closed
-    round_obj = await close_round_repo(db, round_id)
+    round_obj = await close_round_repo(db, fractal_id)
 
     # Step 2: Get all groups for this round
     groups = await get_groups_for_round_repo(db, round_obj.id)
@@ -333,6 +373,7 @@ async def close_round(db: AsyncSession, round_id: int):
             await send_message_to_group(db, g.id, text)
             await send_message_to_web_app_group(db, g.id, text)
 
+        await close_fractal_repo(db, fractal_id)
 
         # Step 5: Return the new round if created, else the closed round
         return None
@@ -583,3 +624,106 @@ async def send_message_to_web_app_users(telegram_ids: list[int], text: str, even
             print(f"Failed to send to {user_id}: {e}")
 
 
+# POLL
+
+# ----------------- POLL LOOP -----------------
+
+async def poll_worker(db, poll_interval: int = 60):
+    """
+    Background loop that periodically checks for fractals to start or update.
+    Runs indefinitely with a sleep between checks.
+    """
+
+    while True:
+        await check_fractals(db)
+        await asyncio.sleep(poll_interval)
+
+
+# ----------------- MAIN CHECK -----------------
+
+async def check_fractals(db):
+    """
+    1. Starts waiting fractals whose start_date <= now.
+    2. Checks open fractals for halfway and round-close times.
+    """
+    now = datetime.now(timezone.utc)
+    print(f"\n🕓 [Poll @ {now.isoformat()}] Checking fractals...")
+    
+    # 1. Handle fractals that should start now
+#    waiting_fractals = await get_fractals_repo(db)
+    waiting_fractals = await get_waiting_fractals_repo(db, now)
+    for fractal in waiting_fractals:
+        print(f"   → id={fractal.id}, name='{fractal.name}', start={fractal.start_date}, status={fractal.status}")
+        if fractal.start_date <= now:
+            await start_fractal(db, fractal.id)
+
+# 2. Handle active fractals
+    open_fractals = await get_open_fractals_repo(db, now)
+    for fractal in open_fractals:
+        print(f"   → id={fractal.id}, name='{fractal.name}', start={fractal.start_date}, status={fractal.status}")
+        if not fractal.meta or "round_time" not in fractal.meta:
+            continue
+        
+        # ✅ FIX: seconds → timedelta
+        round_time = timedelta(seconds=int(fractal.meta["round_time"]))  # 300s
+        half_time = round_time / 2
+        start_date = fractal.start_date
+        elapsed = now - start_date
+        
+        print(f"  → {fractal.name}: elapsed={elapsed}, round_time={round_time}")
+        
+        round_index = int(elapsed // round_time)
+        round_start = start_date + round_index * round_time
+        half_way_time = round_start + half_time
+        round_close_time = round_start + round_time
+        
+        print(f"     Round {round_index}: half={half_way_time}, close={round_close_time}")
+        
+        # ✅ 59s window
+        if half_way_time <= now <= half_way_time + timedelta(seconds=59):
+            print(f"  🟡 HALFWAY → {fractal.id}")
+            await round_half_way_service(db, fractal.id)
+        
+        if round_close_time <= now <= round_close_time + timedelta(seconds=59):
+            print(f"  🔴 CLOSE → {fractal.id}")
+            await close_round(db, fractal.id)
+
+
+# ----------------- FRACTAL SERVICES -----------------
+
+
+async def round_half_way_service(db, fractal_id: int):
+    """
+    Halfway through the round:
+      - Get latest active round.
+      - Notify each group with messages/buttons.
+      - Mark round status as 'vote' using repo.
+    """
+
+    print (":) Half way round")
+    last_round = await get_last_round_repo(db, fractal_id)
+    if not last_round or last_round.status != "active":
+        return
+
+    groups = await get_groups_for_round_repo(db, last_round.id)
+    if not groups:
+        return
+
+    text = "Half way... better work... do some voting!"
+
+    for g in groups:
+        await send_button_to_group(
+            db=db,
+            group_id=g.id,
+            text=text,
+            button_text="Dashboard",
+            fractal_id=fractal_id,
+        )
+
+        await send_message_to_web_app_group(
+            db=db,
+            group_id=g.id,
+            text=text,
+        )
+
+    await set_round_status_repo(db, last_round.id, "vote")

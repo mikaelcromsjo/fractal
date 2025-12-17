@@ -17,26 +17,39 @@ from contextlib import asynccontextmanager
 from telegram.bot import init_bot
 from aiogram.types import BotCommand, MenuButtonCommands
 
+from services.fractal_service import poll_worker
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup - runs FIRST
+    # --- Startup ---
     print("🚀 Starting bot...")
     bot, _ = init_bot()
-    
+
     commands = [
         BotCommand(command="start", description="Show menu"),
         BotCommand(command="help", description="Help"),
-        BotCommand(command="join", description="Join fractal"),
-        BotCommand(command="menu", description="Main menu")
+        BotCommand(command="join", description="Join fractal id (/join 12)"),
     ]
     await bot.set_my_commands(commands)
-    print("✅ Menu commands set!")
-    
-    yield  # App runs here
-    
-    # Shutdown
+    print("✅ Bot menu commands set!")
+
+    # --- Start poll worker ---
+    async def start_poller():
+        from infrastructure.db.session import AsyncSessionLocal
+        async with AsyncSessionLocal() as db:
+            await poll_worker(db, poll_interval=60)
+
+    # Run poller in background
+    asyncio.create_task(start_poller())
+    print("🌀 Poll worker started in background.")
+
+    yield  # --- App runs here (FastAPI lifecycle main body runs) ---
+
+    # --- Shutdown ---
     print("🛑 Shutting down bot...")
     await bot.session.close()
+    print("✅ Bot shutdown complete.")
+
 
 # Apply lifespan to your app
 app = FastAPI(lifespan=lifespan)
