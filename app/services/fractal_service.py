@@ -151,6 +151,7 @@ async def start_fractal(db: AsyncSession, fractal_id: int):
     print ("🚀 Your fractal has started!")
     text = f"🚀 Fractal '{fractal.name}' has started!\n\n💬 Now you can chat with your group members in this private chat. Try writing 'Hi!'\n\n📝 And you can write and vote on proposlas in the Fractal Dashboard!"
     await send_button_to_fractal_members(db, text, "Dashboard", fractal_id)
+    text = f"🚀 Fractal '{fractal.name}' has started!<p>💬 Now you can chat with your group members in this private chat. Try writing 'Hi!'<p>📝 And you can write and vote on proposlas in the Fractal Dashboard!"
     await send_message_to_fractal_web_app_members(db, fractal_id, text, "start")
     await open_fractal_repo(db, fractal_id)
     return round_0
@@ -299,11 +300,11 @@ async def start_round(db: AsyncSession, fractal_id: int, level: int, members: Li
     groups = []
     for grp_users in groups_flat:
         grp = await create_group_repo(db, fractal_id, round_obj.id, level)
-        print("crate group")
+#        print("crate group")
 
         for uid in grp_users:
             await add_group_member_repo(db, grp.id, uid)
-            print("add group member")
+#            print("add group member")
         groups.append(grp)
     return round_obj
 
@@ -319,9 +320,8 @@ async def close_round(db: AsyncSession, fractal_id: int):
     Saves scores per level as lists in JSONB.
     """
 
-    round_id = await get_last_round_repo(db, fractal_id)
-
-    groups = await get_groups_for_round(db, round_id)
+    round = await get_last_round_repo(db, fractal_id)  # Returns Round object
+    groups = await get_groups_for_round_repo(db, round.id)  # Passes .id (int)
     text = f"The round has ended. Thanks for your input!"
     for g in groups:
         await send_message_to_group(db, g.id, text)
@@ -332,7 +332,7 @@ async def close_round(db: AsyncSession, fractal_id: int):
     round_obj = await close_round_repo(db, fractal_id)
 
     # Step 2: Get all groups for this round
-    groups = await get_groups_for_round_repo(db, round_obj.id)
+    groups = await get_groups_for_round_repo(db, round.id)
 
     # Step 3: For each group, process proposals and comments
     for group in groups:
@@ -366,11 +366,9 @@ async def close_round(db: AsyncSession, fractal_id: int):
         return new_round
     else:
 
-        groups = await get_groups_for_round(db, round_id)
         text = f"The Fractal has ended!"
-        for g in groups:
-            await send_message_to_group(db, g.id, text)
-            await send_message_to_web_app_group(db, g.id, text)
+        await send_message_to_fractal_members(db, fractal_id, text)
+        await send_message_to_fractal_web_app_members(db, fractal_id, text, "end")
 
         await close_fractal_repo(db, fractal_id)
 
@@ -440,13 +438,13 @@ async def promote_to_next_round(db: AsyncSession, prev_round_id: int, fractal_id
 async def create_proposal(db: AsyncSession, fractal_id: int, group_id: int, round_id: int,
                                 title: str, body: str, creator_user_id: int):
     # send ws to group about new proposal
-    await send_message_to_web_app_group(db, group_id, "new proposals ready", "refresh")
+    await send_message_to_web_app_group(db, group_id, str(creator_user_id), "refresh")
     return await add_proposal_repo(db, fractal_id, group_id, round_id, title, body, creator_user_id)
 
 
 async def create_comment(db: AsyncSession, proposal_id: int, user_id: int, text: str,
                                parent_comment_id: Optional[int] = None, group_id: Optional[int] = None):
-    await send_message_to_web_app_group(db, group_id, "new comments ready", "refresh")    
+    await send_message_to_web_app_group(db, group_id, str(user_id), "refresh")    
     return await add_comment_repo(db, proposal_id, user_id, text, parent_comment_id, group_id)
 
 
@@ -647,53 +645,112 @@ async def poll_worker(async_session_maker, poll_interval: int = 60):
 
 # ----------------- MAIN CHECK -----------------
 
-async def check_fractals(db):
+async def check_fractals(db: AsyncSession):
     """
     1. Starts waiting fractals whose start_date <= now.
     2. Checks OPEN ROUNDS (not fractals) for half/close times.
     """
     now = datetime.now(timezone.utc)
-    print(f"\n🕓 [Poll @ {now.isoformat()}] Checking fractals...")
+    print(f"\n{'='*60}")
+    print(f"🕓 [Poll @ {now.isoformat()}] Checking fractals...")
+    print(f"{'='*60}")
     
-    # 1. Start waiting fractals ✅ (UNCHANGED - WORKING)
-    waiting_fractals = await get_waiting_fractals_repo(db, now)
-    for fractal in waiting_fractals:
-        print(f"   → WAITING id={fractal.id}, name='{fractal.name}', start={fractal.start_date}")
-        if fractal.start_date <= now:
-            print(f"   🚀 STARTING {fractal.id}")
-            await start_fractal(db, fractal.id)
+    try:
+        # 1. Start waiting fractals
+        print(f"   [STEP 1] Fetching waiting fractals...")
+        waiting_fractals = await get_waiting_fractals_repo(db, now)
+        print(f"   ✓ Found {len(waiting_fractals)} waiting fractals")
+        
+        for fractal in waiting_fractals:
+            print(f"      → id={fractal.id}, name='{fractal.name}', start={fractal.start_date}")
+            if fractal.start_date <= now:
+                print(f"      🚀 STARTING fractal {fractal.id}")
+                try:
+                    await start_fractal(db, fractal.id)
+                    print(f"      ✅ Started successfully")
+                except Exception as e:
+                    print(f"      ❌ Error starting: {e}")
+                    import traceback
+                    traceback.print_exc()
 
-    # 2. NEW: Check OPEN ROUNDS (status='open')
-    print(f"   → Checking OPEN rounds...")
-    open_rounds = await get_open_rounds_repo(db)  # NEW REPO NEEDED
-    for round_obj in open_rounds:
-        fractal = await get_fractal_repo(db, round_obj.fractal_id)  # Get fractal for meta
-        if not fractal or not fractal.meta or "round_time" not in fractal.meta:
-            print(f"   ⏭️ Skipping round {round_obj.id} (no meta)")
-            continue
+        # 2. Check OPEN ROUNDS
+        print(f"\n   [STEP 2] Fetching open rounds...")
+        open_rounds = await get_open_rounds_repo(db)
+        print(f"   ✓ Found {len(open_rounds)} open rounds")
+        
+        for round_obj in open_rounds:
+            print(f"\n      🔍 Processing round {round_obj.id}...")
             
-        round_time_secs = int(fractal.meta["round_time"])
-        round_start = round_obj.started_at  # ✅ Round-specific timing!
-        half_way_time = round_start + timedelta(seconds=round_time_secs / 2)
-        close_time = round_start + timedelta(seconds=round_time_secs)
+            try:
+                # Get fractal metadata
+                fractal = await get_fractal_repo(db, round_obj.fractal_id)
+                if not fractal:
+                    print(f"         ⏭️ Fractal {round_obj.fractal_id} not found, skipping")
+                    continue
+                    
+                if not fractal.meta or "round_time" not in fractal.meta:
+                    print(f"         ⏭️ No round_time in meta, skipping")
+                    continue
+                
+                round_time_secs = int(fractal.meta["round_time"])
+                round_start = round_obj.started_at
+                half_way_time = round_start + timedelta(seconds=round_time_secs / 2)
+                close_time = round_start + timedelta(seconds=round_time_secs)
+                
+                print(f"         Round time: {round_time_secs}s")
+                print(f"         Started: {round_start}")
+                print(f"         Half-way at: {half_way_time}")
+                print(f"         Close at: {close_time}")
+                print(f"         Now: {now}")
+                
+                # Check halfway window: ±5min (2min before, 3min after)
+                half_window_start = half_way_time - timedelta(minutes=2)
+                half_window_end = half_way_time + timedelta(minutes=3)
+                
+                if half_window_start <= now <= half_window_end:
+                    print(f"         🟡 IN HALFWAY WINDOW!")
+                    try:
+                        await round_half_way_service(db, fractal.id)
+                        print(f"         ✅ Halfway service executed")
+                    except Exception as e:
+                        print(f"         ❌ Halfway service error: {e}")
+                        import traceback
+                        traceback.print_exc()
+                else:
+                    time_until_halfway = (half_way_time - now).total_seconds()
+                    print(f"         ⏳ Halfway in {time_until_halfway:.0f}s")
+                
+                # Check close window: ±5min (2min before, 3min after)
+                close_window_start = close_time - timedelta(minutes=2)
+                close_window_end = close_time + timedelta(minutes=3)
+                
+                if close_window_start <= now <= close_window_end:
+                    print(f"         🔴 IN CLOSE WINDOW!")
+                    try:
+                        await close_round(db, fractal.id)
+                        print(f"         ✅ Close round executed")
+                    except Exception as e:
+                        print(f"         ❌ Close round error: {e}")
+                        import traceback
+                        traceback.print_exc()
+                else:
+                    time_until_close = (close_time - now).total_seconds()
+                    print(f"         ⏳ Close in {time_until_close:.0f}s")
+                    
+            except Exception as e:
+                print(f"         💥 Error processing round {round_obj.id}: {e}")
+                import traceback
+                traceback.print_exc()
         
-        print(f"   🔍 Round {round_obj.id} (fractal {fractal.id}):")
-        print(f"      started={round_start}, half={half_way_time}, close={close_time}")
+        print(f"\n{'='*60}")
+        print(f"✅ Poll cycle complete")
+        print(f"{'='*60}\n")
         
-        # ✅ WIDE 5min windows
-        half_window_start = half_way_time - timedelta(minutes=2)
-        half_window_end = half_way_time + timedelta(minutes=3)
-        close_window_start = close_time - timedelta(minutes=2)
-        close_window_end = close_time + timedelta(minutes=3)
-        
-        if half_window_start <= now <= half_window_end:
-            print(f"   🟡 HALFWAY Round {round_obj.id} → fractal {fractal.id}")
-            await round_half_way_service(db, fractal.id)
-        
-        if close_window_start <= now <= close_window_end:
-            print(f"   🔴 CLOSING Round {round_obj.id} → fractal {fractal.id}")
-            await close_round(db, fractal.id)
-
+    except Exception as e:
+        print(f"\n💥 CRITICAL ERROR in check_fractals: {e}")
+        import traceback
+        traceback.print_exc()
+        print(f"{'='*60}\n")
 # ----------------- FRACTAL SERVICES -----------------
 
 

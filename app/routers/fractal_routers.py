@@ -46,7 +46,8 @@ from services.fractal_service import (
     get_user_info_by_telegram_id,
     get_next_card,
     get_all_cards,
-    get_or_build_round_tree_repo
+    get_or_build_round_tree_repo,
+    get_last_round_repo
 )
 
 from telegram.bot import process_update
@@ -181,6 +182,7 @@ async def fractals_auth(request: AuthRequest, db: AsyncSession = Depends(get_db)
         
         # get fractal
         fractal = await get_fractal(db, user_context.get("fractal_id"))
+        round = await get_last_round_repo(db, user_context.get("fractal_id"))
 
         # Manual response (bypass Pydantic for now)
         response_data = {
@@ -193,7 +195,9 @@ async def fractals_auth(request: AuthRequest, db: AsyncSession = Depends(get_db)
             "username": user.get("username", ""),
             "fractal_name": fractal.name,
             "fractal_description": fractal.description,
-            "fractal_start_date": fractal.start_date.strftime("%Y-%m-%d %H:%M")
+            "fractal_start_date": fractal.start_date.strftime("%Y-%m-%d %H:%M"),
+            "level": round.level,
+            "fractal_status": fractal.status,
         }
         print(f"📤 Sending response: {response_data}")  # Debug
         

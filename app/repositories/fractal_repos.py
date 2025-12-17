@@ -183,11 +183,11 @@ async def set_round_status_repo(db, round_id: int, status: str):
 
 async def close_round_repo(db: AsyncSession, fractal_id: int):
     """Mark a round as closed and set the end timestamp, then return the round."""
-    round_id = await get_last_round_repo(fractal_id)
+    round_obj = await get_last_round_repo(db, fractal_id)
     RoundTree = models.RoundTree
     stmt = (
         update(Round)
-        .where(Round.id == round_id)
+        .where(Round.id == round_obj.id)
         .values(
             ended_at=datetime.now(timezone.utc),
             status="closed"
@@ -565,9 +565,14 @@ async def get_waiting_fractals_repo(db, now: datetime):
     return fractals
 
 async def get_open_rounds_repo(db: AsyncSession):
-    """Get all rounds with status='open'"""
+    """
+    Return all rounds with status='open'.
+    These are actively running rounds that need halfway/close checks.
+    """
     result = await db.execute(
-        select(Round).where(Round.status == "open")
+        select(Round)
+        .where(Round.status == "open")
+        .order_by(Round.started_at.desc())
     )
     return result.scalars().all()
 

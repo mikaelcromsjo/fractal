@@ -323,7 +323,6 @@ async def cmd_invite_group(message: types.Message):
 
 @router.message(CommandStart())
 async def cmd_start(message: types.Message, state: FSMContext):
-    print(f"📱 /start from {message.chat.id}: '{repr(message.text)}'")
     
     from telegram.bot import init_bot
     bot, _ = init_bot()
@@ -338,12 +337,9 @@ async def cmd_start(message: types.Message, state: FSMContext):
     if message.chat.type == ChatType.PRIVATE:
         await bot.set_chat_menu_button(chat_id=message.chat.id, menu_button=MenuButtonCommands())
 
-    # ✅ FIXED LOGIC
     args = message.text.split(maxsplit=1)
-    print(f"📱 args: {args}")
     
     if len(args) > 1 and args[1].startswith("fractal_"):
-        print(f"🔗 Deep link: {args[1]}")
         try:
             fractal_id = int(args[1].replace("fractal_", ""))
         except ValueError:
@@ -353,7 +349,6 @@ async def cmd_start(message: types.Message, state: FSMContext):
         async for db in get_async_session():
             try:
                 fractal = await get_fractal_from_name_or_id_repo(db=db, fractal_identifier=fractal_id)
-                print(f"🔍 Fractal {fractal_id}: {fractal}")
                 
                 if not fractal:
                     await message.answer(f"❌ Fractal '{sanitize_text(str(fractal_id))}' not found.")
@@ -389,7 +384,6 @@ async def cmd_start(message: types.Message, state: FSMContext):
         return
 
     # ✅ DEFAULT /start
-    print("✅ Showing default menu")
     await message.answer("👋 Hi, I am the Fractal Circle Bot!", reply_markup=default_menu())
 
 

@@ -13,6 +13,33 @@
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
 
+.btn-highlight {
+    background-color: #ff6b6b !important; /* Red/warning color */
+    color: white;
+    font-weight: bold;
+    border: 2px solid #ff4444;
+}
+
+@keyframes pulse {
+    0%, 100% {
+        transform: scale(1);
+        box-shadow: 0 0 0 0 rgba(255, 107, 107, 0.7);
+    }
+    50% {
+        transform: scale(1.05);
+        box-shadow: 0 0 0 10px rgba(255, 107, 107, 0);
+    }
+}
+
+@keyframes bounce {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-5px); }
+}
+
+.btn-bounce {
+    animation: bounce 0.6s infinite !important;
+}
+
 html {
     height: -webkit-fill-available; /* Safari iOS fix */
     height: 100%; /* Fallback */
@@ -22,6 +49,12 @@ body {
     height: var(--tg-viewport-stable-height, -webkit-fill-available);
     min-height: 100%;
     height: -webkit-fill-available; /* Mobile WebKit priority */
+}
+
+p{
+  margin:1px;
+  padding:1px;
+
 }
 
 .proposal-comment-vote {
@@ -366,8 +399,8 @@ body {
             border: none;
             cursor: pointer;
         }
-        #add-proposal-btn {
-            margin: 12px 16px;
+        #add-proposal-btn, #more-btn{
+            margin: 2px 9px;
             padding: 10px;
             border-radius: 12px;
             border: none;
@@ -377,6 +410,10 @@ body {
             width: calc(100% - 32px);
             flex-shrink: 0;
         }
+        #add-proposal-btn {
+            display:none;
+        }
+        
         #char-count {
             text-align: right;
             font-size: 12px;
@@ -394,6 +431,7 @@ body {
     <!-- Cards will appear here -->
 </div>
 
+<button id="more-btn">Update View</button>
 <button id="add-proposal-btn">Create Proposal</button>
 
 <div id="proposal-form">
@@ -422,6 +460,18 @@ body {
 
     let currentTelegramUserId = initDataUnsafe.user ? initDataUnsafe.user.id : null;
 
+    let currentUserId =  "";
+    let currentFractalId = "";
+    let currentRoundId = "";
+    let currentLevel =  "";
+    let currentGroupId  = "";
+    let currentUserName = "";
+    let fractalName = "";
+    let fractalDescription = "";
+    let fractalStartDate = "";
+    let fractalStatus = "";
+
+
 
     const statusEl = document.getElementById("status");
     statusEl.innerText = "Hello, " + userName + "! Sending auth to server...";
@@ -436,30 +486,36 @@ fetch("/api/v1/fractals/auth", {
     if(data.status === "ok") {
 //        const statusPanel = document.getElementById('status-panel');
 //        statusPanel.style.display = 'none'
-        statusEl.innerText = "Name: " + data.username + " Fractal: " + data.fractal_id + " Group:" + data.group_id + " Round: " + data.round_id;
+        statusEl.innerText = "Name: " + data.username + " Fractal: " + data.fractal_id + " Level:" + data.level + " Group:" + data.group_id + " Status: " + data.fractal_status;
         
         // ✅ Set all current context variables
         currentUserId = data.user_id;
         currentFractalId = data.fractal_id;
         currentRoundId = data.round_id;
+        currentLevel = data.level;
         currentGroupId = data.group_id;
         currentUserName = data.username;
         fractalName = data.fractal_name;
         fractalDescription = data.fractal_description; 
         fractalStartDate = data.fractal_start_date; 
+        fractalStatus = data.fractal_status; 
         
         
-        console.log("Auth context:", {
-            userId: currentUserId,
-            fractalId: currentFractalId,
-            roundId: currentRoundId,
-            groupId: currentGroupId
-        });
+        console.log("Auth context:", data);
 
 
         if (!currentGroupId){
             addCardDiv('You are not in any active group at the moment. <p>'+fractalName+'<p>'+fractalDescription+'<p>Start Date: '+fractalStartDate+'');
         }
+        console.log(currentLevel)
+        console.log(fractalStatus)
+        
+        if (!(currentLevel == 0 && fractalStatus == "open")){
+            addBtn.style.display = "none";
+        }else{
+            addBtn.style.display = "block";
+        }
+        
         getNextCard(); // Start loading cards after auth
     } else {
         statusEl.innerText = "Auth failed: " + data.error;
@@ -473,6 +529,7 @@ fetch("/api/v1/fractals/auth", {
 
     // Proposal form logic
     const addBtn = document.getElementById("add-proposal-btn");
+    const moreBtn = document.getElementById("more-btn");
     const form = document.getElementById("proposal-form");
     const cancelBtn = document.getElementById("cancel-proposal");
     const submitBtn = document.getElementById("submit-proposal");
@@ -484,6 +541,11 @@ fetch("/api/v1/fractals/auth", {
     addBtn.addEventListener("click", function() {
         form.style.display = "flex";
         addBtn.style.display = "none";
+    });
+
+
+    moreBtn.addEventListener("click", function() {
+        location.reload(true);
     });
 
 
@@ -522,6 +584,11 @@ function isAllVoted() {
 // Load a single card from backend
 function getNextCard() {
 
+    if(fractalStatus != "open"){
+        getAllCards();
+        return;
+    }
+
     // Call with current context from auth
     fetch(`/api/v1/fractals/get_next_card?group_id=${currentGroupId}&user_id=${currentUserId}`)
         .then(res => {
@@ -530,6 +597,8 @@ function getNextCard() {
         })
         .then(html => {
             if (html.length > 0) {
+
+            noMoreCards = false;
 
             // ✅ Remove .card.show divs that contain .no-proposals-message
             const cardShowDivs = document.querySelectorAll('.card.show');
@@ -585,12 +654,30 @@ function getAllCards() {
         });
 }
 
-
 function addCard(html) {
     var card = document.createElement("div");
     card.className = "card";
-    card.innerHTML = html; // Insert full HTML from backend
+    card.innerHTML = html;
     cardsContainer.appendChild(card);
+
+    // ✅ Hide/disable voting blocks if not in level 0 or fractal not open
+    if (currentLevel != "0" || fractalStatus != "open") {
+        card.querySelectorAll(".proposal-comment-input-row").forEach(el => {
+            el.style.display = "none";
+        });
+    }
+    if (fractalStatus != "open") {
+        
+        // Disable proposal-rating-block (voting)
+        card.querySelectorAll(".proposal-rating-block").forEach(el => {
+            el.style.pointerEvents = "none";
+        });
+        
+        // Disable proposal-comments-block (commenting)
+        card.querySelectorAll(".proposal-comments-block").forEach(el => {
+            el.style.pointerEvents = "none";
+        });
+    }
 
     // Trigger animation
     requestAnimationFrame(function() {
@@ -625,7 +712,6 @@ document.body.addEventListener('noMoreCards', function() {
 
 document.body.addEventListener('noCards', function() {
     noMoreCards = true;
-    addCard("There are no proposals at all..");
 });
 
 
@@ -982,15 +1068,19 @@ async function connectWS() {
                 if (data.type === 'start' && data.message) {
 //                    Telegram.WebApp.showAlert(data.message);
                     addCardDiv(data.message)
-                    getNextCard();
+                    onNewCardsWebhook();
                 }
 
+                if (data.type === 'start' && data.message) {
+//                    Telegram.WebApp.showAlert(data.message);
+                    addCardDiv(data.message)
+                    onNewCardsWebhook();
+                }
 
                 if (data.type === 'refresh' && data.message) {
                     console.log(data.message);
-                    if (noMoreCards)
-//                        getNextCard();
-                        noMoreCards = false;
+                    if (noMoreCards && data.message != str(currentUserId))
+                        onNewCardsWebhook();
                 }
 
                 if (data.type === 'half_time' && data.message) {
@@ -1052,6 +1142,27 @@ function setViewportHeight() {
 }
 window.addEventListener('resize', setViewportHeight);
 setViewportHeight();
+
+
+function onNewCardsWebhook() {
+    const moreBtn = document.getElementById("more-btn");
+    
+    // ✅ Option 1: Pulse animation + change text + color
+    moreBtn.textContent = "📌 Update View";
+    moreBtn.classList.add("btn-highlight");
+    moreBtn.style.animation = "pulse 1s infinite";
+}
+
+// When user clicks
+document.getElementById("more-btn").addEventListener("click", () => {
+    location.reload(); // or fetch new cards
+    
+    // Reset button
+    const moreBtn = document.getElementById("more-btn");
+    moreBtn.textContent = "Update View";
+    moreBtn.classList.remove("btn-highlight");
+    moreBtn.style.animation = "none";
+});
 
     </script>
 </%text>
