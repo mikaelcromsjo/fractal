@@ -2,6 +2,8 @@
 """
 Application entrypoint. Includes routers and mounts.
 """
+
+import asyncpg
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import asyncio
@@ -19,6 +21,15 @@ from aiogram.types import BotCommand, MenuButtonCommands
 
 from services.fractal_service import poll_worker
 from infrastructure.db.session import AsyncSessionLocal
+
+from sqlalchemy.ext.asyncio import create_async_engine
+from infrastructure.db.session import Base  # adjust import to your Base
+
+
+DATABASE_ADMIN_URL = "postgresql://fractal_user:fractal_pass@db:5432/postgres"
+TEST_DB_NAME = "test_fractal_db"
+DATABASE_URL = f"postgresql+asyncpg://fractal_user:fractal_pass@db:5432/{TEST_DB_NAME}"
+
 
 async def recreate_test_db():
     conn = await asyncpg.connect(DATABASE_ADMIN_URL)
