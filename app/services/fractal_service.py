@@ -11,6 +11,8 @@ import asyncio
 
 
 from repositories.fractal_repos import (
+    get_votes_for_group_comments_repo,
+    get_votes_for_group_proposals_repo,
     set_round_status_repo,
     get_user_by_telegram_id_repo,
     create_user_repo,
@@ -314,66 +316,145 @@ async def get_groups_for_round(db: AsyncSession, round_id: int):
 # ----------------------------
 # Close Round
 # ----------------------------
+
+# =================== PROPOSAL SCORING ==========================
+from collections import defaultdict
+
+# ====================== CONFIGURATION =========================
+
+# Top-N rank scoring configuration for proposals
+MAX_RANK: int = 10
+RANK_POINTS: List[int] = list(range(MAX_RANK, 0, -1))  # [10, 9, 8, ..., 1]
+
+# Bayesian smoothing minimum votes threshold for comments
+MIN_VOTES_FOR_BAYES: int = 5
+
+async def calculate_proposal_scores_with_ties(db, group_id: int, round_obj):
+    all_votes = await get_votes_for_group_proposals_repo(db, group_id)
+    if not all_votes:
+        return
+
+    # Group by voter (one dict per member)
+    votes_by_member = defaultdict(list)
+    for v in all_votes:
+        votes_by_member[v.voter_user_id].append(v)
+
+    proposal_totals = defaultdict(float)
+
+    for voter_user_id, votes in votes_by_member.items():
+        sorted_votes = sorted(votes, key=lambda v: v.score, reverse=True)
+        assigned_points = {}
+        rank_index = 0
+
+        while rank_index < len(sorted_votes) and rank_index < len(RANK_POINTS):
+            current_score = sorted_votes[rank_index].score
+            # Collect all proposals tied at this score
+            tied_group = [v for v in sorted_votes if v.score == current_score]
+
+            # Skip if already processed this score level
+            if any(t.proposal_id in assigned_points for t in tied_group):
+                rank_index += 1
+                continue
+
+            tie_count = len(tied_group)
+            available_points = RANK_POINTS[rank_index : rank_index + tie_count]
+            if not available_points:
+                break
+
+            avg_points = sum(available_points) / tie_count
+            for t in tied_group:
+                assigned_points[t.proposal_id] = avg_points
+
+            rank_index += tie_count
+
+        # Add this member's contribution
+        for pid, pts in assigned_points.items():
+            proposal_totals[pid] += pts
+
+    # Save total scores per proposal
+    for proposal_id, total_score in proposal_totals.items():
+        await save_proposal_score_repo(db, proposal_id, round_obj.level, total_score)
+
+
+# ===================== COMMENT SCORING =========================
+
+async def calculate_comment_scores(db, group_id: int, round_obj):
+    """
+    Normalize user votes, then apply Bayesian weighted average.
+    """
+    all_votes = await get_votes_for_group_comments_repo(db, group_id)
+    if not all_votes:
+        return
+
+    votes_by_user = defaultdict(list)
+    for v in all_votes:
+        votes_by_user[v.voter_user_id].append(v)
+
+    normalized_votes = []
+    for voter_user_id, votes in votes_by_user.items():
+        max_score = max(v.vote for v in votes) or 1
+        for v in votes:
+            norm_score = v.vote / max_score
+            normalized_votes.append((v.comment_id, norm_score))
+
+    # Aggregate normalized votes
+    comment_totals = defaultdict(list)
+    for cid, score in normalized_votes:
+        comment_totals[cid].append(score)
+
+    # Compute global average for Bayesian smoothing
+    global_avg = (
+        sum(sum(vals) / len(vals) for vals in comment_totals.values()) / len(comment_totals)
+    )
+
+    # Apply Bayesian weighting
+    for comment_id, vals in comment_totals.items():
+        n = len(vals)
+        local_avg = sum(vals) / n
+        adjusted = (n / (n + MIN_VOTES_FOR_BAYES)) * local_avg + (
+            MIN_VOTES_FOR_BAYES / (n + MIN_VOTES_FOR_BAYES)
+        ) * global_avg
+        await save_comment_score_repo(db, comment_id, round_obj.level, adjusted)
+
+
+# ===================== ROUND CLOSURE ===========================
+
 async def close_round(db: AsyncSession, fractal_id: int):
     """
     Close a round: mark it closed and calculate totals for proposals and comments.
     Saves scores per level as lists in JSONB.
     """
-
-    round = await get_last_round_repo(db, fractal_id)  # Returns Round object
-    groups = await get_groups_for_round_repo(db, round.id)  # Passes .id (int)
-    text = f"The round has ended. Thanks for your input!"
+    round = await get_last_round_repo(db, fractal_id)
+    groups = await get_groups_for_round_repo(db, round.id)
+    text = "The round has ended. Thanks for your input!"
     for g in groups:
         await send_message_to_group(db, g.id, text)
         await send_message_to_web_app_group(db, g.id, text)
 
-
     # Step 1: Mark round as closed
     round_obj = await close_round_repo(db, fractal_id)
 
-    # Step 2: Get all groups for this round
-    groups = await get_groups_for_round_repo(db, round.id)
-
-    # Step 3: For each group, process proposals and comments
+    # Step 2: Process each group
     for group in groups:
-        # Get all proposals explicitly
-        proposals = await get_proposals_for_group_repo(db, group.id)
-        for p in proposals:
-            # Explicitly load votes for this proposal
-            proposal_votes = await get_votes_for_proposal_repo(db, p.id)
-            total_score = sum(v.score for v in proposal_votes)
-            # Save proposal score per level
-            await save_proposal_score_repo(db, p.id, round_obj.level, total_score)
+        await calculate_proposal_scores_with_ties(db, group.id, round_obj)
+        await calculate_comment_scores(db, group.id, round_obj)
 
-            # Explicitly load comments for this proposal
-            comments = await get_comments_for_proposal_repo(db, p.id)
-            for c in comments:
-                comment_votes = await get_votes_for_comment_repo(db, c.id)
-                yes_count = sum(1 for v in comment_votes if v.vote)
-                no_count = sum(1 for v in comment_votes if not v.vote)
-                comment_score = yes_count - no_count
-                await save_comment_score_repo(db, c.id, round_obj.level, comment_score)
-
-    # Step 4: Promote to next round
+    # Step 3: Promote to next round
     new_round = await promote_to_next_round(db, round_obj.id, round_obj.fractal_id)
     if new_round:
-
-        groups = await get_groups_for_round(db, new_round.id)
-        text = f"The Next Round has started! You have been selected to represent your Circle!"
-        for g in groups:
+        next_groups = await get_groups_for_round(db, new_round.id)
+        text = "The Next Round has started! You have been selected to represent your Circle!"
+        for g in next_groups:
             await send_button_to_group(db, g.id, text, "Dashboard", round_obj.fractal_id)
             await send_message_to_web_app_group(db, g.id, text)
         return new_round
-    else:
 
-        text = f"The Fractal has ended!"
-        await send_message_to_fractal_members(db, fractal_id, text)
-        await send_message_to_fractal_web_app_members(db, fractal_id, text, "end")
-
-        await close_fractal_repo(db, fractal_id)
-
-        # Step 5: Return the new round if created, else the closed round
-        return None
+    # Step 4: End fractal if no new round
+    end_text = "The Fractal has ended!"
+    await send_message_to_fractal_members(db, fractal_id, end_text)
+    await send_message_to_fractal_web_app_members(db, fractal_id, end_text, "end")
+    await close_fractal_repo(db, fractal_id)
+    return None
 
 # ----------------------------
 # Promote to Next Round
@@ -393,7 +474,7 @@ async def promote_to_next_round(db: AsyncSession, prev_round_id: int, fractal_id
     rep_user_ids = []
     for g in prev_groups:
         members = await get_group_members(db, g.id)
-        member_ids = [m.user_id for m in members]
+        voter_user_ids = [m.user_id for m in members]
         rep_id = await select_representative_repo(db, g.id)  # highest voted rep
         if rep_id:
             rep_user_ids.append(rep_id)
@@ -421,7 +502,8 @@ async def promote_to_next_round(db: AsyncSession, prev_round_id: int, fractal_id
         new_groups.append(grp)
 
     # Step 5: Promote top proposals from previous round
-    top_count = 2  # can come from fractal settings
+    top_count = settings.PROPOSALS_PER_USER_DEFAULT
+
     for g_prev, grp_new in zip(prev_groups, new_groups):
         top_props = await get_top_proposals_repo(db, g_prev.id, top_count)  # g_prev.id is group_id
         for p in top_props:

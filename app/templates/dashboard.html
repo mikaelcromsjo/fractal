@@ -13,31 +13,50 @@
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
 
+.proposal-header-row {
+  position: relative; /* ensures absolute children (badge) stay inside */
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.proposal-score-badge {
+  position: absolute;
+  top: 8px;
+  right: 12px;
+  background-color: #ffda77;
+  color: #333;
+  font-weight: bold;
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 0.9em;
+}
+
+.hidden-proposal {
+  display: none;
+}
+
 .btn-highlight {
-    background-color: #ff6b6b !important; /* Red/warning color */
     color: white;
-    font-weight: bold;
-    border: 2px solid #ff4444;
 }
 
 @keyframes pulse {
     0%, 100% {
         transform: scale(1);
-        box-shadow: 0 0 0 0 rgba(255, 107, 107, 0.7);
+        box-shadow: 0 0 0 0 rgba(3, 5, 59, 0.7);
     }
     50% {
-        transform: scale(1.05);
-        box-shadow: 0 0 0 10px rgba(255, 107, 107, 0);
+        transform: scale(1.02);
+        box-shadow: 0 0 0 5px rgba(255, 107, 107, 0);
     }
 }
 
 @keyframes bounce {
     0%, 100% { transform: translateY(0); }
-    50% { transform: translateY(-5px); }
+    50% { transform: translateY(-2px); }
 }
 
 .btn-bounce {
-    animation: bounce 0.6s infinite !important;
+    animation: bounce 0.6s 5s !important;
 }
 
 html {
@@ -354,6 +373,7 @@ p{
             padding: 12px 16px;
             border-bottom: 1px solid #ddd;
             flex-shrink: 0;
+            _display:none;
         }
         #status-panel p {
             margin: 0;
@@ -545,6 +565,7 @@ fetch("/api/v1/fractals/auth", {
 
 
     moreBtn.addEventListener("click", function() {
+        console.log("morebtn")
         location.reload(true);
     });
 
@@ -564,6 +585,7 @@ fetch("/api/v1/fractals/auth", {
 
 
 function isAllVoted() {
+ 
     const proposalCards = document.querySelectorAll('.proposal-card[data-proposal-id]');
     
     return Array.from(proposalCards).every(card => {
@@ -583,6 +605,8 @@ function isAllVoted() {
 
 // Load a single card from backend
 function getNextCard() {
+    console.log("getnextcard")
+
 
     if(fractalStatus != "open"){
         getAllCards();
@@ -624,6 +648,7 @@ function getNextCard() {
 
 // Load a single card from backend
 function getAllCards() {
+    console.log("getallcard")
 
     // Clear all
 
@@ -1148,13 +1173,14 @@ function onNewCardsWebhook() {
     const moreBtn = document.getElementById("more-btn");
     
     // ✅ Option 1: Pulse animation + change text + color
-    moreBtn.textContent = "📌 Update View";
+    moreBtn.textContent = "Update View";
     moreBtn.classList.add("btn-highlight");
     moreBtn.style.animation = "pulse 1s infinite";
 }
 
 // When user clicks
 document.getElementById("more-btn").addEventListener("click", () => {
+    console.log("more.btn")
     location.reload(); // or fetch new cards
     
     // Reset button
@@ -1163,6 +1189,11 @@ document.getElementById("more-btn").addEventListener("click", () => {
     moreBtn.classList.remove("btn-highlight");
     moreBtn.style.animation = "none";
 });
+
+function showHiddenComments(proposalId) {
+  document.querySelectorAll(`.hidden_${proposalId}`).forEach(el => el.style.display = 'flex');
+  document.getElementById(`show_more_comment_proposal_${proposalId}`).style.display = 'none';
+}
 
     </script>
 </%text>

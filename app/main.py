@@ -20,9 +20,38 @@ from aiogram.types import BotCommand, MenuButtonCommands
 from services.fractal_service import poll_worker
 from infrastructure.db.session import AsyncSessionLocal
 
+async def recreate_test_db():
+    conn = await asyncpg.connect(DATABASE_ADMIN_URL)
+    # Terminate connections to the test DB
+    await conn.execute(f"""
+        SELECT pg_terminate_backend(pid)
+        FROM pg_stat_activity
+        WHERE datname = '{TEST_DB_NAME}' AND pid <> pg_backend_pid();
+    """)
+    # Drop and create DB
+    await conn.execute(f"DROP DATABASE IF EXISTS {TEST_DB_NAME};")
+    await conn.execute(f"CREATE DATABASE {TEST_DB_NAME};")
+    await conn.close()
+    print(f"Database '{TEST_DB_NAME}' recreated successfully.")
+
+
+async def create_tables():
+    engine = create_async_engine(DATABASE_URL, echo=True)
+    async with engine.begin() as conn:
+        print("Creating all tables...")
+        await conn.run_sync(Base.metadata.create_all)
+    await engine.dispose()
+    print("Tables created successfully.")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    print("🚀 Starting bot...")
+
+
+    await recreate_test_db()
+    await create_tables()
+
+    print("🚀 Starting")
     bot, _ = init_bot()
 
     commands = [

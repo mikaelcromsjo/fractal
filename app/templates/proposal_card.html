@@ -1,124 +1,190 @@
+
+<%
+    proposal_id = proposal.get('id', 0)
+    username = proposal.get('username', '')
+    user_avatar = user.get('avatar', '')
+    proposal_date = proposal.get('date', '')
+    proposal_title = proposal.get('title', '')
+    proposal_message = proposal.get('message', '')
+
+    total_score = int(proposal.get('total_score') or 0)
+    proposal_vote = int(proposal.get('vote') or 0)
+
+    tags = proposal.get('tags') or []
+    comments = proposal.get('comments') or []
+
+    current_group = current_group_id if current_group_id is not None else None
+    visible_count = 10
+    #number_comments or 0
+%>
+
 <div class="card show">
-<div class="proposal-card" data-proposal-id="${proposal['id']}">
-    <!-- Header: avatar + name + date -->
-    <div class="proposal-header-row">
-        <div class="proposal-userblock">
-            <img src="${user['avatar']}" alt="${proposal['username']}" class="proposal-avatar">
-            <div class="proposal-usertext">
-                <a _href="/profile/${proposal['id']}/"
-                   data-uid="${proposal['id']}"
-                   class="proposal-username usertooltip">
-                    ${proposal['username']}
-                </a>
-                <div class="proposal-date">
-                    ${proposal['date']}
+    <div class="proposal-card" data-proposal-id="${proposal_id}">
+
+        <!-- Header -->
+        <div class="proposal-header-row">
+            <div class="proposal-userblock">
+                <img src="${user_avatar}" alt="${username}" class="proposal-avatar">
+                <div class="proposal-usertext">
+                    <a href="/profile/${proposal_id}/"
+                       data-uid="${proposal_id}"
+                       class="proposal-username usertooltip">
+                        ${username}
+                    </a>
+                    <div class="proposal-date">${proposal_date}</div>
                 </div>
             </div>
-        </div>
 
-    </div>
-
-    <!-- Title + description -->
-    <div class="proposal-main">
-        <h2 class="proposal-title">${proposal['title']}</h2>
-        <p class="proposal-text">${proposal['message']}</p>
-
-        % if proposal.get('tags'):
-            <div class="proposal-tags">
-                % for tag in proposal['tags']:
-                    <span class="proposal-tag">#${tag}</span>
-                % endfor
+                % if total_score:
+            <div class="proposal-score-badge">
+                ⭐ ${total_score}
             </div>
-        % endif
-    </div>
-
-
-<!-- Star Rating -->
-        % if proposal['vote'] != -1:        
-<div class="proposal-rating-block">
-    <div class="proposal-star-rating" id="star-rating-${proposal['id']}">
-
-            % for i in range(10):
-                % if i < proposal['vote']:
-                <span class="star active" data-rating="${i+1}" onclick="onStarRatingClick(${proposal['id']}, ${i+1})">⭐</span>
-                % else:
-                <span class="star faded" data-rating="${i+1}" onclick="onStarRatingClick(${proposal['id']}, ${i+1})">⭐</span>
-             % endif
-         % endfor
-    </div>
-</div>
-% endif
-
-    <!-- Comments list -->
-    <div class="proposal-comments-block">
-        <div class="proposal-comments-header">
-            Comments
-        </div>
-        <div class="proposal-comments-list" id="comments-list-${proposal['id']}">
-            % if proposal.get('comments'):
-                % for comment in proposal['comments']:
-                    <div class="proposal-comment-row">
-                        <img src="${comment['avatar']}"
-                             alt="${comment['username']}"
-                             class="proposal-comment-avatar">
-                        <div class="proposal-comment-content">
-<div class="proposal-comment-top">
-    <span>
-    <div class="proposal-comment-username">
-        ${comment['username']}
-    </div>
-    <div class="proposal-comment-date">
-        ${comment['date']}
-    </div>
-    </span>
-
-
-
-    
-<!-- Star Rating Comment -->
-        % if comment['vote'] != -1:
-<div class="comment-rating-block">
-    <div class="comment-star-rating" id="comment-star-rating-${comment['id']}">
-            % for i in range(3):
-                % if i < comment['vote']:
-                <span class="star comment-star active" data-rating="${i+1}" onclick="onStarRatingCommentClick(${comment['id']}, ${i+1})">⭐</span>
-                % else:
-                <span class="star comment-star faded" data-rating="${i+1}" onclick="onStarRatingCommentClick(${comment['id']}, ${i+1})">⭐</span>
                 % endif
-            % endfor
-    </div>
-</div>
-        % endif
+        </div>
 
-</div>
-            <div class="proposal-comment-text">
-                ${comment['text']}
-            </div>
-                        </div>
-                    </div>
-                % endfor
-            % else:
-                <div class="proposal-comment-empty">
-                    No comments yet.
+        <!-- Title + Description -->
+        <div class="proposal-main">
+            <h2 class="proposal-title">${proposal_title}</h2>
+            <p class="proposal-text">${proposal_message}</p>
+
+            % if tags:
+                <div class="proposal-tags">
+                    % for tag in tags:
+                        <span class="proposal-tag">#${tag}</span>
+                    % endfor
                 </div>
             % endif
         </div>
 
-        <!-- Comment input -->
-        <div class="proposal-comment-input-row">
-            <textarea
-                class="proposal-comment-input"
-                id="comment-input-${proposal['id']}"
-                rows="1"
-                placeholder="Add a comment..."
-                onkeydown="if(event.key==='Enter' && !event.shiftKey){event.preventDefault();submitProposalComment(${proposal['id']});}"></textarea>
-            <button
-                type="button"
-                class="proposal-comment-send-btn"
-                onclick="submitProposalComment(${proposal['id']});">
-                Send
-            </button>
+        <!-- Star Rating -->
+        % if proposal_vote != -1:
+            <div class="proposal-rating-block">
+                <div class="proposal-star-rating" id="star-rating-${proposal_id}">
+                    % for i in range(10):
+                        <span class="star ${'active' if i < proposal_vote else 'faded'}"
+                              data-rating="${i + 1}"
+                              onclick="onStarRatingClick(${proposal_id}, ${i + 1})">⭐</span>
+                    % endfor
+                </div>
+            </div>
+        % endif
+
+        <!-- Comments -->
+        <div class="proposal-comments-block">
+            <div class="proposal-comments-header">Comments</div>
+            <div class="proposal-comments-list" id="comments-list-${proposal_id}">
+
+                % if comments:
+                    <%
+                        hidden_comments_count = 0
+                    %>
+
+                    % for i, comment in enumerate(comments):
+                        <%
+                            comment_group = comment.get('group_id')
+                            comment_vote = int(comment.get('vote') or 0)
+                        %>
+
+                        % if 1:
+                            <!-- Same group: always visible -->
+                            <div class="proposal-comment-row">
+                                <img src="${comment.get('avatar','')}"
+                                     alt="${comment.get('username','')}"
+                                     class="proposal-comment-avatar">
+                                <div class="proposal-comment-content">
+                                    <div class="proposal-comment-top">
+                                        <span>
+                                            <div class="proposal-comment-username">
+                                                ${comment.get('username','')}
+                                            </div>
+                                            <div class="proposal-comment-date">
+                                                ${comment.get('date','')}
+                                            </div>
+                                        </span>
+
+                                        % if comment_vote != -1:
+                                            <div class="comment-rating-block">
+                                                <div class="comment-star-rating"
+                                                     id="comment-star-rating-${comment.get('id',0)}">
+                                                    % for j in range(3):
+                                                        <span class="star comment-star ${'active' if j < comment_vote else 'faded'}"
+                                                              data-rating="${j + 1}"
+                                                              onclick="onStarRatingCommentClick(${comment.get('id',0)}, ${j + 1})">⭐</span>
+                                                    % endfor
+                                                </div>
+                                            </div>
+                                        % endif
+                                    </div>
+                                    <div class="proposal-comment-text">
+                                        ${comment.get('text','')}
+                                    </div>
+                                </div>
+                            </div>
+
+                        % elif i < visible_count:
+                            <!-- Visible non-group -->
+                            <div class="proposal-comment-row">
+                                <img src="${comment.get('avatar','')}"
+                                     alt="${comment.get('username','')}"
+                                     class="proposal-comment-avatar">
+                                <div class="proposal-comment-content">
+                                    <div class="proposal-comment-username">
+                                        ${comment.get('username','')}
+                                    </div>
+                                    <div class="proposal-comment-text">
+                                        ${comment.get('text','')}
+                                    </div>
+                                </div>
+                            </div>
+
+                        % else:
+                            <% hidden_comments_count += 1 %>
+                            <div class="proposal-comment-row hidden_${proposal_id} hidden-proposal"
+                                 style="display:none;">
+                                <img src="${comment.get('avatar','')}"
+                                     alt="${comment.get('username','')}"
+                                     class="proposal-comment-avatar">
+                                <div class="proposal-comment-content">
+                                    <div class="proposal-comment-username">
+                                        ${comment.get('username','')}
+                                    </div>
+                                    <div class="proposal-comment-text">
+                                        ${comment.get('text','')}
+                                    </div>
+                                </div>
+                            </div>
+                        % endif
+                    % endfor
+
+                    % if hidden_comments_count > 0:
+                        <div class="show-more-comments"
+                             id="show_more_comment_proposal_${proposal_id}"
+                             onclick="showHiddenComments(${proposal_id})">
+                            Show ${hidden_comments_count}
+                            hidden comment${'s' if hidden_comments_count > 1 else ''}
+                        </div>
+                    % endif
+
+                % else:
+                    <div class="proposal-comment-empty">No comments yet.</div>
+                % endif
+            </div>
+
+            <!-- Comment input -->
+            <div class="proposal-comment-input-row">
+                <textarea
+                    class="proposal-comment-input"
+                    id="comment-input-${proposal_id}"
+                    rows="1"
+                    placeholder="Add a comment..."
+                    onkeydown="if(event.key==='Enter' && !event.shiftKey){event.preventDefault();submitProposalComment(${proposal_id});}">
+                </textarea>
+                <button type="button"
+                        class="proposal-comment-send-btn"
+                        onclick="submitProposalComment(${proposal_id});">
+                    Send
+                </button>
+            </div>
         </div>
     </div>
-</div>
 </div>

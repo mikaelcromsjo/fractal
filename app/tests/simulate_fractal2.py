@@ -38,7 +38,7 @@ DATABASE_URL = f"postgresql+asyncpg://fractal_user:fractal_pass@db:5432/{TEST_DB
 
 
 # Max simulated users = 8 * 8 * 7
-MAX_SIM_USERS = 8 * 8 * 7
+MAX_SIM_USERS = 8 * 8 
 
 # Telegram id for your test user (string, as stored in DB)
 TEST_USER_TELEGRAM_ID = "1369836643"  # change to your real Telegram id as string

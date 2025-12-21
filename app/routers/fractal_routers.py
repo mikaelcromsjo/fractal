@@ -292,7 +292,9 @@ async def get_all_cards_router(
         template.render_unicode(  # ✅ render_unicode() returns str
             request=request,
             user=current_user,
-            proposal=card
+            proposal=card,
+            number_comments = 1,
+            current_group_id = group_id
         )
         for card in cards
     ])

@@ -97,14 +97,14 @@ async def main():
 
         # Join exactly 9 simulation users (3 groups x 3 users)
         users = []
-        for i in range(25):
+        for i in range(9):
             u = await join_fractal(
                 db,
                 {"username": f"sim_user{i+1}", "telegram_id": str(30000 + i)},
                 fractal.id,
             )
             users.append(u)
-        print(f"Joined 25 simulation users: {[u.username for u in users]}")
+        print(f"Joined 9 simulation users: {[u.username for u in users]}")
 
         # PAUSE 1: Login as real Telegram user before starting
         await pause("Login as real Telegram user now - fractal is waiting")

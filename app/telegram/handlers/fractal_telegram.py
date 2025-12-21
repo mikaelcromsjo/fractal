@@ -355,8 +355,9 @@ async def cmd_start(message: types.Message, state: FSMContext):
                     break
                 
                 now = datetime.now(timezone.utc)
-                if not fractal.start_date or fractal.start_date < now or fractal.status.lower() != "waiting":
-                    await message.answer(f"❌ Fractal '{sanitize_text(fractal.name or 'Unknown')}' not ready.")
+#                if not fractal.start_date or fractal.start_date < now or fractal.status.lower() != "waiting":
+                if fractal.status.lower() != "waiting":
+                    await message.answer(f"❌ Fractal '{sanitize_text(fractal.name or 'Unknown')}' {fractal.status} not ready.")
                     break
 
                 # SAFE - fractal exists + valid

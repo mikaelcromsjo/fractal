@@ -252,34 +252,15 @@ async def get_proposals_for_group_repo(db: AsyncSession, group_id: int) -> List[
     return result.scalars().all()
 
 async def get_top_proposals_repo(db: AsyncSession, group_id: int, top_count: int) -> List[Proposal]:
-    """
-    Get top proposals for a group, sorted by score at the group's level.
-    
-    Args:
-        db: AsyncSession
-        group_id: ID of the group
-        top_count: how many top proposals to return
-        
-    Returns:
-        List of Proposal objects
-    """
-    # Get the group to find its level
-    result = await db.execute(select(Group).where(Group.id == group_id))
-    group = result.scalar_one()
-    group_level = group.level
+    stmt = (
+        select(Proposal)
+        .where(Proposal.group_id == group_id)
+        .order_by(desc(Proposal.total_score))
+        .limit(top_count)
+    )
 
-    # Fetch proposals in this group
-    result = await db.execute(select(Proposal).where(Proposal.group_id == group_id))
-    proposals = result.scalars().all()
-
-    # Sort proposals by score at group's level
-    def proposal_score_repo(p: Proposal):
-        scores = p.score_per_level or []
-        if not scores or group_level >= len(scores):
-            return 0.0
-        return scores[group_level]
-
-    top_proposals = sorted(proposals, key=proposal_score_repo, reverse=True)[:top_count]
+    result = await db.execute(stmt)
+    top_proposals = result.scalars().all()
     return top_proposals
 
 
@@ -295,15 +276,46 @@ async def add_comment_repo(db: AsyncSession, proposal_id: int, user_id: int, tex
     await db.refresh(comment)
     return comment
 
-async def get_comments_for_proposal_repo(db: AsyncSession, proposal_id: int) -> List[Comment]:
+async def get_comments_for_proposal_repo(
+    db: AsyncSession,
+    proposal_id: int,
+    proposal_group_id: int | None = None,
+    level: int = 0,
+) -> List[Comment]:
     """
-    Fetch all comments for a proposal.
-    Does NOT calculate vote totals.
+    Fetch comments for a proposal such that:
+      • Comments from the current group appear first.
+      • Otherwise order by total_score DESC, then created_at ASC.
+      • For level 0 (first round) -> chronological order only.
     """
-    result = await db.execute(
-        select(Comment).where(Comment.proposal_id == proposal_id).order_by(Comment.created_at)
-    )
+
+    if level > 0:
+        # CASE WHEN comment belongs to current group
+        is_current_group = case(
+            (Comment.group_id == proposal_group_id, 1),
+            else_=0
+        )
+
+        stmt = (
+            select(Comment)
+            .where(Comment.proposal_id == proposal_id)
+            .order_by(
+                desc(is_current_group),           # current group first
+                desc(Comment.total_score).nullslast(),  # then by total score
+                asc(Comment.created_at),          # oldest first within ties
+            )
+        )
+    else:
+        # Level 0 -> no prior scores, chronological order only
+        stmt = (
+            select(Comment)
+            .where(Comment.proposal_id == proposal_id)
+            .order_by(asc(Comment.created_at))
+        )
+
+    result = await db.execute(stmt)
     return result.scalars().all()
+
 
 async def get_comments_tree_repo(
     db: AsyncSession,
@@ -448,49 +460,89 @@ async def get_group_members_repo(db: AsyncSession, group_id: int) -> List[GroupM
 # -----------------------------
 # Proposal scores with list
 # -----------------------------
-async def save_proposal_score_repo(db: AsyncSession, proposal_id: int, level: int, score: float):
+
+async def save_proposal_score_repo(
+    db: AsyncSession,
+    proposal_id: int,
+    level: int,
+    score: float,
+):
+    """
+    Save proposal's score for a given round level and
+    update weighted total_score based on all previous levels.
+    """
+    # Fetch existing per-level scores
     result = await db.execute(select(Proposal.score_per_level).where(Proposal.id == proposal_id))
     score_list = result.scalar() or []
-    
-    # Extend the list if needed
+
+    # Extend list to current level
     while len(score_list) <= level:
         score_list.append(None)
     score_list[level] = score
-    
+
+    # --- Compute weighted total_score ---
+    # Weight decay: 1.0, 0.8, 0.6, 0.4, ... until non-positive
+    weights = [1 - 0.2 * i for i in range(len(score_list))]
+    total_score = sum(
+        (s or 0) * w for s, w in zip(reversed(score_list), weights) if w > 0
+    )
+
+    # --- Persist both per-level scores and total ---
     await db.execute(
         update(Proposal)
         .where(Proposal.id == proposal_id)
-        .values(score_per_level=score_list)
+        .values(score_per_level=score_list, total_score=total_score)
     )
     await db.commit()
-
+""""
 async def get_proposal_score_repo(db: AsyncSession, proposal_id: int, level: int) -> float | None:
     result = await db.execute(select(Proposal.score_per_level).where(Proposal.id == proposal_id))
     score_list = result.scalar() or []
     return score_list[level] if level < len(score_list) else None
 
-# -----------------------------
-# Comment scores with list
-# -----------------------------
-async def save_comment_score_repo(db: AsyncSession, comment_id: int, level: int, score: float):
-    result = await db.execute(select(Comment.score_per_level).where(Comment.id == comment_id))
-    score_list = result.scalar() or []
-    
-    while len(score_list) <= level:
-        score_list.append(None)
-    score_list[level] = score
-    
-    await db.execute(
-        update(Comment)
-        .where(Comment.id == comment_id)
-        .values(score_per_level=score_list)
-    )
-    await db.commit()
-
 async def get_comment_score_repo(db: AsyncSession, comment_id: int, level: int) -> float | None:
     result = await db.execute(select(Comment.score_per_level).where(Comment.id == comment_id))
     score_list = result.scalar() or []
     return score_list[level] if level < len(score_list) else None
+"""
+
+# -----------------------------
+# Comment scores with list
+# -----------------------------
+async def save_comment_score_repo(
+    db: AsyncSession,
+    comment_id: int,
+    level: int,
+    score: float,
+):
+    """
+    Update comment.score_per_level for this round,
+    then compute and persist weighted total_score.
+    """
+    # Fetch existing list
+    result = await db.execute(select(Comment.score_per_level).where(Comment.id == comment_id))
+    score_list = result.scalar() or []
+
+    # Expand list to current level
+    while len(score_list) <= level:
+        score_list.append(None)
+    score_list[level] = score
+
+    # --- Compute weighted total_score ---
+    weights = [1 - 0.2 * i for i in range(len(score_list))]
+    total_score = sum(
+        (s or 0) * w for s, w in zip(reversed(score_list), weights) if w > 0
+    )
+
+    # --- Persist both fields ---
+    await db.execute(
+        update(Comment)
+        .where(Comment.id == comment_id)
+        .values(score_per_level=score_list, total_score=total_score)
+    )
+    await db.commit()
+
+
 
 #----------------------------
 # Proposal votes
@@ -772,6 +824,54 @@ async def get_fractal_members_repo(db: AsyncSession, fractal_id: int):
     )
     return result.scalars().all()
 
+from sqlalchemy import select, desc, asc, func, literal, Float, and_, cast
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.ext.asyncio import AsyncSession
+
+async def get_next_proposal_to_vote_repo(
+    db: AsyncSession,
+    group_id: int,
+    current_user_id: int,
+):
+    """
+    Fetch the next proposal the user should vote on.
+
+    Rules:
+      • Exclude proposals created by the current user.
+      • Exclude proposals the user has already voted on.
+      • Sort by Proposal.total_score DESC, then Proposal.created_at ASC.
+    """
+
+    # Subquery: check if user has already voted on the proposal
+    vote_exists = (
+        select(ProposalVote.id)
+        .where(
+            and_(
+                ProposalVote.proposal_id == Proposal.id,
+                ProposalVote.voter_user_id == current_user_id,
+            )
+        )
+        .exists()
+    )
+
+    # Build the main query
+    stmt = (
+        select(Proposal)
+        .where(
+            Proposal.group_id == group_id,
+            Proposal.creator_user_id != current_user_id,
+            ~vote_exists,
+        )
+        .order_by(
+            desc(func.cast(Proposal.total_score, Float)).nullslast(),  # highest total score first
+            asc(Proposal.created_at),                                   # then oldest first
+        )
+        .limit(1)
+    )
+
+    # Execute and return
+    result = await db.execute(stmt)
+    return result.scalars().first()
 
 async def get_next_card_repo(
     db: AsyncSession,
@@ -785,32 +885,10 @@ async def get_next_card_repo(
 
     # --- 1) Proposals WITHOUT votes from current_user, not created by current_user
 
-    vote_exists = (
-        select(ProposalVote.id)
-        .where(
-            and_(
-                ProposalVote.proposal_id == Proposal.id,          # correlate
-                ProposalVote.voter_user_id == current_user_id,
-            )
-        )
-        .exists()
-    )
-
-    prop_stmt = (
-        select(Proposal)
-        .where(
-            Proposal.group_id == group_id,
-            Proposal.creator_user_id != current_user_id,          # not own proposal
-            ~vote_exists,                                         # NOT EXISTS
-        )
-        .order_by(Proposal.created_at.asc())
-        .limit(1)
-    )
-
-    prop_result = await db.execute(prop_stmt)
-    proposal = prop_result.scalars().first()
+    proposal = await get_next_proposal_to_vote_repo(db, group_id, current_user_id)
 
     if proposal:
+        print("got a proposal")
         return await _enrich_proposal_with_comments_repo(db, proposal, current_user_id)
 
     # --- 2) Comments WITHOUT votes from current_user, not created by current_user
@@ -838,6 +916,7 @@ async def get_next_card_repo(
     comment = comment_result.scalars().first()
 
     if comment:
+        print("got a comment", comment.text)
         return await _enrich_comment_with_proposal_repo(db, comment, current_user_id)
 
     return None
@@ -857,9 +936,11 @@ async def get_all_cards_repo(
     prop_stmt = (
         select(Proposal)
         .where(Proposal.group_id == group_id)
-        .order_by(Proposal.created_at.asc())
+        .order_by(
+            desc(Proposal.total_score).nullslast(),  # highest total_score first
+            desc(Proposal.created_at),                # then newest proposals
+        )
     )
-
     prop_result = await db.execute(prop_stmt)
     proposals = prop_result.scalars().all()
 
@@ -881,7 +962,7 @@ async def get_all_cards_repo(
 async def _enrich_proposal_with_comments_repo(
     db: AsyncSession, 
     proposal: Proposal, 
-    current_user_id: int
+    current_user_id: int,
 ) -> Dict:
     """Enrich proposal to match proposal_card.html template exactly."""
     User = models.User
@@ -907,7 +988,8 @@ async def _enrich_proposal_with_comments_repo(
         print("proposal_vote ", proposal_vote)
 
     # ALL comments (matching template structure)
-    all_comments = await get_comments_for_proposal_repo(db, proposal.id)
+    group = await get_group_repo(db, proposal.group_id)
+    all_comments = await get_comments_for_proposal_repo(db, proposal.id, group.id, group.level)
     template_comments = []
 
     for comment in all_comments:
@@ -919,6 +1001,8 @@ async def _enrich_proposal_with_comments_repo(
         # take away users own vote
         if (comment.user_id == current_user_id):
             vote = -1
+#        if (group.id != comment.group_id):
+#            vote = -1
         else:        
             vote_result = await db.execute(
                 select(CommentVote)
@@ -936,6 +1020,8 @@ async def _enrich_proposal_with_comments_repo(
             "date": comment.created_at.strftime("%Y-%m-%d %H:%M"),
             "vote": vote,
             "text": comment.text,
+            "total_score": comment.total_score,
+            "group_id": comment.group_id,
             # Add other template fields
         }
         template_comments.append(comment_card)        
@@ -952,6 +1038,7 @@ async def _enrich_proposal_with_comments_repo(
         "rating_percent": 0,  # 0-100%
         "tags": proposal.meta.get("tags", []),  # ✅ Template expects 'tags'
         "vote": proposal_vote,  # ✅ Template score pill
+        "total_score": proposal.total_score,
         "comments": template_comments  # ✅ Full comments array
     }
     
@@ -960,7 +1047,7 @@ async def _enrich_proposal_with_comments_repo(
 async def _enrich_comment_with_proposal_repo(
     db: AsyncSession, 
     comment: Comment, 
-    current_user_id: int
+    current_user_id: int,
 ) -> Dict:
     """Comment card - wraps proposal context to match template."""
     Proposal = models.Proposal
@@ -1020,3 +1107,37 @@ async def get_or_build_round_tree_repo(
     await db.flush()
 
     return tree
+
+
+# =================== REPOSITORY HELPERS ========================
+
+async def get_votes_for_group_proposals_repo(db: AsyncSession, group_id: int):
+    """
+    Fetch all proposal votes for all proposals belonging to a group.
+    Expected models:
+      - Proposal(id, group_id)
+      - ProposalVote(proposal_id, voter_user_id, score)
+    """
+    result = await db.execute(
+        select(ProposalVote)
+        .join(Proposal, ProposalVote.proposal_id == Proposal.id)
+        .where(Proposal.group_id == group_id)
+    )
+    return result.scalars().all()
+
+
+async def get_votes_for_group_comments_repo(db: AsyncSession, group_id: int):
+    """
+    Fetch all comment votes for all comments belonging to proposals in a group.
+    Expected models:
+      - Proposal(id, group_id)
+      - Comment(id, proposal_id)
+      - CommentVote(comment_id, user_id, score)
+    """
+    result = await db.execute(
+        select(CommentVote)
+        .join(Comment, CommentVote.comment_id == Comment.id)
+        .join(Proposal, Comment.proposal_id == Proposal.id)
+        .where(Proposal.group_id == group_id)
+    )
+    return result.scalars().all()
