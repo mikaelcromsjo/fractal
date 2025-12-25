@@ -172,45 +172,25 @@ async def telegram_webhook(token: str, request: Request):
 @router.post("/auth")
 async def fractals_auth(request: AuthRequest, db: AsyncSession = Depends(get_db)):
     try:
-        
-        # Validate Telegram data
         validate(request.init_data, settings.bot_token)
         data = parse(request.init_data)
         user = data["user"]
-        print(f"✅ Telegram user: {user['id']} - {user['first_name']}")  # Debug
         
-        # Get user context from service
         user_context = await get_user_info_by_telegram_id(db, str(user["id"]))
-        print(f"🔍 Service response: {user_context}")  # Debug - SEE WHAT IT RETURNS
         
-        # get fractal
-        fractal = await get_fractal(db, user_context.get("fractal_id"))
-        round = await get_last_round_repo(db, user_context.get("fractal_id"))
-
-        # Manual response (bypass Pydantic for now)
-        response_data = {
+        # Safe response
+        return {
             "status": "ok",
-            "user_id": user_context.get("user_id"),
-            "fractal_id": user_context.get("fractal_id"),
-            "round_id": user_context.get("round_id"),
-            "group_id": user_context.get("group_id"),
-            "first_name": user["first_name"],
-            "username": user.get("username", ""),
-            "fractal_name": fractal.name,
-            "fractal_description": fractal.description,
-            "fractal_start_date": fractal.start_date.strftime("%Y-%m-%d %H:%M"),
-            "level": round.level,
-            "fractal_status": fractal.status,
+            "user_id": int(user_context.get("user_id") or 0),
+            "fractal_id": int(user_context.get("fractal_id") or 0),
+            "round_id": int(user_context.get("round_id") or 0),
+            "group_id": int(user_context.get("group_id") or 0),
+            "first_name": user.get("first_name", ""),
+            "username": user.get("username", "")
         }
-        print(f"📤 Sending response: {response_data}")  # Debug
-        
-        return JSONResponse(content=response_data)
-        
     except Exception as e:
-        print(f"❌ Auth error: {type(e).__name__}: {str(e)}")  # Debug
-        error_response = {"status": "error", "error": str(e)}
-        return JSONResponse(status_code=400, content=error_response)
-
+        raise HTTPException(status_code=400, detail=str(e))
+    
 # ---------- HTML Endpoints ----------
 templates = TemplateLookup(
     directories=["templates"],
@@ -512,12 +492,17 @@ async def select_representative_endpoint(
 
 
 @router.post("/vote_representative")
-async def vote_rep(payload: dict, db: AsyncSession = Depends(get_db)):
-    results = await vote_representative(
-        db, payload["group_id"], payload["round_id"], 
-        payload["voter_id"], payload["candidate_id"], payload["points"]
-    )
-    return {"status": "ok", "results": results}
+async def vote_representative_endpoint(
+    group_id: int = Query(...),
+    round_id: int = Query(...),
+    voter_id: int = Query(...),
+    candidate_id: int = Query(...),
+    points: int = Query(..., ge=1, le=3),
+    db: AsyncSession = Depends(get_db)
+):
+    """Fixed: Query params + validation"""
+    vote = await vote_representative(db, group_id, round_id, voter_id, candidate_id, points)
+    return {"status": "ok", "vote": orm_to_dict(vote)}
 
 @router.get("/rep_results/{group_id}/{round_id}")
 async def get_rep_results(group_id: int, round_id: int, db: AsyncSession = Depends(get_db)):
@@ -618,40 +603,120 @@ async def websocket_endpoint(websocket: WebSocket):
                 del connected_clients[user_id]
             
             
-async def _websocket_endpoint(websocket: WebSocket):
-    await websocket.accept()
 
-    token = websocket.query_params.get("token")
-    user_id = websocket.query_params.get("user_id")
 
-    print("Received token:", token)    
-    if not token:
-        await websocket.close(code=1008)
-        return
+@router.post("/test/create_users")
+async def test_create_users(num_users: int = 8, db: AsyncSession = Depends(get_db)):
+    """Create N test users (usernames: User1, User2...)"""
+    users = []
+    for i in range(1, num_users + 1):
+        user = await create_user(db, {
+            "username": f"User{i}",
+            "telegram_id": f"test_user_{i}",
+            "other_id": f"test_{i}"
+        })
+        users.append(orm_to_dict(user))
+    return {"ok": True, "users": users, "count": len(users)}
+
+@router.post("/test/join_fractal")
+async def test_join_fractal(fractal_id: int, user_ids: List[int], db: AsyncSession = Depends(get_db)):
+    """Join users to fractal (fills groups automatically)"""
+    results = []
+    for user_id in user_ids:
+        user = await join_fractal(db, {"id": user_id}, fractal_id)
+        results.append({"user_id": user_id, "group_id": user.group_id})
+    return {"ok": True, "joins": results}
+
+@router.post("/test/generate_activity")
+async def test_generate_activity(
+    fractal_id: int, 
+    proposals_per_group: int = 3, 
+    comments_per_proposal: int = 2,
+    db: AsyncSession = Depends(get_db)
+):
+    """Generate proposals + comments + votes across fractal"""
+    groups = await get_groups_for_round(db, fractal_id)  # Get current round groups
     
-    try:
-        payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=[ALGORITHM])
-        print("Payload:", payload)
-        user_id = payload.get("sub")
-        if not user_id:
-            raise JWTError()
-    except JWTError as e:
-        print("JWTError:", e)
-        await websocket.close(code=1008)
-        return
-
-    print("User ID", user_id)
-
-    if user_id not in connected_clients:
-        connected_clients[user_id] = []
-    connected_clients[user_id].append(websocket)
+    activity = {"proposals": [], "comments": [], "votes": []}
     
-    try:
-        while True:
-            # Optional: handle client messages
-            data = await websocket.receive_text()
-#            await handle_client_message(websocket, json.loads(data))
-    except WebSocketDisconnect:
-        connected_clients[user_id].remove(websocket)
-        if not connected_clients[user_id]:
-            del connected_clients[user_id]
+    for group in groups:
+        group_id = group.id
+        
+        # 1. Create proposals
+        members = await get_group_members(db, group_id)
+        for i in range(min(proposals_per_group, len(members))):
+            member = members[i % len(members)]
+            proposal = await create_proposal(
+                db, fractal_id, group_id, 1,  # round_id=1 (current)
+                f"Test Proposal {i+1}", f"Generated proposal {i+1} for group {group_id}",
+                member.user_id
+            )
+            activity["proposals"].append(orm_to_dict(proposal))
+            
+            # 2. Add comments
+            for j in range(comments_per_proposal):
+                commenter = members[(i+j+1) % len(members)]
+                comment = await create_comment(
+                    db, proposal.id, commenter.user_id, 
+                    f"Comment {j+1} on proposal {i+1}", None, group_id
+                )
+                activity["comments"].append(orm_to_dict(comment))
+                
+                # 3. Vote on comment
+                await vote_comment(db, comment.id, commenter.user_id, 2)  # 2/3 stars
+        
+        # 4. Vote on proposals
+        for proposal in activity["proposals"][-proposals_per_group:]:
+            for member in members[:3]:  # First 3 members vote
+                await vote_proposal(db, proposal["id"], member.user_id, 5)  # 5/10 stars
+    
+    return {"ok": True, "activity": activity}
+
+@router.post("/test/run_full_simulation")
+async def test_full_simulation(
+    num_users: int = 8,
+    proposals_per_group: int = 3,
+    db: AsyncSession = Depends(get_db)
+):
+    """Complete test flow: users → fractal → activity"""
+    
+    # 1. Create fractal
+    fractal = await create_fractal(db, "Test Fractal", "Auto-generated test")
+    
+    # 2. Create & join users
+    users = []
+    for i in range(num_users):
+        user = await create_user(db, {"username": f"TestUser{i+1}", "telegram_id": f"test{i+1}"})
+        await join_fractal(db, {"id": user.id}, fractal.id)
+        users.append(user.id)
+    
+    # 3. Start fractal
+    await start_fractal(db, fractal.id)
+    
+    # 4. Generate activity
+    activity = await test_generate_activity(fractal.id, proposals_per_group, db=db)
+    
+    return {
+        "ok": True,
+        "fractal_id": fractal.id,
+        "users": [u.id for u in users],
+        "activity": activity
+    }
+
+@router.get("/test/status/{fractal_id}")
+async def test_status(fractal_id: int, db: AsyncSession = Depends(get_db)):
+    """Quick status check for test fractal"""
+    fractal = await get_fractal(db, fractal_id)
+    groups = await get_groups_for_round(db, fractal_id)
+    
+    proposals = 0
+    for group in groups:
+        tree = await get_proposals_comments_tree(db, group.id)
+        proposals += len(tree)
+    
+    return {
+        "fractal": orm_to_dict(fractal),
+        "groups": len(groups),
+        "proposals": proposals,
+        "ready": proposals > 0
+    }
