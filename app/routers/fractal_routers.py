@@ -675,11 +675,11 @@ async def test_vote_proposals(fractal_id: int, score: int = 10, db: AsyncSession
     for group in groups:
         members = await get_group_members(db, group.id)
         tree = await get_proposals_comments_tree(db, group.id)
-        for proposal in tree:
+        for node in tree:  # each node is a dict wrapping the proposal and metadata
+            proposal = node["proposal"]
             for member in members:
                 await vote_proposal(db, proposal.id, member.user_id, score)
-                votes += 1
-    
+                votes += 1    
     await db.commit()
     return {"ok": True, "total_votes": votes}
 
