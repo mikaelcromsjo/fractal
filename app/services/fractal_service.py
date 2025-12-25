@@ -37,7 +37,6 @@ from repositories.fractal_repos import (
     save_proposal_score_repo,
     save_comment_score_repo,
     get_groups_for_round_repo,
-    select_representative_repo,
     vote_representative_repo,
     get_votes_for_comment_repo,
     get_votes_for_proposal_repo,
