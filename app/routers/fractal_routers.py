@@ -38,7 +38,7 @@ from services.fractal_service import (
     vote_comment,
     get_proposals_comments_tree,
     get_proposal_comments_tree,
-    get_representatives_for_group,
+    get_representatives_for_group_repo,
     vote_representative,
     get_group_members,
     get_fractal,
@@ -491,7 +491,7 @@ async def select_representative_endpoint(
     group_id: int, 
     db: AsyncSession = Depends(get_db)
 ):
-    selection = await get_representatives_for_group(db, group_id)
+    selection = await get_representatives_for_group_repo(db, group_id)
     return JSONResponse(content={"ok": True, "selection": orm_to_dict(selection)})
 
 #@router.post("/vote_representative")
