@@ -633,9 +633,6 @@ async def get_proposal_comments_tree(db: AsyncSession, proposal_id: int):
 # ----------------------------
 # Representative Selection
 # ----------------------------
-#async def select_representative_from_vote(db: AsyncSession, group_id: int):
-#    return select_representative_repo(db, group_id)
-
 
 #async def vote_representative(db: AsyncSession, group_id: int, voter_user_id: int, candidate_user_id: int):
 #    # You can add extra logic here, e.g., check if voter belongs to the group

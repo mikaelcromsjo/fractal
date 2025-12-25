@@ -2,7 +2,7 @@ import pytest
 
 from domain.fractal_logic import (
     divide_into_groups,
-    select_representative_from_votes,
+    get_representatives_for_groups,
     build_comment_tree,
 )
 
@@ -36,9 +36,9 @@ def test_divide_into_groups_empty():
 
 
 # -------------------------------------------------------------------
-# 2) TEST select_representative_from_votes
+# 2) TEST get_representatives_for_groups
 # -------------------------------------------------------------------
-def test_select_representative_from_votes_simple():
+def test_get_representatives_for_groups_simple():
     member_ids = [10, 11, 12, 13]
     votes = {
         10: 3,
@@ -47,7 +47,7 @@ def test_select_representative_from_votes_simple():
         13: 4,
     }
 
-    rep = select_representative_from_votes(votes, member_ids)
+    rep = get_representatives_for_groups(votes, member_ids)
     assert rep == 11  # highest score
 
 
@@ -58,7 +58,7 @@ def test_select_representative_handles_missing_votes():
         # 1 and 3 missing → assume 0
     }
 
-    rep = select_representative_from_votes(votes, member_ids)
+    rep = get_representatives_for_groups(votes, member_ids)
     assert rep == 2
 
 
@@ -71,7 +71,7 @@ def test_select_representative_tie_breaker():
     member_ids = [5, 6]
     votes = {5: 10, 6: 10}
 
-    rep = select_representative_from_votes(votes, member_ids)
+    rep = get_representatives_for_groups(votes, member_ids)
 
     # Adjust if your logic breaks ties differently
     assert rep in (5, 6)

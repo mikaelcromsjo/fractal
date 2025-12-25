@@ -66,17 +66,17 @@ async def vote_representative_repo(db: AsyncSession, group_id: int, voter_user_i
     return vote
 
 
-async def select_representative_repo(db: AsyncSession, group_id: int):
-    res = await db.execute(
-        select(
-            RepresentativeVote.candidate_user_id,
-            func.count(RepresentativeVote.id).label("votes")
-        ).where(RepresentativeVote.group_id == group_id)
-        .group_by(RepresentativeVote.candidate_user_id)
-        .order_by(func.count(RepresentativeVote.id).desc())
-    )
-    row = res.first()
-    return row.candidate_user_id if row else None
+#async def select_representative_repo(db: AsyncSession, group_id: int):
+#    res = await db.execute(
+#        select(
+#            RepresentativeVote.candidate_user_id,
+#            func.count(RepresentativeVote.id).label("votes")
+#        ).where(RepresentativeVote.group_id == group_id)
+#        .group_by(RepresentativeVote.candidate_user_id)
+#        .order_by(func.count(RepresentativeVote.id).desc())
+#    )
+#    row = res.first()
+#    return row.candidate_user_id if row else None
 
 async def add_fractal_member_repo(db: AsyncSession, fractal_id: int, user_id: int, role: str = "member") -> FractalMember:
     member = FractalMember(fractal_id=fractal_id, user_id=user_id, role=role)
@@ -214,38 +214,47 @@ async def close_round_repo(db: AsyncSession, fractal_id: int):
 async def get_representatives_for_group_repo(db: AsyncSession, group_id: int, round_id: int = None):
     """
     Returns dict: {1: user_id_gold, 2: user_id_silver, 3: user_id_bronze}
-    or calculates live if no persisted representatives table
+    Auto-detects round_id from group if not provided
     """
-    if round_id:
-        result = await db.execute(
-            select(RepresentativeVote.candidate_user_id, 
-                   func.row_number().over(
-                       order_by=(func.sum(RepresentativeVote.points).desc(),
-                                func.count().desc(),
-                                RepresentativeVote.candidate_user_id.desc())
-                   ).label("rank")
-            )
-            .where(RepresentativeVote.group_id == group_id)
-            .where(RepresentativeVote.round_id == round_id)
-            .group_by(RepresentativeVote.candidate_user_id)
-            .having(func.sum(RepresentativeVote.points) > 0)
-            .limit(3)
+    # Auto-detect round if not provided
+    if round_id is None:
+        round_result = await db.execute(
+            select(Round.id)
+            .where(Round.group_id == group_id)
+            .where(Round.status == "active")  # or "open", your status enum
+            .order_by(Round.created_at.desc())
+            .limit(1)
         )
-    else:
-        # Fallback: highest total points across all rounds
-        result = await db.execute(
-            select(RepresentativeVote.candidate_user_id, 
-                   func.row_number().over(
-                       order_by=(func.sum(RepresentativeVote.points).desc(),
-                                func.count().desc())
-                   ).label("rank")
-            )
-            .where(RepresentativeVote.group_id == group_id)
-            .group_by(RepresentativeVote.candidate_user_id)
-            .limit(3)
-        )
+        round_row = round_result.fetchone()
+        round_id = round_row[0] if round_row else None
     
-    reps = {row.rank: row.candidate_user_id for row in result}
+    if not round_id:
+        return {}  # No active round
+    
+    # Single query - works for both round_id cases
+    result = await db.execute(
+        select(
+            RepresentativeVote.candidate_user_id,
+            func.row_number().over(
+                order_by=(
+                    func.sum(RepresentativeVote.points).desc(),
+                    func.count(RepresentativeVote.id).desc(),
+                    RepresentativeVote.candidate_user_id.desc()
+                )
+            ).label("rank")
+        )
+        .where(RepresentativeVote.group_id == group_id)
+        .where(RepresentativeVote.round_id == round_id)
+        .group_by(RepresentativeVote.candidate_user_id)
+        .having(func.sum(RepresentativeVote.points) > 0)
+        .limit(3)
+    )
+    
+    # Map results correctly
+    reps = {}
+    for row in result:
+        reps[row.rank] = row.candidate_user_id
+    
     return reps  # {1: 123, 2: 456, 3: 789}
 
 # ----------------------------
