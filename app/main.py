@@ -59,14 +59,14 @@ async def create_tables():
 async def lifespan(app: FastAPI):
 
 
-#    await recreate_test_db()
-#    await create_tables()
+    await recreate_test_db()
+    await create_tables()
 
     print("🚀 Starting")
     bot, _ = init_bot()
 
-    await bot.delete_webhook(drop_pending_updates=True)
-    await bot.set_webhook("https://fractal.ia-ai.se/api/v1/fractals/webhook")
+#    await bot.delete_webhook(drop_pending_updates=True)
+#    await bot.set_webhook("https://fractal.ia-ai.se/api/v1/fractals/webhook/8568824507:AAHGONnctVOq0L7IC9O_ZewzYNpqj4CSWkU")
 
     commands = [
         BotCommand(command="start", description="Show menu"),

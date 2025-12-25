@@ -177,8 +177,7 @@
                     id="comment-input-${proposal_id}"
                     rows="1"
                     placeholder="Add a comment..."
-                    onkeydown="if(event.key==='Enter' && !event.shiftKey){event.preventDefault();submitProposalComment(${proposal_id});}">
-                </textarea>
+                    onkeydown="if(event.key==='Enter' && !event.shiftKey){event.preventDefault();submitProposalComment(${proposal_id});}"></textarea>
                 <button type="button"
                         class="proposal-comment-send-btn"
                         onclick="submitProposalComment(${proposal_id});">

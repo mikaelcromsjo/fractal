@@ -47,7 +47,8 @@ from services.fractal_service import (
     get_next_card,
     get_all_cards,
     get_or_build_round_tree_repo,
-    get_last_round_repo
+    get_last_round_repo,
+    calculate_rep_results
 )
 
 from telegram.bot import process_update
@@ -493,21 +494,35 @@ async def select_representative_endpoint(
     selection = await select_representative_from_vote(db, group_id)
     return JSONResponse(content={"ok": True, "selection": orm_to_dict(selection)})
 
-@router.post("/vote_representative")
-async def vote_representative_endpoint(
-    payload: AnyDictModel, 
-    db: AsyncSession = Depends(get_db)
-):
-    data = payload.data
-    group_id = data.get("group_id")
-    voter_user_id = data.get("voter_user_id")
-    candidate_user_id = data.get("candidate_user_id")
+#@router.post("/vote_representative")
+#async def vote_representative_endpoint(
+#    payload: AnyDictModel, 
+#    db: AsyncSession = Depends(get_db)
+#):
+#    data = payload.data
+#    group_id = data.get("group_id")
+#    voter_user_id = data.get("voter_user_id")
+#    candidate_user_id = data.get("candidate_user_id")
     
-    if not all([group_id, voter_user_id, candidate_user_id]):
-        raise HTTPException(status_code=400, detail="group_id, voter_user_id and candidate_user_id required")
+#    if not all([group_id, voter_user_id, candidate_user_id]):
+#        raise HTTPException(status_code=400, detail="group_id, voter_user_id and candidate_user_id required")
     
-    vote = await vote_representative(db, group_id, voter_user_id, candidate_user_id)
-    return JSONResponse(content={"ok": True, "vote": orm_to_dict(vote)})
+#    vote = await vote_representative(db, group_id, voter_user_id, candidate_user_id)
+#    return JSONResponse(content={"ok": True, "vote": orm_to_dict(vote)})
+
+
+@router.post("/vote-representative")
+async def vote_rep(payload: dict, db: AsyncSession = Depends(get_db)):
+    results = await vote_representative(
+        db, payload["group_id"], payload["round_id"], 
+        payload["voter_id"], payload["candidate_id"], payload["points"]
+    )
+    return {"status": "ok", "results": results}
+
+@router.get("/rep-results/{group_id}/{round_id}")
+async def get_rep_results(group_id: int, round_id: int, db: AsyncSession = Depends(get_db)):
+    results = await calculate_rep_results(db, group_id, round_id)
+    return {"results": results}
 
 # ---------- Convenience endpoints ----------
 @router.get("/fractal/{fractal_id}")

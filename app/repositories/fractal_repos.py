@@ -210,6 +210,43 @@ async def close_round_repo(db: AsyncSession, fractal_id: int):
 
     return closed_round
 
+# app/repositories/representative_repo.py
+async def get_representatives_for_group_repo(db: AsyncSession, group_id: int, round_id: int = None):
+    """
+    Returns dict: {1: user_id_gold, 2: user_id_silver, 3: user_id_bronze}
+    or calculates live if no persisted representatives table
+    """
+    if round_id:
+        result = await db.execute(
+            select(RepresentativeVote.candidate_user_id, 
+                   func.row_number().over(
+                       order_by=(func.sum(RepresentativeVote.points).desc(),
+                                func.count().desc(),
+                                RepresentativeVote.candidate_user_id.desc())
+                   ).label("rank")
+            )
+            .where(RepresentativeVote.group_id == group_id)
+            .where(RepresentativeVote.round_id == round_id)
+            .group_by(RepresentativeVote.candidate_user_id)
+            .having(func.sum(RepresentativeVote.points) > 0)
+            .limit(3)
+        )
+    else:
+        # Fallback: highest total points across all rounds
+        result = await db.execute(
+            select(RepresentativeVote.candidate_user_id, 
+                   func.row_number().over(
+                       order_by=(func.sum(RepresentativeVote.points).desc(),
+                                func.count().desc())
+                   ).label("rank")
+            )
+            .where(RepresentativeVote.group_id == group_id)
+            .group_by(RepresentativeVote.candidate_user_id)
+            .limit(3)
+        )
+    
+    reps = {row.rank: row.candidate_user_id for row in result}
+    return reps  # {1: 123, 2: 456, 3: 789}
 
 # ----------------------------
 # Group
@@ -455,6 +492,39 @@ async def get_group_members_repo(db: AsyncSession, group_id: int) -> List[GroupM
         select(GroupMember).where(GroupMember.group_id == group_id)
     )
     return result.scalars().all()
+
+
+# app/repositories/representative_vote_repo.py
+async def save_rep_vote_repo(db: AsyncSession, group_id: int, round_id: int, voter_id: int, candidate_id: int, points: int):
+    vote = RepresentativeVote(
+        group_id=group_id,
+        round_id=round_id,
+        voter_user_id=voter_id,
+        candidate_user_id=candidate_id,
+        points=points
+    )
+    db.add(vote)
+    await db.commit()
+    await db.refresh(vote)
+    return vote
+
+async def get_rep_votes_for_round_repo(db: AsyncSession, group_id: int, round_id: int):
+    result = await db.execute(
+        select(RepresentativeVote)
+        .where(RepresentativeVote.group_id == group_id)
+        .where(RepresentativeVote.round_id == round_id)
+    )
+    return result.scalars().all()
+
+async def get_user_rep_points_used_repo(db: AsyncSession, group_id: int, round_id: int, voter_id: int):
+    result = await db.execute(
+        select(func.sum(RepresentativeVote.points))
+        .where(RepresentativeVote.group_id == group_id)
+        .where(RepresentativeVote.round_id == round_id)
+        .where(RepresentativeVote.voter_user_id == voter_id)
+    )
+    return result.scalar() or 0
+
 
 
 # -----------------------------

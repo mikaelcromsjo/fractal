@@ -1,22 +1,13 @@
-Make a webSocket queue for testing
+Add scheduler for sending websocket messages (optional for testing)
 
-Display Fractal Description
-Dates for Round Starts
-Join Commands
-
-On Fractal Start
-You can send messages and reply to messages in this private chat!
-
-Add scheduler for starting fractals/rounds
-Add scheduler for sending websocket messages
-
-Show last round for your group 
-Dashboard
-Telegram
+Show results in telegram
 
 Add Voting system for Representatives
-Changre rules for promoting poroposal 
-Add Rules for promoting (and sorting) comments (only vote on new comments)
+
+Dates in local timeformat (utc)
+
+
+
 
 
 

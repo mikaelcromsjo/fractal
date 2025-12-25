@@ -11,6 +11,8 @@ import asyncio
 
 
 from repositories.fractal_repos import (
+    get_representatives_for_group_repo,
+    get_user_rep_points_used_repo,
     get_votes_for_group_comments_repo,
     get_votes_for_group_proposals_repo,
     set_round_status_repo,
@@ -475,7 +477,11 @@ async def promote_to_next_round(db: AsyncSession, prev_round_id: int, fractal_id
     for g in prev_groups:
         members = await get_group_members(db, g.id)
         voter_user_ids = [m.user_id for m in members]
-        rep_id = await select_representative_repo(db, g.id)  # highest voted rep
+        reps = await get_representatives_for_group_repo(db, g.id, prev_round_id)
+        rep_id = reps.get(1)
+
+#        rep_id = await select_representative_repo(db, g.id)  # highest voted rep
+
         if rep_id:
             rep_user_ids.append(rep_id)
 
@@ -627,13 +633,46 @@ async def get_proposal_comments_tree(db: AsyncSession, proposal_id: int):
 # ----------------------------
 # Representative Selection
 # ----------------------------
-async def select_representative_from_vote(db: AsyncSession, group_id: int):
-    return select_representative_repo(db, group_id)
+#async def select_representative_from_vote(db: AsyncSession, group_id: int):
+#    return select_representative_repo(db, group_id)
 
 
-async def vote_representative(db: AsyncSession, group_id: int, voter_user_id: int, candidate_user_id: int):
-    # You can add extra logic here, e.g., check if voter belongs to the group
-    return await vote_representative_repo(db, group_id, voter_user_id, candidate_user_id)
+#async def vote_representative(db: AsyncSession, group_id: int, voter_user_id: int, candidate_user_id: int):
+#    # You can add extra logic here, e.g., check if voter belongs to the group
+#    return await vote_representative_repo(db, group_id, voter_user_id, candidate_user_id)
+
+
+# app/services/representative_service.py
+async def vote_representative(db: AsyncSession, group_id: int, round_id: int, voter_id: int, candidate_id: int, points: int):
+    # Check points limit (max 5 total)
+    used_points = await get_user_rep_points_used_repo(db, group_id, round_id, voter_id)
+    if used_points + points > 5:
+        raise ValueError(f"Max 5 points total. Used: {used_points}")
+    
+    # Save vote
+    await save_rep_vote_repo(db, group_id, round_id, voter_id, candidate_id, points)
+    
+    # Recalculate live results
+    results = await calculate_rep_results(db, group_id, round_id)
+    return results
+
+async def calculate_rep_results(db: AsyncSession, group_id: int, round_id: int):
+    votes = await get_rep_votes_for_round_repo(db, group_id, round_id)
+    
+    scores = defaultdict(lambda: {"points": 0, "vote_count": 0})
+    for vote in votes:
+        scores[vote.candidate_user_id]["points"] += vote.points
+        scores[vote.candidate_user_id]["vote_count"] += 1
+    
+    # Sort: points DESC, vote_count DESC, user_id DESC (tiebreaker)
+    ranked = sorted(
+        scores.items(), 
+        key=lambda x: (x[1]["points"], x[1]["vote_count"], x[0]), 
+        reverse=True
+    )
+    
+    return {user_id: data for user_id, data in ranked[:3]}  # Top 3 only
+
 
 # Add to services/fractal_service.py:
 async def get_user_by_telegram_id(db: AsyncSession, telegram_id: str):
