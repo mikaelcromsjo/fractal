@@ -297,9 +297,9 @@ async def create_fractal_endpoint(
         payload.description or "",
         payload.start_date or datetime.now(),
         payload.status,
-        payload.settings
+        payload.settings  # meta optional ✅
     )
-    return JSONResponse(content={"ok": True, "fractal": orm_to_dict(fractal)})
+    return JSONResponse(content={"ok": True, "fractal": orm_to_dict(fractal)})  # ✅ Original
 
 @router.get("/get_group_members/{group_id}")
 async def get_group_members_endpoint(
@@ -605,118 +605,209 @@ async def websocket_endpoint(websocket: WebSocket):
             
 
 
+class TestUser(BaseModel):
+    username: str
+    telegram_id: Optional[str] = None
+
 @router.post("/test/create_users")
 async def test_create_users(num_users: int = 8, db: AsyncSession = Depends(get_db)):
-    """Create N test users (usernames: User1, User2...)"""
+    """Create N test users"""
     users = []
     for i in range(1, num_users + 1):
-        user = await create_user(db, {
-            "username": f"User{i}",
+        user_info = {
+            "username": f"TestUser{i}",
             "telegram_id": f"test_user_{i}",
             "other_id": f"test_{i}"
-        })
+        }
+        user = await create_user(db, user_info)  # ✅ Matches your signature
         users.append(orm_to_dict(user))
+    await db.commit()
     return {"ok": True, "users": users, "count": len(users)}
 
+@router.post("/test/create_fractal")
+async def test_create_fractal(db: AsyncSession = Depends(get_db)):
+    """Create test fractal with meta"""
+    default_meta = {
+        "group_size": 8,
+        "proposals_per_user": 3
+    }
+    fractal = await create_fractal(
+        db, 
+        "Test Fractal 🧪", 
+        "Auto-generated for testing",
+        datetime.now(timezone.utc),
+        "waiting",
+        meta=default_meta  # ✅ Optional meta as you confirmed
+    )
+    await db.commit()
+    return {"ok": True, "fractal_id": fractal.id, "fractal": orm_to_dict(fractal)}
+
 @router.post("/test/join_fractal")
-async def test_join_fractal(fractal_id: int, user_ids: List[int], db: AsyncSession = Depends(get_db)):
-    """Join users to fractal (fills groups automatically)"""
-    results = []
-    for user_id in user_ids:
-        user = await join_fractal(db, {"id": user_id}, fractal_id)
-        results.append({"user_id": user_id, "group_id": user.group_id})
-    return {"ok": True, "joins": results}
-
-@router.post("/test/generate_activity")
-async def test_generate_activity(
+async def test_join_fractal(
     fractal_id: int, 
-    proposals_per_group: int = 3, 
-    comments_per_proposal: int = 2,
+    num_users: int = 8, 
     db: AsyncSession = Depends(get_db)
 ):
-    """Generate proposals + comments + votes across fractal"""
-    groups = await get_groups_for_round(db, fractal_id)  # Get current round groups
-    
-    activity = {"proposals": [], "comments": [], "votes": []}
-    
-    for group in groups:
-        group_id = group.id
-        
-        # 1. Create proposals
-        members = await get_group_members(db, group_id)
-        for i in range(min(proposals_per_group, len(members))):
-            member = members[i % len(members)]
-            proposal = await create_proposal(
-                db, fractal_id, group_id, 1,  # round_id=1 (current)
-                f"Test Proposal {i+1}", f"Generated proposal {i+1} for group {group_id}",
-                member.user_id
-            )
-            activity["proposals"].append(orm_to_dict(proposal))
-            
-            # 2. Add comments
-            for j in range(comments_per_proposal):
-                commenter = members[(i+j+1) % len(members)]
-                comment = await create_comment(
-                    db, proposal.id, commenter.user_id, 
-                    f"Comment {j+1} on proposal {i+1}", None, group_id
-                )
-                activity["comments"].append(orm_to_dict(comment))
-                
-                # 3. Vote on comment
-                await vote_comment(db, comment.id, commenter.user_id, 2)  # 2/3 stars
-        
-        # 4. Vote on proposals
-        for proposal in activity["proposals"][-proposals_per_group:]:
-            for member in members[:3]:  # First 3 members vote
-                await vote_proposal(db, proposal["id"], member.user_id, 5)  # 5/10 stars
-    
-    return {"ok": True, "activity": activity}
-
-@router.post("/test/run_full_simulation")
-async def test_full_simulation(
-    num_users: int = 8,
-    proposals_per_group: int = 3,
-    db: AsyncSession = Depends(get_db)
-):
-    """Complete test flow: users → fractal → activity"""
-    
-    # 1. Create fractal
-    fractal = await create_fractal(db, "Test Fractal", "Auto-generated test")
-    
-    # 2. Create & join users
+    """Create + join N users to fractal"""
     users = []
     for i in range(num_users):
-        user = await create_user(db, {"username": f"TestUser{i+1}", "telegram_id": f"test{i+1}"})
-        await join_fractal(db, {"id": user.id}, fractal.id)
-        users.append(user.id)
+        # Create user
+        user_info = {"username": f"User{i+1}", "telegram_id": f"test{i+1}"}
+        user = await create_user(db, user_info)
+        
+        # Join fractal
+        joined_user = await join_fractal(db, {"id": user.id}, fractal_id)
+        users.append({
+            "user_id": user.id,
+            "group_id": joined_user.group_id
+        })
     
-    # 3. Start fractal
-    await start_fractal(db, fractal.id)
+    await db.commit()
+    return {"ok": True, "fractal_id": fractal_id, "joins": users}
+
+@router.post("/test/start_fractal/{fractal_id}")
+async def test_start_fractal(fractal_id: int, db: AsyncSession = Depends(get_db)):
+    """Start fractal + first round"""
+    round_obj = await start_fractal(db, fractal_id)  # ✅ Your signature
+    groups = await get_groups_for_round(db, round_obj.id)
+    await db.commit()
+    return {
+        "ok": True, 
+        "round_id": round_obj.id,
+        "groups": len(groups),
+        "group_ids": [g.id for g in groups]
+    }
+
+@router.post("/test/generate_proposals")
+async def test_generate_proposals(
+    fractal_id: int, 
+    proposals_per_group: int = 3, 
+    db: AsyncSession = Depends(get_db)
+):
+    """Generate proposals across all groups"""
+    round_obj = await get_last_round_repo(db, fractal_id)
+    groups = await get_groups_for_round(db, round_obj.id)
     
-    # 4. Generate activity
-    activity = await test_generate_activity(fractal.id, proposals_per_group, db=db)
+    proposals = []
+    for group in groups:
+        members = await get_group_members(db, group.id)
+        for i in range(min(proposals_per_group, len(members))):
+            member = members[i]
+            proposal = await create_proposal(
+                db, fractal_id, group.id, round_obj.id,
+                f"Proposal {i+1}", f"Test proposal content {i+1}",
+                member.user_id
+            )
+            proposals.append(orm_to_dict(proposal))
+    
+    await db.commit()
+    return {"ok": True, "proposals_created": len(proposals), "proposals": proposals}
+
+@router.post("/test/generate_comments")
+async def test_generate_comments(
+    fractal_id: int, 
+    comments_per_proposal: int = 2, 
+    db: AsyncSession = Depends(get_db)
+):
+    """Add comments + votes to existing proposals"""
+    round_obj = await get_last_round_repo(db, fractal_id)
+    groups = await get_groups_for_round(db, round_obj.id)
+    
+    comments = []
+    for group in groups:
+        tree = await get_proposals_comments_tree(db, group.id)
+        for proposal in tree[:comments_per_proposal]:
+            members = await get_group_members(db, group.id)
+            for i, member in enumerate(members[:comments_per_proposal]):
+                comment = await create_comment(
+                    db, proposal["id"], member.user_id,
+                    f"Comment {i+1} on proposal {proposal['title'][:20]}...",
+                    None, group.id
+                )
+                # Vote on comment
+                await vote_comment(db, comment.id, member.user_id, 2)
+                comments.append(orm_to_dict(comment))
+    
+    await db.commit()
+    return {"ok": True, "comments_created": len(comments)}
+
+@router.post("/test/generate_votes")
+async def test_generate_votes(fractal_id: int, db: AsyncSession = Depends(get_db)):
+    """Generate proposal + rep votes"""
+    round_obj = await get_last_round_repo(db, fractal_id)
+    groups = await get_groups_for_round(db, round_obj.id)
+    
+    for group in groups:
+        members = await get_group_members(db, group.id)
+        tree = await get_proposals_comments_tree(db, group.id)
+        
+        # Vote proposals
+        for proposal in tree:
+            for member in members[:3]:
+                await vote_proposal(db, proposal["id"], member.user_id, 5)
+        
+        # Vote representatives (3,2,1 points)
+        for i, member in enumerate(members[:8]):  # 8 users max
+            candidates = [m.user_id for m in members if m.user_id != member.user_id]
+            for points in [3, 2, 1]:  # Gold, Silver, Bronze
+                candidate = candidates[i % len(candidates)]
+                await vote_representative(db, group.id, round_obj.id, 
+                                        member.user_id, candidate, points)
+    
+    await db.commit()
+    return {"ok": True, "votes_generated": True}
+
+@router.post("/test/full_simulation")
+async def test_full_simulation(num_users: int = 8, db: AsyncSession = Depends(get_db)):
+    """Complete test flow"""
+    print("🧪 1. Creating fractal...")
+    fractal = await create_fractal(db, "Test Fractal", "Simulation", 
+                                 datetime.now(timezone.utc), "waiting", {})
+    
+    print("🧪 2. Creating/joining users...")
+    await test_join_fractal(fractal.id, num_users, db)
+    
+    print("🧪 3. Starting fractal...")
+    await test_start_fractal(fractal.id, db)
+    
+    print("🧪 4. Generating proposals...")
+    await test_generate_proposals(fractal.id, 3, db)
+    
+    print("🧪 5. Generating comments...")
+    await test_generate_comments(fractal.id, 2, db)
+    
+    print("🧪 6. Generating votes...")
+    await test_generate_votes(fractal.id, db)
+    
+    await db.commit()
     
     return {
         "ok": True,
         "fractal_id": fractal.id,
-        "users": [u.id for u in users],
-        "activity": activity
+        "summary": "Full simulation complete! Check /test/status/{fractal_id}"
     }
 
 @router.get("/test/status/{fractal_id}")
 async def test_status(fractal_id: int, db: AsyncSession = Depends(get_db)):
-    """Quick status check for test fractal"""
+    """Fractal test status"""
     fractal = await get_fractal(db, fractal_id)
-    groups = await get_groups_for_round(db, fractal_id)
+    round_obj = await get_last_round_repo(db, fractal_id)
+    groups = await get_groups_for_round(db, round_obj.id) if round_obj else []
     
-    proposals = 0
+    stats = {"groups": [], "total_proposals": 0}
     for group in groups:
+        members = await get_group_members(db, group.id)
         tree = await get_proposals_comments_tree(db, group.id)
-        proposals += len(tree)
+        stats["groups"].append({
+            "group_id": group.id,
+            "members": len(members),
+            "proposals": len(tree)
+        })
+        stats["total_proposals"] += len(tree)
     
     return {
         "fractal": orm_to_dict(fractal),
-        "groups": len(groups),
-        "proposals": proposals,
-        "ready": proposals > 0
+        "round": orm_to_dict(round_obj) if round_obj else None,
+        **stats
     }
+
