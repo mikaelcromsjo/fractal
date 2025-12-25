@@ -11,6 +11,7 @@ import asyncio
 
 
 from repositories.fractal_repos import (
+    save_rep_vote_repo,
     get_representatives_for_group_repo,
     get_user_rep_points_used_repo,
     get_votes_for_group_comments_repo,
