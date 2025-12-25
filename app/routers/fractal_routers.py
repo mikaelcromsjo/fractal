@@ -624,7 +624,7 @@ async def test_quick_start(num_users: int = 25, db: AsyncSession = Depends(get_d
     # 1. Create fractal
     fractal = await create_fractal(
         db, "Quick Test", "Quick simulation", 
-        datetime.now(timezone.utc), "waiting", {}
+         datetime.now(timezone.utc) + timedelta(minutes=1), "waiting", {}
     )
     
     # 2. Join users (exact match)
@@ -634,15 +634,7 @@ async def test_quick_start(num_users: int = 25, db: AsyncSession = Depends(get_d
         user = await join_fractal(db, user_dict, fractal.id)
         users.append(user)
     
-    # 3. Start fractal
-    round0 = await start_fractal(db, fractal.id)
-    
-    await db.commit()
-    return {
-        "fractal_id": fractal.id,
-        "round_id": round0.id,
-        "users_joined": len(users)
-    }
+
 
 @router.post("/test/generate_proposals")
 async def test_generate_proposals(fractal_id: int, db: AsyncSession = Depends(get_db)):
