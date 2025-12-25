@@ -789,7 +789,6 @@ async def test_status(fractal_id: int, db: AsyncSession = Depends(get_db)):
 
 import subprocess
 from fastapi import APIRouter, HTTPException
-from app.config import settings
 
 
 @router.post("test/git_pull_reload")
