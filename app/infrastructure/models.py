@@ -1,5 +1,5 @@
 # app/infrastructure/models.py
-from sqlalchemy import Column, Integer, String, Text, Boolean, DateTime, ForeignKey, JSON, UniqueConstraint, func
+from sqlalchemy import Column, Integer, String, Text, Boolean, DateTime, ForeignKey, JSON, UniqueConstraint, func, CheckConstraint
 from sqlalchemy.orm import relationship, backref
 from datetime import datetime, timezone
 from infrastructure.db.session import Base
@@ -248,11 +248,19 @@ class CommentVote(Base):
 # ----------------------------
 class RepresentativeVote(Base):
     __tablename__ = "representative_votes"
+    
     id = Column(Integer, primary_key=True)
     group_id = Column(Integer, ForeignKey("groups.id"), index=True)
-    voter_user_id = Column(Integer, ForeignKey("users.id"))
-    candidate_user_id = Column(Integer, ForeignKey("users.id"))
+    round_id = Column(Integer, ForeignKey("rounds.id"), index=True)  # Add round context
+    voter_user_id = Column(Integer, ForeignKey("users.id"), index=True)
+    candidate_user_id = Column(Integer, ForeignKey("users.id"), index=True)    
     created_at = Column(DateTime(timezone=True), default=func.now())
+    points = Column(Integer, nullable=False)
+    
+    UniqueConstraint(
+        "group_id", "round_id", "voter_user_id", "points", 
+        name="unique_vote_per_points"
+    ),
 
 # ----------------------------
 # RepresentativeSelection

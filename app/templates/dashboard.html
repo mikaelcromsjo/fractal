@@ -13,6 +13,65 @@
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
 
+
+.vote-btn.active {
+    background: #4CAF50 !important;
+    color: white;
+    font-weight: bold;
+}
+
+.proposal-comment-avatar,
+.vote-hover-target {
+    position: relative;
+    cursor: pointer;
+}
+
+.rep-vote-popup {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    background: #fff;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    padding: 8px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    z-index: 1000;
+    display: none;
+    min-width: 100px;
+    opacity: 0;
+    transform: translateY(-10px);
+    transition: all 0.2s ease;
+}
+
+.rep-vote-popup.show {
+    display: block;
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.vote-btn {
+    width: 100%;
+    padding: 6px 8px;
+    border: none;
+    background: none;
+    cursor: pointer;
+    border-radius: 4px;
+    font-size: 14px;
+    transition: background 0.1s;
+}
+
+.vote-btn:hover { background: #f0f0f0; }
+.vote-btn.gold { color: #ffd700; }
+.vote-btn.silver { color: #c0c0c0; }
+.vote-btn.bronze { color: #cd7f32; }
+
+.points-used {
+    font-size: 12px;
+    color: #666;
+    text-align: center;
+    margin-top: 4px;
+}
+
 .proposal-header-row {
   position: relative; /* ensures absolute children (badge) stay inside */
   display: flex;
@@ -1194,6 +1253,47 @@ function showHiddenComments(proposalId) {
   document.querySelectorAll(`.hidden_${proposalId}`).forEach(el => el.style.display = 'flex');
   document.getElementById(`show_more_comment_proposal_${proposalId}`).style.display = 'none';
 }
+
+async function onRepRating(e) {
+    const btn = e.target;
+    const rank = parseInt(btn.dataset.rank);  // 1,2,3 instead of points
+    const userId = btn.closest('.rep-vote-popup').dataset.userId;
+    
+    // Visual feedback: toggle active state
+    document.querySelectorAll(`.rep-vote-popup[data-user-id="${userId}"] .vote-btn`).forEach(b => {
+        b.classList.remove('active');
+    });
+    btn.classList.add('active');
+    
+    const payload = {
+        group_id: currentGroupId,
+        round_id: currentRoundId,
+        voter_id: tg.initDataUnsafe.user.id,
+        candidate_id: parseInt(userId),
+        rank: rank  // Send rank, not points
+    };
+    
+    const response = await fetch('/api/v1/fractals/vote-representative', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(payload)
+    });
+    
+    const data = await response.json();
+    updateLeaderboard(data.results);
+    
+    // Show user's current choices
+    showUserChoices(userId);
+}
+
+function showUserChoices(userId) {
+    // Visual: highlight user's current Gold/Silver/Bronze
+    const popup = document.querySelector(`.rep-vote-popup[data-user-id="${userId}"]`);
+    popup.querySelector('.user-choices').innerHTML = `
+        <div>Your picks: 🥇UserA 🥈UserB 🥉UserC</div>
+    `;
+}
+
 
     </script>
 </%text>

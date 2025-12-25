@@ -34,6 +34,12 @@
                     <div class="proposal-date">${proposal_date}</div>
                 </div>
             </div>
+            <div class="rep-vote-popup" data-user-id="${comment.get('user_id','')}">
+                <button class="vote-btn gold active" data-rank="1">🥇 Gold</button>
+                <button class="vote-btn silver" data-rank="2">🥈 Silver</button>
+                <button class="vote-btn bronze" data-rank="3">🥉 Bronze</button>
+                <div class="user-choices">Click to vote your #1, #2, #3</div>
+            </div>            
 
                 % if total_score:
             <div class="proposal-score-badge">

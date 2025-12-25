@@ -40,31 +40,44 @@ async def create_user_repo(db: AsyncSession, user_info: Dict) -> User:
     await db.refresh(user)
     return user
 
-async def vote_representative_repo(db: AsyncSession, group_id: int, voter_user_id: int, candidate_user_id: int):
+async def vote_representative_repo(
+    db: AsyncSession, 
+    group_id: int, 
+    round_id: int, 
+    voter_user_id: int, 
+    candidate_user_id: int, 
+    points: int  # 3=gold, 2=silver, 1=bronze
+):
     """
-    Cast a vote for a representative in a group.
-    If the voter already voted in this group, replace the old vote.
+    User has 3 distinct votes: Gold(3), Silver(2), Bronze(1).
+    Replace existing vote for THIS POINTS LEVEL only.
     """
-    # Remove any existing vote from this voter in the group
+    if points not in (1, 2, 3):
+        raise ValueError("Points must be 1, 2, or 3")
+    
+    # Delete ONLY existing vote with SAME POINTS (keep other ranks)
     await db.execute(
         delete(RepresentativeVote)
         .where(
             (RepresentativeVote.group_id == group_id) &
-            (RepresentativeVote.voter_user_id == voter_user_id)
+            (RepresentativeVote.round_id == round_id) &
+            (RepresentativeVote.voter_user_id == voter_user_id) &
+            (RepresentativeVote.points == points)  # Replace same rank only
         )
     )
-
-    # Add the new vote
+    
+    # Add new vote
     vote = RepresentativeVote(
         group_id=group_id,
+        round_id=round_id,
         voter_user_id=voter_user_id,
         candidate_user_id=candidate_user_id,
+        points=points  # 3,2,1
     )
     db.add(vote)
     await db.commit()
     await db.refresh(vote)
     return vote
-
 
 #async def select_representative_repo(db: AsyncSession, group_id: int):
 #    res = await db.execute(
@@ -210,18 +223,13 @@ async def close_round_repo(db: AsyncSession, fractal_id: int):
 
     return closed_round
 
-# app/repositories/representative_repo.py
 async def get_representatives_for_group_repo(db: AsyncSession, group_id: int, round_id: int = None):
-    """
-    Returns dict: {1: user_id_gold, 2: user_id_silver, 3: user_id_bronze}
-    Auto-detects round_id from group if not provided
-    """
-    # Auto-detect round if not provided
+    """Auto-detects round, returns {1: gold_user_id, 2: silver_user_id, 3: bronze_user_id}"""
     if round_id is None:
         round_result = await db.execute(
             select(Round.id)
             .where(Round.group_id == group_id)
-            .where(Round.status == "active")  # or "open", your status enum
+            .where(Round.status == "active")
             .order_by(Round.created_at.desc())
             .limit(1)
         )
@@ -229,9 +237,8 @@ async def get_representatives_for_group_repo(db: AsyncSession, group_id: int, ro
         round_id = round_row[0] if round_row else None
     
     if not round_id:
-        return {}  # No active round
+        return {}
     
-    # Single query - works for both round_id cases
     result = await db.execute(
         select(
             RepresentativeVote.candidate_user_id,
@@ -250,12 +257,10 @@ async def get_representatives_for_group_repo(db: AsyncSession, group_id: int, ro
         .limit(3)
     )
     
-    # Map results correctly
-    reps = {}
-    for row in result:
-        reps[row.rank] = row.candidate_user_id
-    
-    return reps  # {1: 123, 2: 456, 3: 789}
+    reps = {row.rank: row.candidate_user_id for row in result}
+    return reps
+
+
 
 # ----------------------------
 # Group
