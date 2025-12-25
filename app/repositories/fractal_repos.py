@@ -1116,6 +1116,8 @@ async def _enrich_proposal_with_comments_repo(
     card = {
         "username" : creator.username,        
         "id": proposal.id,
+        "user_id": creator.id,
+        "avatar": f"/static/img/64_{(creator.id) % 16 + 1}.png",
         "title": proposal.title,
         "message": proposal.body or "",  # ✅ Template uses 'message'
         "date": proposal.created_at.strftime("%Y-%m-%d %H:%M") if proposal.created_at else "just now",
