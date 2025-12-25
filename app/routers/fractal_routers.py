@@ -785,3 +785,32 @@ async def test_status(fractal_id: int, db: AsyncSession = Depends(get_db)):
         "groups": stats,
         "representatives": reps
     }
+
+
+import subprocess
+from fastapi import APIRouter, HTTPException
+from app.config import settings
+
+
+@router.post("test/git_pull_reload")
+async def git_pull_reload():
+    """⚙️ Pull latest code and rely on --reload to pick up changes."""
+    if settings.environment != "dev":
+        raise HTTPException(403, "Not allowed outside dev environment.")
+
+    try:
+        git_output = subprocess.check_output(
+            ["git", "pull", "origin", "main"],
+            cwd="/app",
+            text=True,
+            stderr=subprocess.STDOUT
+        )
+
+        return {
+            "ok": True,
+            "message": "Git pull complete — reload will trigger automatically via --reload.",
+            "git_output": git_output.strip()
+        }
+
+    except subprocess.CalledProcessError as e:
+        raise HTTPException(500, f"Git error: {e.output}")
