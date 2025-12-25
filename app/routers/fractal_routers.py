@@ -657,7 +657,8 @@ async def test_quick_start(num_users: int = 25, db: AsyncSession = Depends(get_d
         user = await join_fractal(db, user_dict, fractal.id)
         users.append(user)
     
-
+    await db.commit()
+    return {"ok": True, "fractal_id": fractal.id, "users_joined": len(users)}
 
 @router.post("/test/generate_proposals")
 async def test_generate_proposals(fractal_id: int, db: AsyncSession = Depends(get_db)):
