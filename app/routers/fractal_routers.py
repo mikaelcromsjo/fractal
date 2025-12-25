@@ -5,7 +5,7 @@ from jose import jwt, JWTError
 from datetime import datetime, timedelta
 import json
 from fastapi import APIRouter, Depends, HTTPException, status, Request, Query
-from fastapi.responses import JSONResponse, HTMLResponse
+from fastapi.responses import JSONResponse, HTMLResponse, Response
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Any, Dict, List, Optional
@@ -162,9 +162,11 @@ class AuthRequest(BaseModel):
 async def telegram_webhook(token: str, request: Request):
     if token != settings.bot_token:
         raise HTTPException(status_code=403, detail="Invalid token")
+    
     data = await request.json()
-    await process_update(data)
-    return {"ok": True}
+    await process_update(data)    
+    # Telegram expects EMPTY 200 response
+    return Response(status_code=200)  # or PlainTextResponse("OK")
 
 @router.post("/auth")
 async def fractals_auth(request: AuthRequest, db: AsyncSession = Depends(get_db)):

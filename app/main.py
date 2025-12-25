@@ -65,6 +65,9 @@ async def lifespan(app: FastAPI):
     print("🚀 Starting")
     bot, _ = init_bot()
 
+    await bot.delete_webhook(drop_pending_updates=True)
+    await bot.set_webhook("https://fractal.ia-ai.se/api/v1/fractals/webhook")
+
     commands = [
         BotCommand(command="start", description="Show menu"),
         BotCommand(command="help", description="Help"),
