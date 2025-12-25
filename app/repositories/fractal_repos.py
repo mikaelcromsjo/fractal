@@ -1100,6 +1100,7 @@ async def _enrich_proposal_with_comments_repo(
             "id": comment.id,
             "message": comment.text,
             "username": author.username,
+            "user_id": author.id,
             "avatar": f"/static/img/64_{(author.id) % 16 + 1}.png",
             "date": comment.created_at.strftime("%Y-%m-%d %H:%M"),
             "vote": vote,

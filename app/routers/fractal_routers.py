@@ -511,7 +511,7 @@ async def select_representative_endpoint(
 #    return JSONResponse(content={"ok": True, "vote": orm_to_dict(vote)})
 
 
-@router.post("/vote-representative")
+@router.post("/vote_representative")
 async def vote_rep(payload: dict, db: AsyncSession = Depends(get_db)):
     results = await vote_representative(
         db, payload["group_id"], payload["round_id"], 
@@ -519,7 +519,7 @@ async def vote_rep(payload: dict, db: AsyncSession = Depends(get_db)):
     )
     return {"status": "ok", "results": results}
 
-@router.get("/rep-results/{group_id}/{round_id}")
+@router.get("/rep_results/{group_id}/{round_id}")
 async def get_rep_results(group_id: int, round_id: int, db: AsyncSession = Depends(get_db)):
     results = await calculate_rep_results(db, group_id, round_id)
     return {"results": results}

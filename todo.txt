@@ -6,7 +6,14 @@ Add Voting system for Representatives
 
 Dates in local timeformat (utc)
 
+Test Rep Voting - Add default points for rep based on their totals.
 
+
+Double messages
+🚀 Fractal 'test3' has started!
+💬 Now you can chat with your group members in this private chat. Try writing 'Hi!'
+
+📝 And you can write and vote on proposlas in the Fractal Dashboard!
 
 
 

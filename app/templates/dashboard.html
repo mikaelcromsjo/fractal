@@ -1273,7 +1273,7 @@ async function onRepRating(e) {
         rank: rank  // Send rank, not points
     };
     
-    const response = await fetch('/api/v1/fractals/vote-representative', {
+    const response = await fetch('/api/v1/fractals/vote_representative', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify(payload)
