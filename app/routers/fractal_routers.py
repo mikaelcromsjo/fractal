@@ -172,23 +172,46 @@ async def telegram_webhook(token: str, request: Request):
 @router.post("/auth")
 async def fractals_auth(request: AuthRequest, db: AsyncSession = Depends(get_db)):
     try:
+        # 1️⃣ Validate Telegram WebApp data
         validate(request.init_data, settings.bot_token)
         data = parse(request.init_data)
         user = data["user"]
-        
+        print(f"✅ Telegram user: {user['id']} - {user.get('first_name', '')}")
+
+        # 2️⃣ Fetch user context
         user_context = await get_user_info_by_telegram_id(db, str(user["id"]))
-        
-        # Safe response
-        return {
+        print(f"🔍 Service response: {user_context}")
+
+        # Extract fractal details if user is linked to one
+        fractal_id = user_context.get("fractal_id")
+        fractal = await get_fractal(db, fractal_id) if fractal_id else None
+        round_obj = await get_last_round_repo(db, fractal_id) if fractal_id else None
+
+        # 3️⃣ Construct the response (with null-safety)
+        response_data = {
             "status": "ok",
-            "user_id": int(user_context.get("user_id") or 0),
-            "fractal_id": int(user_context.get("fractal_id") or 0),
-            "round_id": int(user_context.get("round_id") or 0),
-            "group_id": int(user_context.get("group_id") or 0),
+            "user_id": user_context.get("user_id"),
+            "fractal_id": fractal_id,
+            "round_id": user_context.get("round_id"),
+            "group_id": user_context.get("group_id"),
             "first_name": user.get("first_name", ""),
-            "username": user.get("username", "")
+            "username": user.get("username", ""),
+            "fractal_name": fractal.name if fractal else None,
+            "fractal_description": fractal.description if fractal else None,
+            "fractal_start_date": (
+                fractal.start_date.strftime("%Y-%m-%d %H:%M")
+                if fractal and fractal.start_date
+                else None
+            ),
+            "level": getattr(round_obj, "level", None),
+            "fractal_status": getattr(fractal, "status", None),
         }
+
+        print(f"📤 Sending response: {response_data}")
+        return JSONResponse(content=response_data)
+
     except Exception as e:
+        print(f"❌ Auth failed: {e}")
         raise HTTPException(status_code=400, detail=str(e))
     
 # ---------- HTML Endpoints ----------
