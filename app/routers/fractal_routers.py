@@ -677,7 +677,7 @@ async def test_vote_proposals(fractal_id: int, score: int = 10, db: AsyncSession
         tree = await get_proposals_comments_tree(db, group.id)
         for proposal in tree:
             for member in members:
-                await vote_proposal(db, proposal["id"], member.user_id, score)
+                await vote_proposal(db, proposal.id, member.user_id, score)
                 votes += 1
     
     await db.commit()
