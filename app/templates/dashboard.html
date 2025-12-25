@@ -1254,6 +1254,13 @@ function showHiddenComments(proposalId) {
   document.getElementById(`show_more_comment_proposal_${proposalId}`).style.display = 'none';
 }
 
+document.addEventListener("DOMContentLoaded", () => {
+  // Attach click listeners to all rep vote buttons
+  document.querySelectorAll(".rep-vote-popup .vote-btn").forEach(btn => {
+    btn.addEventListener("click", onRepRating);
+  });
+});
+
 async function onRepRating(e) {
     const btn = e.target;
     const rank = parseInt(btn.dataset.rank);  // 1,2,3 instead of points
