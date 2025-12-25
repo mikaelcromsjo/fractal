@@ -794,8 +794,6 @@ from fastapi import APIRouter, HTTPException
 @router.post("test/git_pull_reload")
 async def git_pull_reload():
     """⚙️ Pull latest code and rely on --reload to pick up changes."""
-    if settings.environment != "dev":
-        raise HTTPException(403, "Not allowed outside dev environment.")
 
     try:
         git_output = subprocess.check_output(
