@@ -69,9 +69,9 @@ async def lifespan(app: FastAPI):
 #    await bot.set_webhook("https://fractal.ia-ai.se/api/v1/fractals/webhook/8568824507:AAHGONnctVOq0L7IC9O_ZewzYNpqj4CSWkU")
 
     commands = [
-        BotCommand(command="start", description="Show menu"),
-        BotCommand(command="help", description="Help"),
-        BotCommand(command="join", description="Join fractal id (/join 12)"),
+        BotCommand(command="start", description="Show Menu"),
+        BotCommand(command="help", description="Information"),
+        BotCommand(command="dashboard", description="Open Dashboard"),
     ]
     await bot.set_my_commands(commands)
     print("✅ Bot menu commands set!")

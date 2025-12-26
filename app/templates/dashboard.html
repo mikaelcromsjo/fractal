@@ -1163,7 +1163,7 @@ async function connectWS() {
 
                 if (data.type === 'refresh' && data.message) {
                     console.log(data.message);
-                    if (noMoreCards && data.message != str(currentUserId))
+                    if (data.message != str(currentUserId))
                         onNewCardsWebhook();
                 }
 
