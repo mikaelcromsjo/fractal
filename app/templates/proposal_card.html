@@ -26,24 +26,14 @@
             <div class="proposal-userblock">
                 <img src="${user_avatar}" alt="${username}" class="proposal-avatar">
                 <div class="proposal-usertext">
-                    <a href="/profile/${proposal_id}/"
+                    <span href="/profile/${proposal_id}/"
                        data-uid="${proposal_id}"
                        class="proposal-username usertooltip">
                         ${username}
-                    </a>
+                </span>
                     <div class="proposal-date">${proposal_date}</div>
                 </div>
             </div>
-
-            <!-- Proposal Author Vote Popup (if not current user) -->
-            % if proposal_user_id != user_id:
-            <div class="rep-vote-popup" data-user-id="${proposal_user_id}">
-                <button class="vote-btn gold" data-points="3">🥇 Gold</button>
-                <button class="vote-btn silver" data-points="2">🥈 Silver</button>
-                <button class="vote-btn bronze" data-points="1">🥉 Bronze</button>
-                <div class="user-choices">Click your #1, #2, #3</div>
-            </div>
-            % endif
 
             % if total_score:
             <div class="proposal-score-badge">

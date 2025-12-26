@@ -867,7 +867,7 @@ function submitProposalComment(proposalId) {
             const avatarSrc = `/static/img/64_${avatarNum}.png`;
             
             // Format date
-            const date = "Just now";
+            const date = "just now";
             
             // Create comment HTML
             const commentHtml = `
@@ -877,7 +877,7 @@ function submitProposalComment(proposalId) {
                         <div class="proposal-comment-top">
                             <span>
                                 <div class="proposal-comment-username">
-                                    ${comment.username || `user_${comment.user_id}`}
+                                    You
                                 </div>
                                 <div class="proposal-comment-date">
                                     ${date}
@@ -970,11 +970,11 @@ submitBtn.addEventListener("click", function() {
                         <div class="proposal-userblock">
                             <img src="${avatarSrc}" alt="You" class="proposal-avatar">
                             <div class="proposal-usertext">
-                                <a _href="/profile/${proposal.creator_user_id}/" data-uid="${proposal.creator_user_id}" class="proposal-username usertooltip">
+                                <a href="/profile/${proposal.creator_user_id}/" data-uid="${proposal.creator_user_id}" class="proposal-username usertooltip">
                                     You
                                 </a>
                                 <div class="proposal-date">
-                                    Just now
+                                    just now
                                 </div>
                             </div>
                         </div>
@@ -1146,17 +1146,14 @@ async function connectWS() {
 
                 if (data.type === 'message' && data.message) {
                     addCardDiv(data.message)
-//                    Telegram.WebApp.showAlert(data.message);
                 }
 
                 if (data.type === 'start' && data.message) {
-//                    Telegram.WebApp.showAlert(data.message);
                     addCardDiv(data.message)
                     onNewCardsWebhook();
                 }
 
                 if (data.type === 'start' && data.message) {
-//                    Telegram.WebApp.showAlert(data.message);
                     addCardDiv(data.message)
                     onNewCardsWebhook();
                 }
@@ -1170,7 +1167,12 @@ async function connectWS() {
                 if (data.type === 'half_time' && data.message) {
                     console.log(data.message);
                     addCardDiv(data.message)
-//                    Telegram.WebApp.showAlert(data.message);
+                }
+
+                if (data.type === 'end' && data.message) {
+                    console.log(data.message);
+                    addCardDiv(data.message)
+                    onNewCardsWebhook();
                 }
 
 
@@ -1252,53 +1254,6 @@ document.getElementById("more-btn").addEventListener("click", () => {
 function showHiddenComments(proposalId) {
   document.querySelectorAll(`.hidden_${proposalId}`).forEach(el => el.style.display = 'flex');
   document.getElementById(`show_more_comment_proposal_${proposalId}`).style.display = 'none';
-}
-
-document.addEventListener("DOMContentLoaded", () => {
-  // Attach click listeners to all rep vote buttons
-  document.querySelectorAll(".rep-vote-popup .vote-btn").forEach(btn => {
-    btn.addEventListener("click", onRepRating);
-  });
-});
-
-async function onRepRating(e) {
-    const btn = e.target;
-    const rank = parseInt(btn.dataset.rank);  // 1,2,3 instead of points
-    const userId = btn.closest('.rep-vote-popup').dataset.userId;
-    
-    // Visual feedback: toggle active state
-    document.querySelectorAll(`.rep-vote-popup[data-user-id="${userId}"] .vote-btn`).forEach(b => {
-        b.classList.remove('active');
-    });
-    btn.classList.add('active');
-    
-    const payload = {
-        group_id: currentGroupId,
-        round_id: currentRoundId,
-        voter_id: tg.initDataUnsafe.user.id,
-        candidate_id: parseInt(userId),
-        rank: rank  // Send rank, not points
-    };
-    
-    const response = await fetch('/api/v1/fractals/vote_representative', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify(payload)
-    });
-    
-    const data = await response.json();
-    updateLeaderboard(data.results);
-    
-    // Show user's current choices
-    showUserChoices(userId);
-}
-
-function showUserChoices(userId) {
-    // Visual: highlight user's current Gold/Silver/Bronze
-    const popup = document.querySelector(`.rep-vote-popup[data-user-id="${userId}"]`);
-    popup.querySelector('.user-choices').innerHTML = `
-        <div>Your picks: 🥇UserA 🥈UserB 🥉UserC</div>
-    `;
 }
 
 
