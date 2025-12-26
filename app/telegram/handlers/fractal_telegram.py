@@ -1008,9 +1008,9 @@ async def handle_reply(message: types.Message):
 @router.message()
 async def echo_all(message: types.Message):
     if not message.text:
-        await message.answer(
+#        await message.answer(
 #            f"Received non-text message of type: {message.content_type}"
-        )
+#        )
         return
 
     user_info = await get_user_info(str(message.from_user.id))
