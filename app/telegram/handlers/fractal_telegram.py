@@ -329,6 +329,12 @@ def format_proposal_preview(proposal: Dict[str, Any]) -> str:
     return f"<b>P_{pid}</b> {title}\nBy: {creator}\n{snippet}..."
 
 
+@router.message(F.text == "test_tz")
+async def test_tz(message: types.Message, state: FSMContext):
+    # Simulate state with offset
+    await state.update_data(user_tz_offset=1.0)  # CET
+    result = await parse_start_date(state, "30")
+    await message.answer(f"Test '30': {result}")
 
 async def parse_start_date(state: FSMContext, s: str) -> Optional[datetime]:
     """
