@@ -529,6 +529,7 @@ async def fsm_get_start_date(message: types.Message, state: FSMContext):
     await state.clear()
     return
     
+
 @router.message(Command("create_fractal"))
 async def cmd_create_fractal(message: types.Message):
     """
@@ -555,18 +556,35 @@ async def cmd_create_fractal(message: types.Message):
 
         name = args_parts[0].strip()
 
-        # Flexible description parsing
-        if len(args_parts) == 4:  # name desc round start
-            description = args_parts[1].strip()
-            round_time = args_parts[2].strip()
-            start_date_raw = args_parts[3].strip()
-        elif len(args_parts) == 5 and args_parts[1].startswith('"') and args_parts[2].endswith('"'):  # name "desc" round start
-            description = (args_parts[1] + " " + args_parts[2]).strip('"').strip()
-            round_time = args_parts[3].strip()
-            start_date_raw = args_parts[4].strip()
+        # Flexible description parsing - handles quoted multi-word descriptions
+        description = ""
+        i = 1
+        if len(args_parts) > 1 and args_parts[1].startswith('"'):
+            # Collect quoted parts until closing quote
+            while i < len(args_parts) and not args_parts[i].endswith('"'):
+                description += args_parts[i] + " "
+                i += 1
+            if i < len(args_parts) and args_parts[i].endswith('"'):
+                description += args_parts[i]
+                description = description.strip('"').strip()
+                i += 1
+            else:
+                await message.answer('Usage: /create_fractal <name> "<description>" <round_time> <start_date>', parse_mode=None)
+                return
         else:
-            await message.answer('Usage: /create_fractal <name> <short_desc> <round_time> <start_date>\nOR\n/create_fractal <name> "<long desc>" <round_time> <start_date>', parse_mode=None)
+            # Single word description
+            description = args_parts[1].strip()
+            i = 2
+
+        # Remaining args: round_time + start_date
+        if i + 1 >= len(args_parts):
+            await message.answer('Usage: /create_fractal <name> <desc> <round_time> <start_date>\nOR\n/create_fractal <name> "<long desc>" <round_time> <start_date>', parse_mode=None)
             return
+
+        round_time = args_parts[i].strip()
+        start_date_raw = args_parts[i + 1].strip()
+
+        print(f"DEBUG: name='{name}', desc='{description}', round={round_time}, start='{start_date_raw}'")
 
         # Validation
         round_time_int = int(round_time)
@@ -575,15 +593,16 @@ async def cmd_create_fractal(message: types.Message):
             await message.answer("Couldn't parse start_date. Use minutes or YYYYMMDDHHMM.", parse_mode=None)
             return
 
-        meta_settings = {"round_time": round_time_int} 
+        settings = {"round_time": round_time_int}  # minutes
 
     except ValueError:
         await message.answer("round_time must be a number.", parse_mode=None)
         return
-    except Exception:
-        await message.answer("Failed to parse arguments.", parse_mode=None)
+    except Exception as e:
+        await message.answer(f"Failed to parse arguments: {e}", parse_mode=None)
         return
 
+    # Create fractal
     async for db in get_async_session():
         try:
             fractal = await create_fractal(
@@ -591,7 +610,7 @@ async def cmd_create_fractal(message: types.Message):
                 name=name,
                 description=description,
                 start_date=start_date,
-                settings=meta_settings
+                settings=settings
             )
             fractal_id = getattr(fractal, "id", None)
             fractal_name = getattr(fractal, "name", name)
@@ -599,13 +618,6 @@ async def cmd_create_fractal(message: types.Message):
             from telegram.keyboards import fractal_created_menu
 
             share_text = (
-                f"🚀 Fractal *{fractal_name}* created!\n\n"
-                f"👥 You can invite others to join:\n"
-                f"`https://t.me/{settings.bot_username}?start=fractal_{fractal_id}`"  # ✅ FIX 5: use settings['bot_username']? No - use global settings
-            )
-
-            # ✅ FIX 6: Use global settings.bot_username
-            share_text = share_text.format(bot_username=settings.bot_username) if 'bot_username' in settings else (
                 f"🚀 Fractal *{fractal_name}* created!\n\n"
                 f"👥 You can invite others to join:\n"
                 f"`https://t.me/{settings.bot_username}?start=fractal_{fractal_id}`"
@@ -626,6 +638,7 @@ async def cmd_create_fractal(message: types.Message):
             logger.exception("create_fractal failed")
             await message.answer(f"Failed to create fractal: {e}", parse_mode=None)
             return
+
 
 async def cmd_join(message: types.Message, state: FSMContext, 
                   fractal_id: Union[str, int] | None = None,
@@ -677,7 +690,11 @@ async def cmd_join(message: types.Message, state: FSMContext,
 
             round_time_minutes = int(fractal.meta.get("round_time", 0))
             round_time_str = f"{round_time_minutes} min/round" if round_time_minutes else "N/A"
-
+            start_str = (
+                fractal.start_date.strftime("%A %H:%M, %B %d, %Y")
+                if fractal.start_date
+                else "Unknown"
+            )
 
             await message.answer(
                 f"❌ *This fractal isn't open for joining.*\n\n"
