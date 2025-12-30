@@ -879,7 +879,7 @@ async def round_half_way_service(db, fractal_id: int):
             db=db,
             group_id=g.id,
             text=text,
-            button_text="Dashboard",
+            button="Dashboard",
             fractal_id=fractal_id,
         )
 
