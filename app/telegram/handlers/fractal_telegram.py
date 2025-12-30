@@ -460,7 +460,7 @@ async def fsm_get_start_date(message: types.Message, state: FSMContext):
     round_time = data["round_time"]
 
     # Build dict for create_fractal
-    settings = {"round_time": round_time}
+    meta_settings = {"round_time": round_time}
 
     async for db in get_async_session():
         try:
@@ -469,7 +469,7 @@ async def fsm_get_start_date(message: types.Message, state: FSMContext):
                 name=name,
                 description=description,
                 start_date=start_date,
-                settings=settings,
+                settings=meta_settings,
             )
 
             fractal_id = getattr(fractal, "id", None)
