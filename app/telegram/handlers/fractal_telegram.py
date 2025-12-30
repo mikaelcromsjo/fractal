@@ -126,7 +126,7 @@ async def handle_inline_share(query: InlineQuery):
     )
     start_date = fractal.start_date.strftime("%A %H:%M, %B %d, %Y")
     minutes = int(fractal.meta["round_time"])
-    round_time = f"{int(minutes)} minutes" if minutes.is_integer() else f"{minutes} minutes"
+    round_time = f"{int(minutes)} minutes"
 
     share_text = (
                    f"🎉 Click to Join Fractal Meeting: \"{sanitize_text(fractal.name)}\"\n\n"
@@ -395,7 +395,7 @@ async def cmd_start(message: types.Message, state: FSMContext):
 
                 start_date = fractal.start_date.strftime("%A %H:%M, %B %d, %Y")
                 minutes = fractal.meta.get("round_time", 0)
-                round_time = f"{int(minutes)} minutes" if minutes.is_integer() else f"{minutes:.1f} minutes"
+                round_time = f"{int(minutes)} minutes"
 
                 await message.answer(
                     f"🎉 Click to Join Fractal Meeting: \"{sanitize_text(fractal.name)}\"\n\n"
