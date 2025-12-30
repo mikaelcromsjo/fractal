@@ -686,7 +686,7 @@ fetch("/api/v1/fractals/auth", {
         fractalRoundTime = data.fractal_round_time; 
         fractalStatus = data.fractal_status; 
 
-        
+
         statusEl.innerText = "Name: " + data.username + " Fractal: " + fractalName + " Level:" + data.level + " Group:" + data.group_id + " Status: " + data.fractal_status;
         statusEl.innerText = "Fractal: " + fractalName + " Level:" + data.level + " Status: " + data.fractal_status;
         
@@ -1492,6 +1492,16 @@ async function onVoteClick(row, candidateId) {
   }
 }
 
+
+let lastFocus = Date.now();
+
+window.addEventListener("focus", () => {
+  const now = Date.now();
+  if (now - lastFocus > 500000) {  // 5s idle threshold
+    window.location.reload(true);
+  }
+  lastFocus = now;
+});
 
 
     </script>

@@ -706,7 +706,7 @@ async def get_open_rounds_repo(db: AsyncSession):
     """
     result = await db.execute(
         select(Round)
-        .where(Round.status == "open")
+        .where(Round.status.in_(["open", "vote"]))
         .order_by(Round.started_at.desc())
     )
     return result.scalars().all()
