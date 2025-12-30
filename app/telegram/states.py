@@ -11,3 +11,4 @@ class CreateFractal(StatesGroup):
     round_time = State()
     start_date = State()    
     timezone = State()
+    timezone_manual = State()
