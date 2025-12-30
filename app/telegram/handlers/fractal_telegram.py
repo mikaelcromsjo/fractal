@@ -211,7 +211,7 @@ async def handle_manual_offset(message: types.Message, state: FSMContext):
         await message.answer("❌ Invalid offset. Use `+2` or `-5`. Try again:")
 
 
-@router.callback_query(F.data.startswith("tz_") & ~F.data == "tz_manual")
+@router.callback_query(F.data.startswith("tz_"))
 async def handle_timezone(callback: types.CallbackQuery, state: FSMContext):
     tz_map = {
         "tz_cet": 1.0, "tz_eet": 2.0, "tz_gmt": 0.0, 
