@@ -48,7 +48,6 @@ from repositories.fractal_repos import (
     get_group_member_repo,
     set_active_fractal_repo,
     get_user_info_by_telegram_id_repo,
-    create_fractal_repo,
     create_user_repo,
     get_fractal_member_repo,
     get_fractal_members_repo,
@@ -764,10 +763,14 @@ async def poll_worker(async_session_maker, poll_interval: int = 60):
 
 # ----------------- MAIN CHECK -----------------
 
+Perfect — since round_time is now minutes everywhere, here's the fixed version:
+
+✅ Fixed check_fractals (minutes + auto-close overdue rounds):
+python
 async def check_fractals(db: AsyncSession):
     """
     1. Starts waiting fractals whose start_date <= now.
-    2. Checks OPEN ROUNDS (not fractals) for half/close times.
+    2. Checks OPEN ROUNDS for half/close times + closes overdue rounds.
     """
     now = datetime.now(timezone.utc)
     print(f"\n{'='*60}")
@@ -792,7 +795,7 @@ async def check_fractals(db: AsyncSession):
                     import traceback
                     traceback.print_exc()
 
-        # 2. Check OPEN ROUNDS
+        # 2. Check OPEN ROUNDS (+ close overdue)
         print(f"\n   [STEP 2] Fetching open rounds...")
         open_rounds = await get_open_rounds_repo(db)
         print(f"   ✓ Found {len(open_rounds)} open rounds")
@@ -811,16 +814,30 @@ async def check_fractals(db: AsyncSession):
                     print(f"         ⏭️ No round_time in meta, skipping")
                     continue
                 
-                round_time_secs = int(fractal.meta["round_time"])
-                round_start = round_obj.started_at
-                half_way_time = round_start + timedelta(seconds=round_time_secs / 2)
-                close_time = round_start + timedelta(seconds=round_time_secs)
+                # ✅ FIXED: round_time is MINUTES now
+                round_time_minutes = int(fractal.meta["round_time"])
+                round_duration = timedelta(minutes=round_time_minutes)
+                half_duration = round_duration / 2
                 
-                print(f"         Round time: {round_time_secs}s")
+                round_start = round_obj.started_at
+                half_way_time = round_start + half_duration
+                close_time = round_start + round_duration
+                
+                print(f"         Round time: {round_time_minutes}min ({round_duration})")
                 print(f"         Started: {round_start}")
                 print(f"         Half-way at: {half_way_time}")
                 print(f"         Close at: {close_time}")
                 print(f"         Now: {now}")
+                
+                # ✅ NEW: Close overdue rounds (10+ min past close time)
+                if now > close_time + timedelta(minutes=10):
+                    print(f"         🛑 OVERDUE by {(now - close_time).total_seconds()/60:.1f}min - AUTO CLOSING!")
+                    try:
+                        await close_round(db, fractal.id)
+                        print(f"         ✅ Overdue round closed")
+                    except Exception as e:
+                        print(f"         ❌ Auto-close error: {e}")
+                    continue  # Skip normal checks for closed round
                 
                 # Check halfway window: ±5min (2min before, 3min after)
                 half_window_start = half_way_time - timedelta(minutes=2)
@@ -837,10 +854,10 @@ async def check_fractals(db: AsyncSession):
                         traceback.print_exc()
                 else:
                     time_until_halfway = (half_way_time - now).total_seconds()
-                    print(f"         ⏳ Halfway in {time_until_halfway:.0f}s")
+                    print(f"         ⏳ Halfway in {time_until_halfway/60:.1f}min")
                 
-                # Check close window: ±5min (2min before, 3min after)
-                close_window_start = close_time - timedelta(minutes=2)
+                # Check close window: ±3min (0min before, 3min after)
+                close_window_start = close_time - timedelta(minutes=0)
                 close_window_end = close_time + timedelta(minutes=3)
                 
                 if close_window_start <= now <= close_window_end:
@@ -854,8 +871,8 @@ async def check_fractals(db: AsyncSession):
                         traceback.print_exc()
                 else:
                     time_until_close = (close_time - now).total_seconds()
-                    print(f"         ⏳ Close in {time_until_close:.0f}s")
-                    
+                    print(f"         ⏳ Close in {time_until_close/60:.1f}min")
+                
             except Exception as e:
                 print(f"         💥 Error processing round {round_obj.id}: {e}")
                 import traceback
@@ -869,9 +886,6 @@ async def check_fractals(db: AsyncSession):
         print(f"\n💥 CRITICAL ERROR in check_fractals: {e}")
         import traceback
         traceback.print_exc()
-        print(f"{'='*60}\n")
-# ----------------- FRACTAL SERVICES -----------------
-
 
 async def round_half_way_service(db, fractal_id: int):
     """
