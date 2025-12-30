@@ -184,6 +184,9 @@ async def handle_manual_tz(callback: types.CallbackQuery, state: FSMContext):
         parse_mode="Markdown",
         reply_markup=cancel_keyboard()
     )
+    await state.set_state(CreateFractal.start_date)
+    await callback.answer()
+
 
 @router.callback_query(F.data.startswith("tz_"))
 async def handle_timezone(callback: types.CallbackQuery, state: FSMContext):
