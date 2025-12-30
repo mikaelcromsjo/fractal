@@ -340,20 +340,30 @@ async def cmd_start(message: types.Message, state: FSMContext):
     args = message.text.split(maxsplit=1)
     
     if len(args) > 1 and args[1].startswith("fractal_"):
+        print("🔍 ENTERED FRACTAL BLOCK")  # 1️⃣
+        
         try:
             fractal_id = int(args[1].replace("fractal_", ""))
+            print(f"🔍 PARSED ID: {fractal_id}")  # 2️⃣
         except ValueError:
+            print("🔍 ID PARSE FAILED")
             await message.answer("❌ Invalid fractal ID.")
             return
 
         async for db in get_async_session():
             try:
+                print(f"🔍 SESSION GOT, LOADING FRACTAL {fractal_id}")  # 3️⃣
                 fractal = await get_fractal_from_name_or_id_repo(db=db, fractal_identifier=fractal_id)
+                print(f"🔍 FRACTAL RESULT: {fractal}")  # 4️⃣ - KEY LINE
                 
                 if not fractal:
+                    print("🔍 FRACTAL NOT FOUND")
                     await message.answer(f"❌ Fractal '{sanitize_text(str(fractal_id))}' not found.")
-                    break
-                        
+                    break  # or return
+                    
+                print(f"🔍 FRACTAL STATUS: '{fractal.status}'")  # 5️⃣
+
+
                 now = datetime.now(timezone.utc)
 
                 # A fractal can only be joined if status is "waiting"
