@@ -175,6 +175,16 @@ async def handle_inline_share(query: InlineQuery):
 # Callbacks
 
 
+@router.callback_query(F.data == "tz_manual")
+async def handle_manual_tz(callback: types.CallbackQuery, state: FSMContext):
+    await callback.message.edit_text(
+        "⌨️ *Enter UTC offset*:\n\n"
+        "🇸🇪 `+1` Sweden\n🇫🇮 `+2` Finland\n🇺🇸 `-5` NY\n🇮🇳 `+5.5` India\n🇯🇵 `+9` Japan\n\n"
+        "_Examples: `+3`, `-3.5`, `+5.5`_",
+        parse_mode="Markdown",
+        reply_markup=cancel_keyboard()
+    )
+
 @router.callback_query(F.data.startswith("tz_"))
 async def handle_timezone(callback: types.CallbackQuery, state: FSMContext):
     tz_map = {
@@ -192,15 +202,6 @@ async def handle_timezone(callback: types.CallbackQuery, state: FSMContext):
     )
     await state.set_state(CreateFractal.start_date)
     await callback.answer()
-
-@router.callback_query(F.data == "tz_other")
-async def handle_other_tz(callback: types.CallbackQuery, state: FSMContext):
-    await callback.message.edit_text(
-        "🌍 Enter UTC offset:\n• `+1` (Sweden)\n• `+2` (Finland)\n• `-5` (NY)",
-        parse_mode="Markdown",
-        reply_markup=cancel_keyboard()
-    )
-    await state.set_state(CreateFractal.timezone_other)
 
 @router.callback_query(lambda c: c.data == "cmd:help")
 async def cb_help(call: types.CallbackQuery):

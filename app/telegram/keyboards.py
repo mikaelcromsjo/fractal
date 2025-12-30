@@ -157,8 +157,8 @@ def timezone_keyboard():
         [InlineKeyboardButton(text="🇬🇧 UK (GMT)", callback_data="tz_gmt")],
         [InlineKeyboardButton(text="🇺🇸 NY (EST)", callback_data="tz_est")],
         [InlineKeyboardButton(text="🇺🇸 LA (PST)", callback_data="tz_pst")],
-        [InlineKeyboardButton(text="➕ Other", callback_data="tz_other")],
-        [InlineKeyboardButton(text="❌ Cancel", callback_data="cancel")]
+        [InlineKeyboardButton(text="➕ Other", callback_data="tz_manual")],
+        [InlineKeyboardButton(text="Cancel", callback_data="cancel")]
     ])
 
 def default_menu():
