@@ -387,7 +387,27 @@ async def cmd_start(message: types.Message, state: FSMContext):
                         f"Please check back later once the organizer opens it again.",
                         parse_mode="Markdown",
                     )
-                    break
+                    return
+                
+                # ✅ SHOW JOIN MENU (like your earlier code!)
+                builder = InlineKeyboardBuilder()
+                builder.button(text=f"🙋 Join Fractal", callback_data=f"join:{fractal.id}")
+                button = builder.as_markup()
+
+                start_date = fractal.start_date.strftime("%A %H:%M, %B %d, %Y")
+                minutes = fractal.meta.get("round_time", 0) / 60
+                round_time = f"{int(minutes)} minutes" if minutes.is_integer() else f"{minutes:.1f} minutes"
+
+                await message.answer(
+                    f"🎉 Click to Join Fractal Meeting: \"{sanitize_text(fractal.name)}\"\n\n"
+                    f"📝 {sanitize_text(fractal.description)}\n\n"
+                    f"📅 {start_date}\n\n"
+                    f"⏰ {round_time} rounds", 
+                    reply_markup=button, 
+                    parse_mode=None
+                )
+                return  # ✅ Exit after showing menu
+                
                 
             except Exception as e:
                 print(f"[ERROR] Fractal {fractal_id}: {e}")
