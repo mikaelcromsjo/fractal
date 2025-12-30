@@ -7,17 +7,30 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <script src="https://unpkg.com/htmx.org@1.9.10"></script>
     <meta charset="UTF-8">
     <title>Telegram WebApp Dashboard</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
 
-Sure — here’s the full CSS you can use for the representative vote card.
-It’s designed for clarity, compactness, and mobile friendliness — the layout is responsive and clean even with many members.
-
-css
 /* ===== Representative Vote Card ===== */
+
+
+html {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+}
+
+* {
+    -webkit-text-size-adjust: 100% !important;
+}
+
+body {
+    font-size: 16px; /* Base size override */
+    line-height: 1.4;
+    -webkit-font-smoothing: antialiased;
+}
 
 #representative-vote-card {
   background: #fff;
@@ -227,6 +240,7 @@ css
 html {
     height: -webkit-fill-available; /* Safari iOS fix */
     height: 100%; /* Fallback */
+    font-size: 16px;
 }
 
 body {
