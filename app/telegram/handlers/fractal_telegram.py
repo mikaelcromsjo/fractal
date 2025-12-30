@@ -77,7 +77,7 @@ def format_international_times(start_date_finland, round_time):
     }
     
     time_lines = [f"{flag}: {time}" for flag, time in times.items()]
-    return '• ' + ' • '.join(time_lines[:7])  # Show first 7 for Telegram width
+    return ' ' + ' '.join(time_lines[:7])  # Show first 7 for Telegram width
 
 
 # Central command list (help)
@@ -153,8 +153,8 @@ async def handle_inline_share(query: InlineQuery):
     share_text = (
         f"🎉 Click to Join Fractal Meeting: \"{sanitize_text(fractal.name)}\"\n\n"
         f"📝 {sanitize_text(fractal.description)}\n\n"
-        f"📅 {start_date}\n"
-        f"⏰ {format_international_times(fractal.start_date, round_time)}\n\n"
+        f"📅 {start_date}\n\n"
+        f"{format_international_times(fractal.start_date, round_time)}\n\n"
         f"🔄 {round_time} rounds • t.me/FractalCircleBot"
     )
 
@@ -330,27 +330,43 @@ def format_proposal_preview(proposal: Dict[str, Any]) -> str:
 
 
 
-def parse_start_date(s: str) -> Optional[datetime]:
+async def parse_start_date(state: FSMContext, s: str) -> Optional[datetime]:
     """
-    Accept either:
-      - minutes from now (e.g., "30")
-      - YYYYMMDDHHMM (e.g., 202511261530)
-    Returns UTC datetime or None.
+    Parse user input using their selected timezone, convert to Finland time.
     """
     if not s:
         return None
     s = s.strip()
+    
+    # Get user timezone offset from state
+    data = await state.get_data()
+    user_tz_offset = data.get('user_tz_offset', 0)  # Default UTC
+    
     try:
         if re.fullmatch(r"\d{1,4}", s):
+            # Relative minutes from user's local now
             minutes = int(s)
-            return datetime.now(timezone.utc) + timedelta(minutes=minutes)
+            user_tz = ZoneInfo(f'UTC{user_tz_offset:+03d}')
+            user_now = datetime.now(user_tz)
+            user_time = user_now + timedelta(minutes=minutes)
+            
+            # Convert to Finland time
+            finland_tz = ZoneInfo('Europe/Helsinki')
+            return user_time.astimezone(finland_tz)
+        
         if re.fullmatch(r"\d{12}", s):
-            # assume provided time is in UTC
-            return datetime.strptime(s, "%Y%m%d%H%M").replace(tzinfo=timezone.utc)
+            # YYYYMMDDHHMM in user's timezone
+            user_time = datetime.strptime(s, "%Y%m%d%H%M")
+            user_tz = ZoneInfo(f'UTC{user_tz_offset:+03d}')
+            user_dt = user_time.replace(tzinfo=user_tz)
+            
+            # Convert to Finland time
+            finland_tz = ZoneInfo('Europe/Helsinki')
+            return user_dt.astimezone(finland_tz)
+    
     except Exception:
         return None
     return None
-
 
 def sanitize_text(s: str) -> str:
     """Escape characters that might be misinterpreted by Telegram when parse_mode=None is not set."""
@@ -466,6 +482,13 @@ async def cmd_start(message: types.Message, state: FSMContext):
                 builder.button(text="🙋 Join Fractal", callback_data=f"join:{fractal.id}")
                 button = builder.as_markup()
 
+                # Remove time from start_date - show only date
+                start_date_formatted = (
+                    fractal.start_date.strftime("%A, %B %d, %Y")
+                    if fractal.start_date
+                    else "Unknown"
+                )
+
                 international_times = format_international_times(
                     fractal.start_date.isoformat(), minutes
                 )
@@ -473,14 +496,14 @@ async def cmd_start(message: types.Message, state: FSMContext):
                 await message.answer(
                     f"🎉 Click to Join Fractal Meeting: \"{sanitize_text(fractal.name)}\"\n\n"
                     f"📝 {sanitize_text(fractal.description)}\n\n"
-                    f"📅 {start_date}\n"
-                    f"{international_times}\n\n"
+                    f"📅 {start_date_formatted}\n\n"  # Date only
+                    f"{international_times}\n\n"    # Times only
                     f"🔄 {round_time} rounds",
                     reply_markup=button, 
                     parse_mode=None
                 )
                 break
-                
+
             except Exception as e:
                 print(f"[ERROR] Fractal {fractal_id}: {e}")
                 await message.answer("❌ Error loading fractal.")
@@ -551,11 +574,15 @@ async def fsm_get_round_time(message: types.Message, state: FSMContext):
 @router.message(CreateFractal.start_date)
 async def fsm_get_start_date(message: types.Message, state: FSMContext):
     start_date_raw = message.text.strip()
-    start_date = parse_start_date(start_date_raw)
+    finland_time = await parse_start_date(state, start_date_raw)  # ✅ Async + state
 
-    if not start_date:
+    if not finland_time:
         await message.answer(
-            "❌ Couldn't parse start_date.\nTry again (minutes or YYYYMMDDHHMM)."
+            "❌ Invalid format. Use:\n"
+            "• `30` = 30 min from now\n"
+            "• `202601011700` = exact time",
+            parse_mode="Markdown",
+            reply_markup=cancel_keyboard()
         )
         return
 
@@ -563,6 +590,10 @@ async def fsm_get_start_date(message: types.Message, state: FSMContext):
     name = data["name"]
     description = data["description"]
     round_time = data["round_time"]
+
+    # ✅ Format for display
+    start_date_formatted = finland_time.strftime("%A, %B %d, %Y")
+    international_times = format_international_times(finland_time.isoformat(), round_time)
 
     # Build dict for create_fractal
     meta_settings = {"round_time": round_time}
@@ -573,17 +604,21 @@ async def fsm_get_start_date(message: types.Message, state: FSMContext):
                 db=db,
                 name=name,
                 description=description,
-                start_date=start_date,
+                start_date=finland_time,  # ✅ Finland time stored
                 settings=meta_settings,
             )
 
             fractal_id = getattr(fractal, "id", None)
             fractal_name = getattr(fractal, "name", name)
 
+            # ✅ International share text
             share_text = (
-                f"🚀 Fractal *{fractal_name}* created!\n\n"
-                f"👥 You can invite others to join:\n"
-                f"`https://t.me/{settings.bot_username}?start=fractal_{fractal_id}`"
+                f"🎉 Click to Join Fractal Meeting: \"{sanitize_text(fractal_name)}\"\n\n"
+                f"📝 {sanitize_text(description)}\n\n"
+                f"📅 {start_date_formatted}\n"
+                f"{international_times}\n\n"
+                f"🔄 {round_time} minutes rounds\n\n"
+                f"`/start fractal_{fractal_id}`"
             )
 
             await message.answer(share_text, parse_mode="Markdown")
@@ -595,14 +630,15 @@ async def fsm_get_start_date(message: types.Message, state: FSMContext):
                 )
             else:
                 await message.answer(share_text, parse_mode="Markdown")
-            return
+            break  # ✅ Exit loop
 
         except Exception as e:
             logger.exception("FSM create_fractal failed")
             await message.answer(f"⚠️ Failed to create fractal: {e}")
+            break
 
     await state.clear()
-    return
+
     
 
 @router.message(Command("create_fractal"))
