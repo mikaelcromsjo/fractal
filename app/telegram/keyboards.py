@@ -1,5 +1,5 @@
 # telegram/keyboards.py
-from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, cancel_button
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from aiogram.types import InlineKeyboardButton
@@ -158,7 +158,7 @@ def timezone_keyboard():
         [InlineKeyboardButton("🇺🇸 NY (EST)", callback_data="tz_est")],
         [InlineKeyboardButton("🇺🇸 LA (PST)", callback_data="tz_pst")],
         [InlineKeyboardButton("➕ Other", callback_data="tz_other")],
-        [cancel_button]
+        [cancel_keyboard]
     ])
 
 def default_menu():
