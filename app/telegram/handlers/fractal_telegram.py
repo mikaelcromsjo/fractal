@@ -60,21 +60,24 @@ logger = logging.getLogger(__name__)
 router = Router()
 
 def format_international_times(start_date_finland, round_time):
-    # Parse Finland time (EET UTC+2 winter, EEST UTC+3 summer)
-    finland_tz = 'Europe/Helsinki'
-    start_dt = datetime.fromisoformat(start_date_finland).replace(tzinfo=ZoneInfo(finland_tz))
+    """Convert Finland start time to international format with flags"""
+    finland_tz = ZoneInfo('Europe/Helsinki')
+    start_dt = datetime.fromisoformat(start_date_finland).replace(tzinfo=finland_tz)
     
     times = {
-        'CET (Sweden)': start_dt.astimezone(ZoneInfo('Europe/Stockholm')).strftime('%H:%M'),
-        'EET (Finland)': start_dt.strftime('%H:%M'),
-        'GMT (UK)': start_dt.astimezone(ZoneInfo('Europe/London')).strftime('%H:%M'),
-        'EST (New York)': start_dt.astimezone(ZoneInfo('America/New_York')).strftime('%H:%M'),
-        'PST (LA)': start_dt.astimezone(ZoneInfo('America/Los_Angeles')).strftime('%H:%M'),
+        '🇪🇺 CET': start_dt.astimezone(ZoneInfo('Europe/Berlin')).strftime('%H:%M'),
+        '🇫🇮 EET': start_dt.strftime('%H:%M'),
+        '🇬🇧 GMT': start_dt.astimezone(ZoneInfo('Europe/London')).strftime('%H:%M'),
+        '🇺🇸 EST': start_dt.astimezone(ZoneInfo('America/New_York')).strftime('%H:%M'),
+        '🇺🇸 PST': start_dt.astimezone(ZoneInfo('America/Los_Angeles')).strftime('%H:%M'),
+        '🇧🇷 BRT': start_dt.astimezone(ZoneInfo('America/Sao_Paulo')).strftime('%H:%M'),
+        '🇮🇳 IST': start_dt.astimezone(ZoneInfo('Asia/Kolkata')).strftime('%H:%M'),
+        '🇯🇵 JST': start_dt.astimezone(ZoneInfo('Asia/Tokyo')).strftime('%H:%M'),
+        '🇦🇺 AEST': start_dt.astimezone(ZoneInfo('Australia/Sydney')).strftime('%H:%M'),
     }
     
-    time_lines = [f"⏰ {tz}: {time}" for tz, time in times.items()]
-    return '\n'.join(time_lines)
-
+    time_lines = [f"{flag}: {time}" for flag, time in times.items()]
+    return '• ' + ' • '.join(time_lines[:7])  # Show first 7 for Telegram width
 
 
 # Central command list (help)
@@ -179,13 +182,33 @@ async def handle_inline_share(query: InlineQuery):
 async def handle_manual_tz(callback: types.CallbackQuery, state: FSMContext):
     await callback.message.edit_text(
         "⌨️ *Enter UTC offset*:\n\n"
-        "🇸🇪 `+1` Sweden\n🇫🇮 `+2` Finland\n🇺🇸 `-5` NY\n🇮🇳 `+5.5` India\n🇯🇵 `+9` Japan\n\n"
-        "_Examples: `+3`, `-3.5`, `+5.5`_",
+        "🇪🇺 `+1` CET\n🇫🇮 `+2` EET\n🇬🇧 `0` GMT\n"
+        "🇺🇸 `-5` EST\n🇺🇸 `-8` PST\n🇧🇷 `-3` BRT\n"
+        "🇮🇳 `+5.5` IST\n🇯🇵 `+9` JST\n🇦🇺 `+10` AEST\n"
+        "🇨🇳 `+8` China\n🇷🇺 `+3` Moscow\n🇿🇦 `+2` South Africa\n"
+        "🇲🇽 `-6` Mexico\n🇦🇷 `-3` Argentina\n🇸🇬 `+8` Singapore\n\n"
+        "_Examples: `+3.5`, `-4.5`, `+11.5`_",
         parse_mode="Markdown",
         reply_markup=cancel_keyboard()
     )
-    await state.set_state(CreateFractal.start_date)
+    await state.set_state(CreateFractal.timezone_manual) 
     await callback.answer()
+
+@router.message(CreateFractal.timezone_manual)
+async def handle_manual_offset(message: types.Message, state: FSMContext):
+    try:
+        offset = float(message.text.strip())
+        await state.update_data(user_tz_offset=offset)
+        await message.answer(
+            f"✅ *Offset {offset:+.1f}h* set! Now enter start time:\n"
+            "• `30` = 30 min from now\n"
+            "• `202601011700` = exact time",
+            parse_mode="Markdown",
+            reply_markup=cancel_keyboard()
+        )
+        await state.set_state(CreateFractal.start_date)  # ✅ Now go to start_date
+    except ValueError:
+        await message.answer("❌ Invalid offset. Use `+2` or `-5`. Try again:")
 
 
 @router.callback_query(F.data.startswith("tz_"))
