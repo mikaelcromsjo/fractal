@@ -18,7 +18,7 @@ from aiogram import F
 from aiogram.enums import ChatType
 from aiogram import F, Router
 from aiogram.enums import ChatType
-from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
+from aiogram.types import Message, timezone_keyboard, InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
 from aiogram.filters import Command
 from config.settings import settings
 
@@ -128,11 +128,28 @@ async def handle_inline_share(query: InlineQuery):
     minutes = int(fractal.meta["round_time"])
     round_time = f"{int(minutes)} minutes"
 
+    def format_international_times(start_date_finland, round_time):
+        # Parse Finland time (EET UTC+2 winter, EEST UTC+3 summer)
+        finland_tz = 'Europe/Helsinki'
+        start_dt = datetime.fromisoformat(start_date_finland).replace(tzinfo=ZoneInfo(finland_tz))
+        
+        times = {
+            'CET (Sweden)': start_dt.astimezone(ZoneInfo('Europe/Stockholm')).strftime('%H:%M'),
+            'EET (Finland)': start_dt.strftime('%H:%M'),
+            'GMT (UK)': start_dt.astimezone(ZoneInfo('Europe/London')).strftime('%H:%M'),
+            'EST (New York)': start_dt.astimezone(ZoneInfo('America/New_York')).strftime('%H:%M'),
+            'PST (LA)': start_dt.astimezone(ZoneInfo('America/Los_Angeles')).strftime('%H:%M'),
+        }
+        
+        time_lines = [f"⏰ {tz}: {time}" for tz, time in times.items()]
+        return '\n'.join(time_lines)
+
     share_text = (
-                   f"🎉 Click to Join Fractal Meeting: \"{sanitize_text(fractal.name)}\"\n\n"
-                    f"📝 {sanitize_text(fractal.description)}\n\n"
-                    f"📅 {start_date}\n\n"
-                    f"⏰ {round_time} rounds"
+        f"🎉 Click to Join Fractal Meeting: \"{sanitize_text(fractal.name)}\"\n\n"
+        f"📝 {sanitize_text(fractal.description)}\n\n"
+        f"📅 {start_date}\n"
+        f"⏰ {format_international_times(fractal.start_date, round_time)}\n\n"
+        f"🔄 {round_time} rounds • t.me/FractalCircleBot"
     )
 
     await query.answer(
@@ -153,6 +170,34 @@ async def handle_inline_share(query: InlineQuery):
     )
 
 # Callbacks
+
+
+@router.callback_query(F.data.startswith("tz_"))
+async def handle_timezone(callback: CallbackQuery, state: FSMContext):
+    tz_map = {
+        "tz_cet": "+1", "tz_eet": "+2", "tz_gmt": "0", 
+        "tz_est": "-5", "tz_pst": "-8"
+    }
+    offset = tz_map.get(callback.data, "0")
+    await state.update_data(user_tz_offset=float(offset))
+    await callback.message.edit_text(
+        "✅ *Timezone set!* Now enter start time:\n"
+        f"• `30` = 30 min from now ({offset})\n"
+        "• `202601011700` = exact time",
+        parse_mode="Markdown",
+        reply_markup=cancel_keyboard()
+    )
+    await state.set_state(CreateFractal.start_date)
+    await callback.answer()
+
+@router.callback_query(F.data == "tz_other")
+async def handle_other_tz(callback: CallbackQuery, state: FSMContext):
+    await callback.message.edit_text(
+        "🌍 Enter UTC offset:\n• `+1` (Sweden)\n• `+2` (Finland)\n• `-5` (NY)",
+        parse_mode="Markdown",
+        reply_markup=cancel_keyboard()
+    )
+    await state.set_state(CreateFractal.timezone_other)
 
 @router.callback_query(lambda c: c.data == "cmd:help")
 async def cb_help(call: types.CallbackQuery):
@@ -372,19 +417,16 @@ async def cmd_start(message: types.Message, state: FSMContext):
                         if fractal.start_date
                         else "Unknown"
                     )
-                    round_time_minutes = int(fractal.meta.get("round_time", 0))
-                    round_time_str = f"{round_time_minutes} min/round" if round_time_minutes else "N/A"
+                    start_date = fractal.start_date.strftime("%A %H:%M, %B %d, %Y")
+                    minutes = fractal.meta.get("round_time", 0)
+                    round_time = f"{int(minutes)} minutes"
 
                     await message.answer(
-                        f"❌ *This fractal isn't open for joining.*\n\n"
-                        f"🆔 **Name:** {sanitize_text(fractal.name or 'Unknown')}\n"
-                        f"📝 **Description:** {sanitize_text(fractal.description or 'No description')}\n"
-                        f"📅 **Start:** {start_str}\n"
-                        f"⏰ **Round time:** {round_time_str}\n"
-                        f"📊 **Status:** {fractal.status.title()}\n\n"
-                        f"⚠️ The fractal has probably already started, so joining is not possible.\n"
-                        f"Please check back later once the organizer opens it again.",
-                        parse_mode="Markdown",
+                        f"❌ Can noy join Fractal Meeting: \"{sanitize_text(fractal.name)}\"\n\n"
+                        f"📝 {sanitize_text(fractal.description)}\n\n"
+                        f"📅 {start_date}\n\n"
+                        f"⏰ {round_time} rounds", 
+                        parse_mode=None
                     )
                     return
                 
@@ -393,9 +435,6 @@ async def cmd_start(message: types.Message, state: FSMContext):
                 builder.button(text=f"🙋 Join Fractal", callback_data=f"join:{fractal.id}")
                 button = builder.as_markup()
 
-                start_date = fractal.start_date.strftime("%A %H:%M, %B %d, %Y")
-                minutes = fractal.meta.get("round_time", 0)
-                round_time = f"{int(minutes)} minutes"
 
                 await message.answer(
                     f"🎉 Click to Join Fractal Meeting: \"{sanitize_text(fractal.name)}\"\n\n"
@@ -457,21 +496,22 @@ async def fsm_get_description(message: types.Message, state: FSMContext):
 async def fsm_get_round_time(message: types.Message, state: FSMContext):
     try:
         round_time = int(message.text.strip())
-        if round_time <= 0:
+        if round_time <= 0 or round_time > 120:  # Max 2 hours reasonable
             raise ValueError
     except ValueError:
-        await message.answer("❌ Invalid round time. Enter a positive number (e.g. 30).")
+        await message.answer("❌ Invalid round time. Enter 1-120 minutes (e.g. 15, 30).")
         return
     
     await state.update_data(round_time=round_time)
     await message.answer(
-        "📅 Finally, enter the *start date*:\n"
-        "• minutes-from-now (e.g. 30)\n"
-        "• or YYYYMMDDHHMM (e.g. 202511271300)",
+        "🌍 *Pick your timezone*, then enter start time:\n\n"
+        "• `30` = 30 min from now\n"
+        "• `202601011700` = Jan 1st 17:00\n\n"
+        "_Your local time → converts to Finland time_",
         parse_mode="Markdown",
-        reply_markup=cancel_keyboard()
+        reply_markup=timezone_keyboard()
     )
-    await state.set_state(CreateFractal.start_date)    
+    await state.set_state(CreateFractal.timezone)
 
 @router.message(CreateFractal.start_date)
 async def fsm_get_start_date(message: types.Message, state: FSMContext):
@@ -697,14 +737,13 @@ async def cmd_join(message: types.Message, state: FSMContext,
             )
 
             await message.answer(
-                f"❌ *This fractal isn't open for joining.*\n\n"
-                f"🆔 **Name:** {sanitize_text(fractal.name or 'Unknown')}\n"
-                f"📝 **Description:** {sanitize_text(fractal.description or 'No description')}\n"
-                f"📅 **Start:** {start_str}\n"
-                f"⏰ **Round time:** {round_time_str}\n"
-                f"📊 **Status:** {fractal.status.title()}\n\n"
-                f"⚠️ The fractal has probably already started, so joining is not possible.\n"
-                f"Please check back later once the organizer opens it again.",
+                f"❌ *Can not join fractal*\n\n"
+                f"🆔 {sanitize_text(fractal.name or 'Unknown')}\n\n"
+                f"📝 {sanitize_text(fractal.description or 'No description')}\n\n"
+                f"📅 {start_str}\n\n"
+                f"⏰ {round_time_str}\n\n"
+                f"📊 {fractal.status.title()}\n\n"
+                f"⚠️ The fractal has probably already started, so joining is not possible.",
                 parse_mode="Markdown",
             )
             break

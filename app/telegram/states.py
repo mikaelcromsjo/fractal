@@ -9,4 +9,5 @@ class CreateFractal(StatesGroup):
     name = State()
     description = State()
     round_time = State()
-    start_date = State()
+    start_date = State()    
+    timezone = State()

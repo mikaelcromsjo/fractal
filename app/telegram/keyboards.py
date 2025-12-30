@@ -1,5 +1,5 @@
 # telegram/keyboards.py
-from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, cancel_button
 
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from aiogram.types import InlineKeyboardButton
@@ -149,6 +149,17 @@ def fractal_actions_menu(fractal_id: int):
             ]
         ]
     )
+
+def timezone_keyboard():
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton("🇸🇪 Sweden (CET)", callback_data="tz_cet")],
+        [InlineKeyboardButton("🇫🇮 Finland (EET)", callback_data="tz_eet")],
+        [InlineKeyboardButton("🇬🇧 UK (GMT)", callback_data="tz_gmt")],
+        [InlineKeyboardButton("🇺🇸 NY (EST)", callback_data="tz_est")],
+        [InlineKeyboardButton("🇺🇸 LA (PST)", callback_data="tz_pst")],
+        [InlineKeyboardButton("➕ Other", callback_data="tz_other")],
+        [cancel_button]
+    ])
 
 def default_menu():
     builder = InlineKeyboardBuilder()

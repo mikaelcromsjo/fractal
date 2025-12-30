@@ -59,8 +59,8 @@ async def create_tables():
 async def lifespan(app: FastAPI):
 
 
-    await recreate_test_db()
-    await create_tables()
+#    await recreate_test_db()
+#    await create_tables()
 
     print("🚀 Starting")
     bot, _ = init_bot()
@@ -71,7 +71,6 @@ async def lifespan(app: FastAPI):
     commands = [
         BotCommand(command="start", description="Show Menu"),
         BotCommand(command="help", description="Information"),
-        BotCommand(command="dashboard", description="Open Dashboard"),
     ]
     await bot.set_my_commands(commands)
     print("✅ Bot menu commands set!")
