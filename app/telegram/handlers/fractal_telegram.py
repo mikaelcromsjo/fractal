@@ -491,12 +491,14 @@ async def fsm_get_start_date(message: types.Message, state: FSMContext):
                 )
             else:
                 await message.answer(share_text, parse_mode="Markdown")
+            return
 
         except Exception as e:
             logger.exception("FSM create_fractal failed")
             await message.answer(f"⚠️ Failed to create fractal: {e}")
 
     await state.clear()
+    return
     
 
 @router.message(Command("create_fractal"))
@@ -541,9 +543,8 @@ async def cmd_create_fractal(message: types.Message):
     if not start_date:
         await message.answer("Couldn't parse start_date. Use minutes or YYYYMMDDHHMM.", parse_mode=None)
         return
-    settings = {"round_time": int(round_time)}
+    settings = {"round_time": int(round_time) * 60}
 
-    # create fractal using your existing session pattern
     async for db in get_async_session():
         try:
             fractal = await create_fractal(
@@ -556,17 +557,19 @@ async def cmd_create_fractal(message: types.Message):
             fractal_id = getattr(fractal, "id", None)
             fractal_name = getattr(fractal, "name", name)
 
-            from telegram.keyboards import fractal_created_menu  # adjust import as needed
+            from telegram.keyboards import fractal_created_menu
 
             await message.answer(
                 f"✨ Fractal '{sanitize_text(fractal_name)}' created!\nid = {fractal_id}",
                 reply_markup=fractal_created_menu(fractal_id),
                 parse_mode=None,
             )
+            return  # ✅ EXIT HERE - handler done!
+
         except Exception as e:
             logger.exception("create_fractal failed")
             await message.answer(f"Failed to create fractal: {e}", parse_mode=None)
-
+            return  # ✅ EXIT HERE TOO
 
 async def cmd_join(message: types.Message, state: FSMContext, 
                   fractal_id: Union[str, int] | None = None,
