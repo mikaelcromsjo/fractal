@@ -21,6 +21,7 @@ from aiogram.enums import ChatType
 from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
 from aiogram.filters import Command
 from config.settings import settings
+from zoneinfo import ZoneInfo
 
 from infrastructure.db.session import get_async_session
 
@@ -57,6 +58,23 @@ from aiogram.filters import CommandStart
 
 logger = logging.getLogger(__name__)
 router = Router()
+
+def format_international_times(start_date_finland, round_time):
+    # Parse Finland time (EET UTC+2 winter, EEST UTC+3 summer)
+    finland_tz = 'Europe/Helsinki'
+    start_dt = datetime.fromisoformat(start_date_finland).replace(tzinfo=ZoneInfo(finland_tz))
+    
+    times = {
+        'CET (Sweden)': start_dt.astimezone(ZoneInfo('Europe/Stockholm')).strftime('%H:%M'),
+        'EET (Finland)': start_dt.strftime('%H:%M'),
+        'GMT (UK)': start_dt.astimezone(ZoneInfo('Europe/London')).strftime('%H:%M'),
+        'EST (New York)': start_dt.astimezone(ZoneInfo('America/New_York')).strftime('%H:%M'),
+        'PST (LA)': start_dt.astimezone(ZoneInfo('America/Los_Angeles')).strftime('%H:%M'),
+    }
+    
+    time_lines = [f"⏰ {tz}: {time}" for tz, time in times.items()]
+    return '\n'.join(time_lines)
+
 
 
 # Central command list (help)
@@ -128,21 +146,6 @@ async def handle_inline_share(query: InlineQuery):
     minutes = int(fractal.meta["round_time"])
     round_time = f"{int(minutes)} minutes"
 
-    def format_international_times(start_date_finland, round_time):
-        # Parse Finland time (EET UTC+2 winter, EEST UTC+3 summer)
-        finland_tz = 'Europe/Helsinki'
-        start_dt = datetime.fromisoformat(start_date_finland).replace(tzinfo=ZoneInfo(finland_tz))
-        
-        times = {
-            'CET (Sweden)': start_dt.astimezone(ZoneInfo('Europe/Stockholm')).strftime('%H:%M'),
-            'EET (Finland)': start_dt.strftime('%H:%M'),
-            'GMT (UK)': start_dt.astimezone(ZoneInfo('Europe/London')).strftime('%H:%M'),
-            'EST (New York)': start_dt.astimezone(ZoneInfo('America/New_York')).strftime('%H:%M'),
-            'PST (LA)': start_dt.astimezone(ZoneInfo('America/Los_Angeles')).strftime('%H:%M'),
-        }
-        
-        time_lines = [f"⏰ {tz}: {time}" for tz, time in times.items()]
-        return '\n'.join(time_lines)
 
     share_text = (
         f"🎉 Click to Join Fractal Meeting: \"{sanitize_text(fractal.name)}\"\n\n"
@@ -368,7 +371,6 @@ async def cmd_invite_group(message: types.Message):
 
 @router.message(CommandStart())
 async def cmd_start(message: types.Message, state: FSMContext):
-    
     from telegram.bot import init_bot
     bot, _ = init_bot()
     
@@ -401,57 +403,63 @@ async def cmd_start(message: types.Message, state: FSMContext):
                         f"ℹ️ It may have been deleted or never initialized properly.",
                         parse_mode="Markdown",
                     )
+                    break
 
-
-                    break  # or return
-                    
-                print(f"🔍 FRACTAL STATUS: '{fractal.status}'")  # 5️⃣
-
-
+                print(f"🔍 FRACTAL STATUS: '{fractal.status}'")
                 now = datetime.now(timezone.utc)
+
+                # ✅ FIX 1: Define start_date consistently
+                start_date = (
+                    fractal.start_date.strftime("%A %H:%M, %B %d, %Y")
+                    if fractal.start_date
+                    else "Unknown"
+                )
+                
+                minutes = fractal.meta.get("round_time", 0)
+                round_time = f"{int(minutes)} minutes"
 
                 # A fractal can only be joined if status is "waiting"
                 if fractal.status.lower() != "waiting":
-                    start_str = (
-                        fractal.start_date.strftime("%A %H:%M, %B %d, %Y")
-                        if fractal.start_date
-                        else "Unknown"
+                    international_times = format_international_times(
+                        fractal.start_date.isoformat(), minutes
                     )
-                    start_date = fractal.start_date.strftime("%A %H:%M, %B %d, %Y")
-                    minutes = fractal.meta.get("round_time", 0)
-                    round_time = f"{int(minutes)} minutes"
-
+                    
                     await message.answer(
-                        f"❌ Can noy join Fractal Meeting: \"{sanitize_text(fractal.name)}\"\n\n"
+                        f"❌ Cannot join Fractal Meeting: \"{sanitize_text(fractal.name)}\"\n\n"
                         f"📝 {sanitize_text(fractal.description)}\n\n"
-                        f"📅 {start_date}\n\n"
-                        f"⏰ {round_time} rounds", 
+                        f"📅 {start_date}\n"
+                        f"{international_times}\n\n"
+                        f"🔄 {round_time} rounds",
                         parse_mode=None
                     )
-                    return
-                
-                # ✅ SHOW JOIN MENU (like your earlier code!)
+                    break
+                    
+                # ✅ SHOW JOIN MENU
                 builder = InlineKeyboardBuilder()
-                builder.button(text=f"🙋 Join Fractal", callback_data=f"join:{fractal.id}")
+                builder.button(text="🙋 Join Fractal", callback_data=f"join:{fractal.id}")
                 button = builder.as_markup()
 
+                international_times = format_international_times(
+                    fractal.start_date.isoformat(), minutes
+                )
 
                 await message.answer(
                     f"🎉 Click to Join Fractal Meeting: \"{sanitize_text(fractal.name)}\"\n\n"
                     f"📝 {sanitize_text(fractal.description)}\n\n"
-                    f"📅 {start_date}\n\n"
-                    f"⏰ {round_time} rounds", 
+                    f"📅 {start_date}\n"
+                    f"{international_times}\n\n"
+                    f"🔄 {round_time} rounds",
                     reply_markup=button, 
                     parse_mode=None
                 )
-                return  # ✅ Exit after showing menu
-                
+                break
                 
             except Exception as e:
                 print(f"[ERROR] Fractal {fractal_id}: {e}")
                 await message.answer("❌ Error loading fractal.")
                 break
-        return
+        
+        return  # ✅ Exit after fractal handling
 
     # ✅ DEFAULT /start
     await message.answer("👋 Hi, I am the Fractal Circle Bot!", reply_markup=default_menu())
