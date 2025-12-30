@@ -211,17 +211,18 @@ async def handle_manual_offset(message: types.Message, state: FSMContext):
         await message.answer("❌ Invalid offset. Use `+2` or `-5`. Try again:")
 
 
-@router.callback_query(F.data.startswith("tz_"))
+@router.callback_query(F.data.startswith("tz_") & ~F.data == "tz_manual")
 async def handle_timezone(callback: types.CallbackQuery, state: FSMContext):
     tz_map = {
-        "tz_cet": "+1", "tz_eet": "+2", "tz_gmt": "0", 
-        "tz_est": "-5", "tz_pst": "-8"
+        "tz_cet": 1.0, "tz_eet": 2.0, "tz_gmt": 0.0, 
+        "tz_est": -5.0, "tz_pst": -8.0,
+        "tz_brt": -3.0, "tz_ist": 5.5, "tz_jst": 9.0, "tz_aest": 10.0
     }
-    offset = tz_map.get(callback.data, "0")
-    await state.update_data(user_tz_offset=float(offset))
+    offset = tz_map.get(callback.data, 0.0)
+    await state.update_data(user_tz_offset=offset)
     await callback.message.edit_text(
-        "✅ *Timezone set!* Now enter start time:\n"
-        f"• `30` = 30 min from now ({offset})\n"
+        f"✅ *{callback.data[3:].upper()}* set! Enter start time:\n"
+        f"• `30` = 30 min from now\n"
         "• `202601011700` = exact time",
         parse_mode="Markdown",
         reply_markup=cancel_keyboard()
@@ -329,13 +330,6 @@ def format_proposal_preview(proposal: Dict[str, Any]) -> str:
     return f"<b>P_{pid}</b> {title}\nBy: {creator}\n{snippet}..."
 
 
-@router.message(F.text == "test_tz")
-async def test_tz(message: types.Message, state: FSMContext):
-    # Simulate state with offset
-    await state.update_data(user_tz_offset=1.0)  # CET
-    result = await parse_start_date(state, "30")
-    await message.answer(f"Test '30': {result}")
-
 async def parse_start_date(state: FSMContext, s: str) -> Optional[datetime]:
     """
     Parse user input using their selected timezone, convert to Finland time.
@@ -344,6 +338,7 @@ async def parse_start_date(state: FSMContext, s: str) -> Optional[datetime]:
         return None
     s = s.strip()
     
+
     # Get user timezone offset from state
     data = await state.get_data()
     user_tz_offset = data.get('user_tz_offset', 0)  # Default UTC
