@@ -825,49 +825,28 @@ async def check_fractals(db: AsyncSession):
                 print(f"         Close at: {close_time}")
                 print(f"         Now: {now}")
                 
-                # ✅ NEW: Close overdue rounds (10+ min past close time)
+                # 1. Overdue first (always)
                 if now > close_time + timedelta(minutes=10):
-                    print(f"         🛑 OVERDUE by {(now - close_time).total_seconds()/60:.1f}min - AUTO CLOSING!")
-                    try:
-                        await close_round(db, fractal.id)
-                        print(f"         ✅ Overdue round closed")
-                    except Exception as e:
-                        print(f"         ❌ Auto-close error: {e}")
-                    continue  # Skip normal checks for closed round
-                
-                # Check halfway window: ±5min (2min before, 3min after)
-                half_window_start = half_way_time - timedelta(minutes=2)
-                half_window_end = half_way_time + timedelta(minutes=3)
-                
+                    print(f"         🛑 OVERDUE - AUTO CLOSING!")
+                    await close_round(db, fractal.id)
+                    continue
+
+                # 2. Halfway: starts AT half_way_time → +2min
+                half_window_start = half_way_time
+                half_window_end = half_way_time + timedelta(minutes=2)
+
                 if half_window_start <= now <= half_window_end:
-                    print(f"         🟡 IN HALFWAY WINDOW!")
-                    try:
-                        await round_half_way_service(db, fractal.id)
-                        print(f"         ✅ Halfway service executed")
-                    except Exception as e:
-                        print(f"         ❌ Halfway service error: {e}")
-                        import traceback
-                        traceback.print_exc()
-                else:
-                    time_until_halfway = (half_way_time - now).total_seconds()
-                    print(f"         ⏳ Halfway in {time_until_halfway/60:.1f}min")
-                
-                # Check close window: ±3min (0min before, 3min after)
-                close_window_start = close_time - timedelta(minutes=0)
+                    print(f"         🟡 HALFWAY WINDOW ({(now - half_window_start).total_seconds()/60:.1f}min in)")
+                    await round_half_way_service(db, fractal.id)
+
+                # 3. Close: starts AT close_time → +3min  
+                close_window_start = close_time
                 close_window_end = close_time + timedelta(minutes=3)
-                
+
                 if close_window_start <= now <= close_window_end:
-                    print(f"         🔴 IN CLOSE WINDOW!")
-                    try:
-                        await close_round(db, fractal.id)
-                        print(f"         ✅ Close round executed")
-                    except Exception as e:
-                        print(f"         ❌ Close round error: {e}")
-                        import traceback
-                        traceback.print_exc()
-                else:
-                    time_until_close = (close_time - now).total_seconds()
-                    print(f"         ⏳ Close in {time_until_close/60:.1f}min")
+                    print(f"         🔴 CLOSE WINDOW ({(now - close_window_start).total_seconds()/60:.1f}min in)")
+                    await close_round(db, fractal.id)
+                    
                 
             except Exception as e:
                 print(f"         💥 Error processing round {round_obj.id}: {e}")
