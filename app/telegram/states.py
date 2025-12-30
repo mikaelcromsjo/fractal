@@ -8,4 +8,5 @@ class ProposalStates(StatesGroup):
 class CreateFractal(StatesGroup):
     name = State()
     description = State()
+    round_time = State()
     start_date = State()
