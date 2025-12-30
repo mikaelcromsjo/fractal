@@ -60,7 +60,7 @@ async def lifespan(app: FastAPI):
 
 
 #    await recreate_test_db()
-#    await create_tables()
+    await create_tables()
 
     print("🚀 Starting")
     bot, _ = init_bot()
