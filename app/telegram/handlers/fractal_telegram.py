@@ -18,7 +18,7 @@ from aiogram import F
 from aiogram.enums import ChatType
 from aiogram import F, Router
 from aiogram.enums import ChatType
-from aiogram.types import Message, timezone_keyboard, InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
+from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
 from aiogram.filters import Command
 from config.settings import settings
 
@@ -51,7 +51,7 @@ from services.fractal_service import (
 )
 
 from telegram.states import ProposalStates, CreateFractal
-from telegram.keyboards import share_to_group_button, create_keyboard, vote_comment_keyboard, vote_proposal_keyboard, list_more_keyboard, show_hidden_keyboard, cancel_keyboard, fractal_actions_menu, help_menu
+from telegram.keyboards import timezone_keyboard, share_to_group_button, create_keyboard, vote_comment_keyboard, vote_proposal_keyboard, list_more_keyboard, show_hidden_keyboard, cancel_keyboard, fractal_actions_menu, help_menu
 from aiogram.filters import CommandStart
 
 
