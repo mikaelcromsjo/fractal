@@ -340,25 +340,24 @@ async def cmd_start(message: types.Message, state: FSMContext):
     args = message.text.split(maxsplit=1)
     
     if len(args) > 1 and args[1].startswith("fractal_"):
-        print("🔍 ENTERED FRACTAL BLOCK")  # 1️⃣
-        
         try:
             fractal_id = int(args[1].replace("fractal_", ""))
-            print(f"🔍 PARSED ID: {fractal_id}")  # 2️⃣
         except ValueError:
-            print("🔍 ID PARSE FAILED")
             await message.answer("❌ Invalid fractal ID.")
             return
 
         async for db in get_async_session():
             try:
-                print(f"🔍 SESSION GOT, LOADING FRACTAL {fractal_id}")  # 3️⃣
                 fractal = await get_fractal_from_name_or_id_repo(db=db, fractal_identifier=fractal_id)
-                print(f"🔍 FRACTAL RESULT: {fractal}")  # 4️⃣ - KEY LINE
                 
                 if not fractal:
-                    print("🔍 FRACTAL NOT FOUND")
-                    await message.answer(f"❌ Fractal '{sanitize_text(str(fractal_id))}' not found.")
+                    await message.answer(
+                        f"❌ Fractal *{sanitize_text(str(fractal_id))}* not found or not created yet.\n\n"
+                        f"ℹ️ It may have been deleted or never initialized properly.",
+                        parse_mode="Markdown",
+                    )
+
+
                     break  # or return
                     
                 print(f"🔍 FRACTAL STATUS: '{fractal.status}'")  # 5️⃣
@@ -457,7 +456,7 @@ async def fsm_get_description(message: types.Message, state: FSMContext):
 @router.message(CreateFractal.round_time)
 async def fsm_get_round_time(message: types.Message, state: FSMContext):
     try:
-        round_time = int(message.text.strip())
+        round_time = int(message.text.strip()) * 60
         if round_time <= 0:
             raise ValueError
     except ValueError:
@@ -570,7 +569,7 @@ async def cmd_create_fractal(message: types.Message):
             return
 
         # Validation
-        round_time_int = int(round_time)  # ✅ FIX 2: moved inside try
+        round_time_int = int(round_time) * 60 # ✅ FIX 2: moved inside try
         start_date = parse_start_date(start_date_raw)
         if not start_date:
             await message.answer("Couldn't parse start_date. Use minutes or YYYYMMDDHHMM.", parse_mode=None)
@@ -676,7 +675,22 @@ async def cmd_join(message: types.Message, state: FSMContext,
             
         except Exception as e:
             logger.exception("Join failed")
-            await message.answer(f"❌ Failed to join: {sanitize_text(str(e))}")
+
+            round_time_minutes = int(fractal.meta.get("round_time", 0) / 60)
+            round_time_str = f"{round_time_minutes} min/round" if round_time_minutes else "N/A"
+
+
+            await message.answer(
+                f"❌ *This fractal isn't open for joining.*\n\n"
+                f"🆔 **Name:** {sanitize_text(fractal.name or 'Unknown')}\n"
+                f"📝 **Description:** {sanitize_text(fractal.description or 'No description')}\n"
+                f"📅 **Start:** {start_str}\n"
+                f"⏰ **Round time:** {round_time_str}\n"
+                f"📊 **Status:** {fractal.status.title()}\n\n"
+                f"⚠️ The fractal has probably already started, so joining is not possible.\n"
+                f"Please check back later once the organizer opens it again.",
+                parse_mode="Markdown",
+            )
             break
 
 @router.message(Command("start_fractal"))
