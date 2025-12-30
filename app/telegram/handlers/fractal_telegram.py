@@ -219,7 +219,8 @@ async def handle_timezone(callback: types.CallbackQuery, state: FSMContext):
     print(f"🔍 STATE AFTER BUTTON: {data}")  # Check if saved
     
     await callback.message.edit_text(
-        f"✅ TZ set! Enter start time:\n• `30` = 30 min from now",
+        f"✅ TZ set! Enter start time:\n• `30` = 30 min from now\n"
+        "• `202601011700` = Jan 1st 17:00",
         parse_mode="Markdown"
     )
     await state.set_state(CreateFractal.start_date)
@@ -339,10 +340,7 @@ def format_proposal_preview(proposal: Dict[str, Any]) -> str:
 async def parse_start_date(state: FSMContext, s: str) -> Optional[datetime]:
     print(f"🔍 PARSE: input='{s}'")
     
-    if not s:
-        return None
     s = s.strip()
-    
     data = await state.get_data()
     user_tz_offset = data.get('user_tz_offset', 0)
     print(f"🔍 PARSE: offset={user_tz_offset}")
@@ -352,27 +350,27 @@ async def parse_start_date(state: FSMContext, s: str) -> Optional[datetime]:
             minutes = int(s)
             print(f"✅ PARSE: relative {minutes}min")
             
-            # ✅ FIX: Use timedelta for offset
+            # User's local now → UTC
             utc_now = datetime.now(timezone.utc)
-            user_now = utc_now + timedelta(hours=user_tz_offset)
-            user_time = user_now + timedelta(minutes=minutes)
+            user_local_now = utc_now + timedelta(hours=user_tz_offset)
+            user_future_local = user_local_now + timedelta(minutes=minutes)
             
-            return user_time
+            # Back to UTC for DB
+            utc_for_db = user_future_local - timedelta(hours=user_tz_offset)
+            print(f"🔍 UTC now: {utc_now}, User local: {user_local_now}, UTC DB: {utc_for_db}")
+            return utc_for_db
         
         if re.match(r'^\d{12}$', s):
             print("✅ PARSE: exact time")
             user_time = datetime.strptime(s, "%Y%m%d%H%M")
-            
-            # ✅ FIX: Apply offset to naive datetime
+            # User local → UTC
             utc_time = user_time.replace(tzinfo=timezone.utc) - timedelta(hours=user_tz_offset)
-            
             return utc_time
     
     except Exception as e:
         print(f"❌ PARSE ERROR: {e}")
     
     return None
-
 
 
 def sanitize_text(s: str) -> str:
