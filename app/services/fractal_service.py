@@ -763,10 +763,6 @@ async def poll_worker(async_session_maker, poll_interval: int = 60):
 
 # ----------------- MAIN CHECK -----------------
 
-Perfect — since round_time is now minutes everywhere, here's the fixed version:
-
-✅ Fixed check_fractals (minutes + auto-close overdue rounds):
-python
 async def check_fractals(db: AsyncSession):
     """
     1. Starts waiting fractals whose start_date <= now.
