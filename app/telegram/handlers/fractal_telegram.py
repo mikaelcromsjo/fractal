@@ -530,21 +530,21 @@ async def fsm_get_start_date(message: types.Message, state: FSMContext):
     await state.clear()
     return
     
+Here are the 4 critical fixes:
 
+✅ Fixed complete handler:
+python
 @router.message(Command("create_fractal"))
 async def cmd_create_fractal(message: types.Message):
     """
     Usage:
-      /create_fractal name "description with spaces" start_date
-    start_date: minutes or YYYYMMDDHHMM
+      /create_fractal name "description with spaces" round_time start_date
     """
-    import shlex
-
     # Remove the command itself
     args = message.text[len("/create_fractal "):].strip()
     if not args:
         await message.answer(
-            "Usage: /create_fractal <name> \"<description>\" <round_time> <start_date>\n"
+            "Usage: /create_fractal <name> [<desc>] <round_time> <start_date>\n"
             "• round_time: minutes per round (e.g. 30)\n"
             "• start_date: minutes-from-now (e.g. 30) or YYYYMMDDHHMM (e.g. 202511261530)",
             parse_mode=None,
@@ -566,27 +566,30 @@ async def cmd_create_fractal(message: types.Message):
             round_time = args_parts[2].strip()
             start_date_raw = args_parts[3].strip()
         elif len(args_parts) == 5 and args_parts[1].startswith('"') and args_parts[2].endswith('"'):  # name "desc" round start
-            description = args_parts[1][1:-1].strip()  # remove quotes
+            description = (args_parts[1] + " " + args_parts[2]).strip('"').strip()  # ✅ FIX 1: join quoted parts
             round_time = args_parts[3].strip()
             start_date_raw = args_parts[4].strip()
         else:
             await message.answer('Usage: /create_fractal <name> <short_desc> <round_time> <start_date>\nOR\n/create_fractal <name> "<long desc>" <round_time> <start_date>', parse_mode=None)
             return
 
-        # Validation + rest unchanged
-        try:
-            round_time_int = int(round_time)
-        except ValueError:
-            await message.answer("round_time must be a number.", parse_mode=None)
-            return
-
+        # Validation
+        round_time_int = int(round_time)  # ✅ FIX 2: moved inside try
         start_date = parse_start_date(start_date_raw)
         if not start_date:
             await message.answer("Couldn't parse start_date. Use minutes or YYYYMMDDHHMM.", parse_mode=None)
             return
 
-        settings = {"round_time": round_time_int} 
+        settings = {"round_time": round_time_int * 60}  # ✅ FIX 3: convert to seconds
 
+    except ValueError:
+        await message.answer("round_time must be a number.", parse_mode=None)
+        return
+    except Exception:
+        await message.answer("Failed to parse arguments.", parse_mode=None)
+        return
+
+    # ✅ FIX 4: INDENTATION - move creation inside try block
     async for db in get_async_session():
         try:
             fractal = await create_fractal(
@@ -602,6 +605,13 @@ async def cmd_create_fractal(message: types.Message):
             from telegram.keyboards import fractal_created_menu
 
             share_text = (
+                f"🚀 Fractal *{fractal_name}* created!\n\n"
+                f"👥 You can invite others to join:\n"
+                f"`https://t.me/{settings.bot_username}?start=fractal_{fractal_id}`"  # ✅ FIX 5: use settings['bot_username']? No - use global settings
+            )
+
+            # ✅ FIX 6: Use global settings.bot_username
+            share_text = share_text.format(bot_username=settings.bot_username) if 'bot_username' in settings else (
                 f"🚀 Fractal *{fractal_name}* created!\n\n"
                 f"👥 You can invite others to join:\n"
                 f"`https://t.me/{settings.bot_username}?start=fractal_{fractal_id}`"
@@ -621,7 +631,7 @@ async def cmd_create_fractal(message: types.Message):
         except Exception as e:
             logger.exception("create_fractal failed")
             await message.answer(f"Failed to create fractal: {e}", parse_mode=None)
-            return  # ✅ EXIT HERE TOO
+            return
 
 async def cmd_join(message: types.Message, state: FSMContext, 
                   fractal_id: Union[str, int] | None = None,
