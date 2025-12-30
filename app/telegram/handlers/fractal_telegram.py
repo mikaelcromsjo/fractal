@@ -553,27 +553,39 @@ async def cmd_create_fractal(message: types.Message):
         return
 
     try:
-        tokens = shlex.split(args)
-    except Exception:
-        await message.answer("Failed to parse arguments. Use quotes for description.", parse_mode=None)
-        return
+        args_parts = args.split()
+        if len(args_parts) < 3:
+            await message.answer("Usage: /create_fractal <name> [<desc>] <round_time> <start_date>", parse_mode=None)
+            return
 
-    if len(tokens) < 4:
-        await message.answer(
-            "Usage: /create_fractal <name> \"<description>\" <round_time> <start_date>",
-            parse_mode=None,
-        )
-        return
+        name = args_parts[0].strip()
 
-    name = tokens[0].strip()
-    description = tokens[1].strip()
-    round_time = tokens[2].strip()
-    start_date_raw = tokens[3].strip()
-    start_date = parse_start_date(start_date_raw)
-    if not start_date:
-        await message.answer("Couldn't parse start_date. Use minutes or YYYYMMDDHHMM.", parse_mode=None)
-        return
-    settings = {"round_time": int(round_time) * 60}
+        # Flexible description parsing
+        if len(args_parts) == 4:  # name desc round start
+            description = args_parts[1].strip()
+            round_time = args_parts[2].strip()
+            start_date_raw = args_parts[3].strip()
+        elif len(args_parts) == 5 and args_parts[1].startswith('"') and args_parts[2].endswith('"'):  # name "desc" round start
+            description = args_parts[1][1:-1].strip()  # remove quotes
+            round_time = args_parts[3].strip()
+            start_date_raw = args_parts[4].strip()
+        else:
+            await message.answer('Usage: /create_fractal <name> <short_desc> <round_time> <start_date>\nOR\n/create_fractal <name> "<long desc>" <round_time> <start_date>', parse_mode=None)
+            return
+
+        # Validation + rest unchanged
+        try:
+            round_time_int = int(round_time)
+        except ValueError:
+            await message.answer("round_time must be a number.", parse_mode=None)
+            return
+
+        start_date = parse_start_date(start_date_raw)
+        if not start_date:
+            await message.answer("Couldn't parse start_date. Use minutes or YYYYMMDDHHMM.", parse_mode=None)
+            return
+
+        settings = {"round_time": round_time_int} 
 
     async for db in get_async_session():
         try:
