@@ -589,12 +589,22 @@ async def cmd_create_fractal(message: types.Message):
 
             from telegram.keyboards import fractal_created_menu
 
-            await message.answer(
-                f"✨ Fractal '{sanitize_text(fractal_name)}' created!\nid = {fractal_id}",
-                reply_markup=fractal_created_menu(fractal_id),
-                parse_mode=None,
+            share_text = (
+                f"🚀 Fractal *{fractal_name}* created!\n\n"
+                f"👥 You can invite others to join:\n"
+                f"`https://t.me/{settings.bot_username}?start=fractal_{fractal_id}`"
             )
-            return  # ✅ EXIT HERE - handler done!
+
+            await message.answer(share_text, parse_mode="Markdown")
+
+            if message.chat.type == ChatType.PRIVATE:
+                await message.answer(
+                    text="📢 Join and Share your Fractal to a group:",
+                    reply_markup=share_to_group_button(fractal_id),
+                )
+            else:
+                await message.answer(share_text, parse_mode="Markdown")
+            return
 
         except Exception as e:
             logger.exception("create_fractal failed")
