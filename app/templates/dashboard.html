@@ -565,7 +565,8 @@ fetch("/api/v1/fractals/auth", {
     if(data.status === "ok") {
 //        const statusPanel = document.getElementById('status-panel');
 //        statusPanel.style.display = 'none'
-        statusEl.innerText = "Name: " + data.username + " Fractal: " + data.fractal_id + " Level:" + data.level + " Group:" + data.group_id + " Status: " + data.fractal_status;
+        statusEl.innerText = "Name: " + data.username + " Fractal: " + fractalName + " Level:" + data.level + " Group:" + data.group_id + " Status: " + data.fractal_status;
+        statusEl.innerText = "Fractal: " + fractalName + " Level:" + data.level + " Status: " + data.fractal_status;
         
         // ✅ Set all current context variables
         currentUserId = data.user_id;
