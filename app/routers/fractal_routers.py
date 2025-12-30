@@ -203,6 +203,10 @@ async def fractals_auth(request: AuthRequest, db: AsyncSession = Depends(get_db)
                 if fractal and fractal.start_date
                 else None
             ),
+            "fractal_round_time": (fractal.meta.get("round_time") 
+                if fractal and fractal.meta and "round_time" in fractal.meta 
+                else None)
+            ,
             "level": getattr(round_obj, "level", None),
             "fractal_status": getattr(fractal, "status", None),
         }
