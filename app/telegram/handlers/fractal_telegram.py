@@ -173,7 +173,7 @@ async def handle_inline_share(query: InlineQuery):
 
 
 @router.callback_query(F.data.startswith("tz_"))
-async def handle_timezone(callback: CallbackQuery, state: FSMContext):
+async def handle_timezone(callback: types.CallbackQuery, state: FSMContext):
     tz_map = {
         "tz_cet": "+1", "tz_eet": "+2", "tz_gmt": "0", 
         "tz_est": "-5", "tz_pst": "-8"
@@ -191,7 +191,7 @@ async def handle_timezone(callback: CallbackQuery, state: FSMContext):
     await callback.answer()
 
 @router.callback_query(F.data == "tz_other")
-async def handle_other_tz(callback: CallbackQuery, state: FSMContext):
+async def handle_other_tz(callback: types.CallbackQuery, state: FSMContext):
     await callback.message.edit_text(
         "🌍 Enter UTC offset:\n• `+1` (Sweden)\n• `+2` (Finland)\n• `-5` (NY)",
         parse_mode="Markdown",
