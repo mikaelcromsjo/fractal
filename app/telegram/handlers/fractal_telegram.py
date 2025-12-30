@@ -354,10 +354,9 @@ async def parse_start_date(state: FSMContext, s: str) -> Optional[datetime]:
             minutes = int(s)
             print(f"✅ PARSE: relative {minutes}min")
             
-            # ✅ FIX: Correct ZoneInfo format
-            user_tz_str = f"UTC{user_tz_offset:+g}"  # +1, +2, -5
-            user_tz = ZoneInfo(user_tz_str)
-            user_now = datetime.now(user_tz)
+            # ✅ FIX: Use timedelta for offset
+            utc_now = datetime.now(timezone.utc)
+            user_now = utc_now + timedelta(hours=user_tz_offset)
             user_time = user_now + timedelta(minutes=minutes)
             
             finland_tz = ZoneInfo('Europe/Helsinki')
@@ -366,20 +365,18 @@ async def parse_start_date(state: FSMContext, s: str) -> Optional[datetime]:
         if re.match(r'^\d{12}$', s):
             print("✅ PARSE: exact time")
             user_time = datetime.strptime(s, "%Y%m%d%H%M")
-            user_tz_str = f"UTC{user_tz_offset:+g}"
-            user_tz = ZoneInfo(user_tz_str)
-            user_dt = user_time.replace(tzinfo=user_tz)
+            
+            # ✅ FIX: Apply offset to naive datetime
+            utc_time = user_time.replace(tzinfo=timezone.utc) - timedelta(hours=user_tz_offset)
             
             finland_tz = ZoneInfo('Europe/Helsinki')
-            return user_dt.astimezone(finland_tz)
+            return utc_time.astimezone(finland_tz)
     
     except Exception as e:
         print(f"❌ PARSE ERROR: {e}")
-        import traceback
-        traceback.print_exc()
     
-    print("❌ PARSE: no match")
     return None
+
 
 
 def sanitize_text(s: str) -> str:
