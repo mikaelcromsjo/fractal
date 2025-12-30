@@ -213,23 +213,31 @@ async def handle_manual_offset(message: types.Message, state: FSMContext):
 
 @router.callback_query(F.data.startswith("tz_"))
 async def handle_timezone(callback: types.CallbackQuery, state: FSMContext):
-    tz_map = {
-        "tz_cet": 1.0, "tz_eet": 2.0, "tz_gmt": 0.0, 
-        "tz_est": -5.0, "tz_pst": -8.0,
-        "tz_brt": -3.0, "tz_ist": 5.5, "tz_jst": 9.0, "tz_aest": 10.0
-    }
+    tz_map = {"tz_cet": 1.0, "tz_eet": 2.0, "tz_gmt": 0.0, "tz_est": -5.0, "tz_pst": -8.0}
     offset = tz_map.get(callback.data, 0.0)
+    
     await state.update_data(user_tz_offset=offset)
+    data = await state.get_data()  # ✅ DEBUG
+    print(f"🔍 STATE AFTER BUTTON: {data}")  # Check if saved
+    
     await callback.message.edit_text(
-        f"✅ *{callback.data[3:].upper()}* set! Enter start time:\n"
-        f"• `30` = 30 min from now\n"
-        "• `202601011700` = exact time",
-        parse_mode="Markdown",
-        reply_markup=cancel_keyboard()
+        f"✅ TZ set! Enter start time:\n• `30` = 30 min from now",
+        parse_mode="Markdown"
     )
     await state.set_state(CreateFractal.start_date)
     await callback.answer()
 
+# Manual handler - add debug  
+@router.message(CreateFractal.timezone_manual)
+async def handle_manual_offset(message: types.Message, state: FSMContext):
+    offset = float(message.text.strip())
+    await state.update_data(user_tz_offset=offset)
+    data = await state.get_data()  # ✅ DEBUG
+    print(f"🔍 STATE AFTER MANUAL: {data}")  # Check if saved
+    
+    await message.answer("✅ Offset set! Enter start time:\n• `30`")
+    await state.set_state(CreateFractal.start_date)
+    
 @router.callback_query(lambda c: c.data == "cmd:help")
 async def cb_help(call: types.CallbackQuery):
     await call.answer()
