@@ -530,10 +530,6 @@ async def fsm_get_start_date(message: types.Message, state: FSMContext):
     await state.clear()
     return
     
-Here are the 4 critical fixes:
-
-✅ Fixed complete handler:
-python
 @router.message(Command("create_fractal"))
 async def cmd_create_fractal(message: types.Message):
     """
