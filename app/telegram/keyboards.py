@@ -152,13 +152,13 @@ def fractal_actions_menu(fractal_id: int):
 
 def timezone_keyboard():
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton("🇸🇪 Sweden (CET)", callback_data="tz_cet")],
-        [InlineKeyboardButton("🇫🇮 Finland (EET)", callback_data="tz_eet")],
-        [InlineKeyboardButton("🇬🇧 UK (GMT)", callback_data="tz_gmt")],
-        [InlineKeyboardButton("🇺🇸 NY (EST)", callback_data="tz_est")],
-        [InlineKeyboardButton("🇺🇸 LA (PST)", callback_data="tz_pst")],
-        [InlineKeyboardButton("➕ Other", callback_data="tz_other")],
-        [cancel_keyboard]
+        [InlineKeyboardButton(text="🇸🇪 Sweden (CET)", callback_data="tz_cet")],
+        [InlineKeyboardButton(text="🇫🇮 Finland (EET)", callback_data="tz_eet")],
+        [InlineKeyboardButton(text="🇬🇧 UK (GMT)", callback_data="tz_gmt")],
+        [InlineKeyboardButton(text="🇺🇸 NY (EST)", callback_data="tz_est")],
+        [InlineKeyboardButton(text="🇺🇸 LA (PST)", callback_data="tz_pst")],
+        [InlineKeyboardButton(text="➕ Other", callback_data="tz_other")],
+        [InlineKeyboardButton(text="❌ Cancel", callback_data="cancel")]
     ])
 
 def default_menu():
