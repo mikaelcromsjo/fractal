@@ -593,7 +593,7 @@ async def cmd_create_fractal(message: types.Message):
             await message.answer("Couldn't parse start_date. Use minutes or YYYYMMDDHHMM.", parse_mode=None)
             return
 
-        settings = {"round_time": round_time_int}  # minutes
+        meta_settings = {"round_time": round_time_int}  # minutes
 
     except ValueError:
         await message.answer("round_time must be a number.", parse_mode=None)
@@ -610,7 +610,7 @@ async def cmd_create_fractal(message: types.Message):
                 name=name,
                 description=description,
                 start_date=start_date,
-                settings=settings
+                settings=meta_settings
             )
             fractal_id = getattr(fractal, "id", None)
             fractal_name = getattr(fractal, "name", name)
