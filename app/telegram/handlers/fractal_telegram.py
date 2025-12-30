@@ -417,13 +417,31 @@ async def fsm_get_name(message: types.Message, state: FSMContext):
 async def fsm_get_description(message: types.Message, state: FSMContext):
     await state.update_data(description=message.text.strip())
     await message.answer(
+        "⏱ Specify *round time* in minutes per round (e.g. 30):",
+        parse_mode="Markdown",
+        reply_markup=cancel_keyboard()
+    )
+    await state.set_state(CreateFractal.round_time)
+
+@router.message(CreateFractal.round_time)
+async def fsm_get_round_time(message: types.Message, state: FSMContext):
+    try:
+        round_time = int(message.text.strip())
+        if round_time <= 0:
+            raise ValueError
+    except ValueError:
+        await message.answer("❌ Invalid round time. Enter a positive number (e.g. 30).")
+        return
+    
+    await state.update_data(round_time=round_time)
+    await message.answer(
         "📅 Finally, enter the *start date*:\n"
         "• minutes-from-now (e.g. 30)\n"
         "• or YYYYMMDDHHMM (e.g. 202511271300)",
         parse_mode="Markdown",
         reply_markup=cancel_keyboard()
     )
-    await state.set_state(CreateFractal.start_date)
+    await state.set_state(CreateFractal.start_date)    
 
 @router.message(CreateFractal.start_date)
 async def fsm_get_start_date(message: types.Message, state: FSMContext):
@@ -439,6 +457,10 @@ async def fsm_get_start_date(message: types.Message, state: FSMContext):
     data = await state.get_data()
     name = data["name"]
     description = data["description"]
+    round_time = data["round_time"]
+
+    # Build dict for create_fractal
+    settings = {"round_time": round_time}
 
     async for db in get_async_session():
         try:
@@ -447,6 +469,7 @@ async def fsm_get_start_date(message: types.Message, state: FSMContext):
                 name=name,
                 description=description,
                 start_date=start_date,
+                settings=settings,
             )
 
             fractal_id = getattr(fractal, "id", None)
@@ -460,15 +483,12 @@ async def fsm_get_start_date(message: types.Message, state: FSMContext):
 
             await message.answer(share_text, parse_mode="Markdown")
 
-            # Private vs Group context
             if message.chat.type == ChatType.PRIVATE:
-                # In private chat: show the share-to-group button
                 await message.answer(
                     text="📢 Join and Share your Fractal to a group:",
                     reply_markup=share_to_group_button(fractal_id),
                 )
             else:
-                # If command ran in group
                 await message.answer(share_text, parse_mode="Markdown")
 
         except Exception as e:
@@ -476,7 +496,6 @@ async def fsm_get_start_date(message: types.Message, state: FSMContext):
             await message.answer(f"⚠️ Failed to create fractal: {e}")
 
     await state.clear()
-
     
 
 @router.message(Command("create_fractal"))
@@ -492,7 +511,8 @@ async def cmd_create_fractal(message: types.Message):
     args = message.text[len("/create_fractal "):].strip()
     if not args:
         await message.answer(
-            "Usage: /create_fractal <name> \"<description>\" <start_date>\n"
+            "Usage: /create_fractal <name> \"<description>\" <round_time> <start_date>\n"
+            "round_time: minutes per round (e.g. 30)\n",
             "start_date: minutes-from-now (e.g. 30) or YYYYMMDDHHMM (e.g. 202511261530)",
             parse_mode=None,
             reply_markup=create_keyboard(),
@@ -506,20 +526,22 @@ async def cmd_create_fractal(message: types.Message):
         await message.answer("Failed to parse arguments. Use quotes for description.", parse_mode=None)
         return
 
-    if len(tokens) < 3:
+    if len(tokens) < 4:
         await message.answer(
-            "Usage: /create_fractal <name> \"<description>\" <start_date>",
+            "Usage: /create_fractal <name> \"<description>\" <round_time> <start_date>",
             parse_mode=None,
         )
         return
 
     name = tokens[0].strip()
     description = tokens[1].strip()
-    start_date_raw = tokens[2].strip()
+    round_time = tokens[2].strip()
+    start_date_raw = tokens[3].strip()
     start_date = parse_start_date(start_date_raw)
     if not start_date:
         await message.answer("Couldn't parse start_date. Use minutes or YYYYMMDDHHMM.", parse_mode=None)
         return
+    settings = {"round_time": int(round_time)}
 
     # create fractal using your existing session pattern
     async for db in get_async_session():
@@ -529,10 +551,10 @@ async def cmd_create_fractal(message: types.Message):
                 name=name,
                 description=description,
                 start_date=start_date,
+                settings=settings
             )
             fractal_id = getattr(fractal, "id", None)
             fractal_name = getattr(fractal, "name", name)
-
 
             from telegram.keyboards import fractal_created_menu  # adjust import as needed
 
