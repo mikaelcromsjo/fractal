@@ -575,9 +575,13 @@ async def fsm_get_round_time(message: types.Message, state: FSMContext):
 @router.message(CreateFractal.start_date)
 async def fsm_get_start_date(message: types.Message, state: FSMContext):
     start_date_raw = message.text.strip()
-    finland_time = await parse_start_date(state, start_date_raw)  # ✅ Async + state
-
+    print(f"🔍 DEBUG START_DATE: raw='{start_date_raw}'")
+    
+    finland_time = await parse_start_date(state, start_date_raw)
+    print(f"🔍 DEBUG RESULT: finland_time={finland_time}")
+    
     if not finland_time:
+        print("❌ DEBUG: parse_start_date returned None")
         await message.answer(
             "❌ Invalid format. Use:\n"
             "• `30` = 30 min from now\n"
@@ -586,6 +590,8 @@ async def fsm_get_start_date(message: types.Message, state: FSMContext):
             reply_markup=cancel_keyboard()
         )
         return
+    
+    print("✅ DEBUG: Success! Continuing...")
 
     data = await state.get_data()
     name = data["name"]
