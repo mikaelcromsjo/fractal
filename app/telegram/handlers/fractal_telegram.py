@@ -353,30 +353,31 @@ async def cmd_start(message: types.Message, state: FSMContext):
                 if not fractal:
                     await message.answer(f"❌ Fractal '{sanitize_text(str(fractal_id))}' not found.")
                     break
-                
+                        
                 now = datetime.now(timezone.utc)
-#                if not fractal.start_date or fractal.start_date < now or fractal.status.lower() != "waiting":
-                if fractal.status.lower() != "waiting":
-                    await message.answer(f"❌ Fractal '{sanitize_text(fractal.name or 'Unknown')}' {fractal.status} not ready.")
-                    break
 
-                # SAFE - fractal exists + valid
-                builder = InlineKeyboardBuilder()
-                builder.button(text=f"🙋 Join Fractal", callback_data=f"join:{fractal_id}")
-                button = builder.as_markup()
-                
-                start_date = fractal.start_date.strftime("%A %H:%M, %B %d, %Y")
-                minutes = fractal.meta["round_time"] / 60
-                round_time = f"{int(minutes)} minutes" if minutes.is_integer() else f"{minutes:.1f} minutes"
-                
-                await message.answer(
-                    f"🎉 Click to Join Fractal Meeting: \"{sanitize_text(fractal.name)}\"\n\n"
-                    f"📝 {sanitize_text(fractal.description)}\n\n"
-                    f"📅 {start_date}\n\n"
-                    f"⏰ {round_time} rounds", 
-                    reply_markup=button, parse_mode=None
-                )
-                break  # Success - exit loop
+                # A fractal can only be joined if status is "waiting"
+                if fractal.status.lower() != "waiting":
+                    start_str = (
+                        fractal.start_date.strftime("%A %H:%M, %B %d, %Y")
+                        if fractal.start_date
+                        else "Unknown"
+                    )
+                    round_time_minutes = int(fractal.meta.get("round_time", 0) / 60)
+                    round_time_str = f"{round_time_minutes} min/round" if round_time_minutes else "N/A"
+
+                    await message.answer(
+                        f"❌ *This fractal isn't open for joining.*\n\n"
+                        f"🆔 **Name:** {sanitize_text(fractal.name or 'Unknown')}\n"
+                        f"📝 **Description:** {sanitize_text(fractal.description or 'No description')}\n"
+                        f"📅 **Start:** {start_str}\n"
+                        f"⏰ **Round time:** {round_time_str}\n"
+                        f"📊 **Status:** {fractal.status.title()}\n\n"
+                        f"⚠️ The fractal has probably already started, so joining is not possible.\n"
+                        f"Please check back later once the organizer opens it again.",
+                        parse_mode="Markdown",
+                    )
+                    break
                 
             except Exception as e:
                 print(f"[ERROR] Fractal {fractal_id}: {e}")
@@ -512,11 +513,10 @@ async def cmd_create_fractal(message: types.Message):
     if not args:
         await message.answer(
             "Usage: /create_fractal <name> \"<description>\" <round_time> <start_date>\n"
-            "round_time: minutes per round (e.g. 30)\n",
-            "start_date: minutes-from-now (e.g. 30) or YYYYMMDDHHMM (e.g. 202511261530)",
+            "• round_time: minutes per round (e.g. 30)\n"
+            "• start_date: minutes-from-now (e.g. 30) or YYYYMMDDHHMM (e.g. 202511261530)",
             parse_mode=None,
             reply_markup=create_keyboard(),
-
         )
         return
 
