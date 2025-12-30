@@ -59,10 +59,8 @@ from aiogram.filters import CommandStart
 logger = logging.getLogger(__name__)
 router = Router()
 
-def format_international_times(start_date_finland, round_time):
-    """Convert Finland start time to international format with flags"""
-    finland_tz = ZoneInfo('Europe/Helsinki')
-    start_dt = datetime.fromisoformat(start_date_finland).replace(tzinfo=finland_tz)
+def format_international_times(start_date, round_time):
+    start_dt = datetime.fromisoformat(start_date)
     
     times = {
         '🇪🇺 CET': start_dt.astimezone(ZoneInfo('Europe/Berlin')).strftime('%H:%M'),
@@ -359,8 +357,7 @@ async def parse_start_date(state: FSMContext, s: str) -> Optional[datetime]:
             user_now = utc_now + timedelta(hours=user_tz_offset)
             user_time = user_now + timedelta(minutes=minutes)
             
-            finland_tz = ZoneInfo('Europe/Helsinki')
-            return user_time.astimezone(finland_tz)
+            return user_time
         
         if re.match(r'^\d{12}$', s):
             print("✅ PARSE: exact time")
@@ -369,8 +366,7 @@ async def parse_start_date(state: FSMContext, s: str) -> Optional[datetime]:
             # ✅ FIX: Apply offset to naive datetime
             utc_time = user_time.replace(tzinfo=timezone.utc) - timedelta(hours=user_tz_offset)
             
-            finland_tz = ZoneInfo('Europe/Helsinki')
-            return utc_time.astimezone(finland_tz)
+            return utc_time
     
     except Exception as e:
         print(f"❌ PARSE ERROR: {e}")
@@ -575,8 +571,7 @@ async def fsm_get_round_time(message: types.Message, state: FSMContext):
     await message.answer(
         "🌍 *Pick your timezone*, then enter start time:\n\n"
         "• `30` = 30 min from now\n"
-        "• `202601011700` = Jan 1st 17:00\n\n"
-        "_Your local time → converts to Finland time_",
+        "• `202601011700` = Jan 1st 17:00",
         parse_mode="Markdown",
         reply_markup=timezone_keyboard()
     )
@@ -587,10 +582,10 @@ async def fsm_get_start_date(message: types.Message, state: FSMContext):
     start_date_raw = message.text.strip()
     print(f"🔍 DEBUG START_DATE: raw='{start_date_raw}'")
     
-    finland_time = await parse_start_date(state, start_date_raw)
-    print(f"🔍 DEBUG RESULT: finland_time={finland_time}")
+    time = await parse_start_date(state, start_date_raw)
+    print(f"🔍 DEBUG RESULT: time={time}")
     
-    if not finland_time:
+    if not time:
         print("❌ DEBUG: parse_start_date returned None")
         await message.answer(
             "❌ Invalid format. Use:\n"
@@ -609,8 +604,8 @@ async def fsm_get_start_date(message: types.Message, state: FSMContext):
     round_time = data["round_time"]
 
     # ✅ Format for display
-    start_date_formatted = finland_time.strftime("%A, %B %d, %Y")
-    international_times = format_international_times(finland_time.isoformat(), round_time)
+    start_date_formatted = time.strftime("%A, %B %d, %Y")
+    international_times = format_international_times(time.isoformat(), round_time)
 
     # Build dict for create_fractal
     meta_settings = {"round_time": round_time}
@@ -621,7 +616,7 @@ async def fsm_get_start_date(message: types.Message, state: FSMContext):
                 db=db,
                 name=name,
                 description=description,
-                start_date=finland_time,  # ✅ Finland time stored
+                start_date=time,  
                 settings=meta_settings,
             )
 
