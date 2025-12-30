@@ -237,7 +237,7 @@ async def handle_manual_offset(message: types.Message, state: FSMContext):
     
     await message.answer("✅ Offset set! Enter start time:\n• `30`")
     await state.set_state(CreateFractal.start_date)
-    
+
 @router.callback_query(lambda c: c.data == "cmd:help")
 async def cb_help(call: types.CallbackQuery):
     await call.answer()
@@ -339,43 +339,48 @@ def format_proposal_preview(proposal: Dict[str, Any]) -> str:
 
 
 async def parse_start_date(state: FSMContext, s: str) -> Optional[datetime]:
-    """
-    Parse user input using their selected timezone, convert to Finland time.
-    """
+    print(f"🔍 PARSE: input='{s}'")
+    
     if not s:
         return None
     s = s.strip()
     
-
-    # Get user timezone offset from state
     data = await state.get_data()
-    user_tz_offset = data.get('user_tz_offset', 0)  # Default UTC
+    user_tz_offset = data.get('user_tz_offset', 0)
+    print(f"🔍 PARSE: offset={user_tz_offset}")
     
     try:
-        if re.fullmatch(r"\d{1,4}", s):
-            # Relative minutes from user's local now
+        if re.match(r'^\d{1,4}$', s):
             minutes = int(s)
-            user_tz = ZoneInfo(f'UTC{user_tz_offset:+03d}')
+            print(f"✅ PARSE: relative {minutes}min")
+            
+            # ✅ FIX: Correct ZoneInfo format
+            user_tz_str = f"UTC{user_tz_offset:+g}"  # +1, +2, -5
+            user_tz = ZoneInfo(user_tz_str)
             user_now = datetime.now(user_tz)
             user_time = user_now + timedelta(minutes=minutes)
             
-            # Convert to Finland time
             finland_tz = ZoneInfo('Europe/Helsinki')
             return user_time.astimezone(finland_tz)
         
-        if re.fullmatch(r"\d{12}", s):
-            # YYYYMMDDHHMM in user's timezone
+        if re.match(r'^\d{12}$', s):
+            print("✅ PARSE: exact time")
             user_time = datetime.strptime(s, "%Y%m%d%H%M")
-            user_tz = ZoneInfo(f'UTC{user_tz_offset:+03d}')
+            user_tz_str = f"UTC{user_tz_offset:+g}"
+            user_tz = ZoneInfo(user_tz_str)
             user_dt = user_time.replace(tzinfo=user_tz)
             
-            # Convert to Finland time
             finland_tz = ZoneInfo('Europe/Helsinki')
             return user_dt.astimezone(finland_tz)
     
-    except Exception:
-        return None
+    except Exception as e:
+        print(f"❌ PARSE ERROR: {e}")
+        import traceback
+        traceback.print_exc()
+    
+    print("❌ PARSE: no match")
     return None
+
 
 def sanitize_text(s: str) -> str:
     """Escape characters that might be misinterpreted by Telegram when parse_mode=None is not set."""
