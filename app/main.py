@@ -76,10 +76,12 @@ async def lifespan(app: FastAPI):
     await bot.set_my_commands(commands)
     print("✅ Bot menu commands set!")
 
-    # Start poller with sessionmaker factory
-    poll_task = asyncio.create_task(poll_worker(AsyncSessionLocal, poll_interval=60))
-    print("🌀 Poll worker started in background.")
-
+    if getattr(app.state, "poller_started", False):
+        print("⚠️ Poller already running. Skipping duplicate start.")
+    else:
+        app.state.poller_started = True
+        poll_task = asyncio.create_task(poll_worker(AsyncSessionLocal, poll_interval=60))
+        print("🌀 Poll worker started in background.")
     try:
         yield
     finally:

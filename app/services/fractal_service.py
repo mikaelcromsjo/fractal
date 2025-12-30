@@ -707,14 +707,12 @@ async def send_message_to_web_app_users(telegram_ids: list[int], text: str, even
         try:
             """Call this from your bot/game logic"""
             user_id = str(user_id)
-            print("Sending")
             print(f"DEBUG: user_id type: {type(user_id)}, value: {repr(user_id)}")
             print(f"DEBUG: connected_clients type: {type(connected_clients)}")
             print(f"DEBUG: connected_clients keys: {list(connected_clients.keys())}")
             print(f"DEBUG: connected_clients keys types: {[type(k) for k in connected_clients.keys()]}")
             print(f"DEBUG: user_id in connected_clients: {user_id in connected_clients}")
             if user_id in connected_clients:
-                print ("Sent")
                 event = {"type": event_type, "message": text, "timestamp": datetime.now(timezone.utc).isoformat()}
                 disconnected = []
                 
