@@ -597,8 +597,12 @@ async def cmd_join(message: types.Message, state: FSMContext,
         try:
             fractal = await get_fractal_from_name_or_id_repo(db=db, fractal_identifier=fractal_id)
             if not fractal:
-                await message.answer(f"❌ Fractal '{sanitize_text(str(fractal_id))}' not found.")
-                break
+                await message.answer(
+                    f"❌ Fractal *{sanitize_text(str(fractal_id))}* not found or not created yet.\n\n"
+                    f"ℹ️ It may have been deleted or never initialized properly.",
+                    parse_mode="Markdown",
+                )
+                return  # ✅ stop cleanly, not break            
             
             user = await join_fractal(db, user_info, fractal.id)
             await state.update_data(
