@@ -654,7 +654,7 @@ async def vote_representative(db: AsyncSession, group_id: int, round_id: int, vo
     return results
 
 async def calculate_rep_results(db: AsyncSession, group_id: int, round_id: int):
-    votes = await get_rep_votes_for_round_repo(db, group_id, round_id)
+    votes = await get_rep_votes_for_round_repo(db, group_id)
     
     scores = defaultdict(lambda: {"points": 0, "vote_count": 0})
     for vote in votes:

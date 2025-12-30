@@ -522,11 +522,10 @@ async def save_rep_vote_repo(db: AsyncSession, group_id: int, round_id: int, vot
     await db.refresh(vote)
     return vote
 
-async def get_rep_votes_for_round_repo(db: AsyncSession, group_id: int, round_id: int):
+async def get_rep_votes_for_round_repo(db: AsyncSession, group_id: int):
     result = await db.execute(
         select(RepresentativeVote)
         .where(RepresentativeVote.group_id == group_id)
-        .where(RepresentativeVote.round_id == round_id)
     )
     return result.scalars().all()
 
