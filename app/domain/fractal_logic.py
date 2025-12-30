@@ -40,16 +40,23 @@ def get_round_index(fractal, now=None):
     now = now or datetime.utcnow()
     if not fractal.start_date or "round_time" not in fractal.meta:
         return None
-    round_time = timedelta(days=fractal.meta["round_time"])
+    
+    # ✅ round_time is MINUTES → convert to timedelta(minutes=)
+    round_time_minutes = fractal.meta["round_time"]
+    round_duration = timedelta(minutes=round_time_minutes)
+    
     elapsed = now - fractal.start_date
-    full_rounds = int(elapsed // round_time)
+    full_rounds = int(elapsed // round_duration)
     return full_rounds
+
 
 def get_round_times(fractal):
     """Returns round_time as timedelta and half_time as timedelta"""
-    round_time = timedelta(days=fractal.meta["round_time"])
-    half_time = round_time / 2
-    return round_time, half_time
+    # ✅ round_time is MINUTES → convert to timedelta(minutes=)
+    round_time_minutes = fractal.meta["round_time"]
+    round_duration = timedelta(minutes=round_time_minutes)
+    half_time = round_duration / 2
+    return round_duration, half_time
 
 # ----------------------------
 # Comment Tree
