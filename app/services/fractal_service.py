@@ -428,7 +428,7 @@ async def close_round(db: AsyncSession, fractal_id: int):
     """
     round = await get_last_round_repo(db, fractal_id)
     groups = await get_groups_for_round_repo(db, round.id)
-    text = "The round has ended!"
+    text = "ℹ️ The round has ended!"
     for g in groups:
         await send_message_to_group(db, g.id, text)
         await send_message_to_web_app_group(db, g.id, text)
@@ -445,7 +445,7 @@ async def close_round(db: AsyncSession, fractal_id: int):
     new_round = await promote_to_next_round(db, round_obj.id, round_obj.fractal_id)
     if new_round:
         next_groups = await get_groups_for_round(db, new_round.id)
-        text = "🚀 The Next Round has started! You have been selected to represent your Circle!"
+        text = "🚀 The Next Round has started! ℹ️ You have been selected to represent your Circle!"
         for g in next_groups:
             await send_button_to_group(db, g.id, text, "Dashboard", round_obj.fractal_id)
             await send_message_to_web_app_group(db, g.id, text, "start")
@@ -870,18 +870,11 @@ async def round_half_way_service(db, fractal_id: int):
       - Mark round status as 'vote' using repo.
     """
 
-    print (":) Half way round")
-    last_round = await get_last_round_repo(db, fractal_id)
-    if not last_round or last_round.status != "active":
-        return
-
-    groups = await get_groups_for_round_repo(db, last_round.id)
-    if not groups:
-        return
-
-    text = "Half way... better work... do some voting!"
-
+    round = await get_last_round_repo(db, fractal_id)
+    groups = await get_groups_for_round_repo(db, round.id)
+    text = "ℹ️ Half of the time for this round is over. Now is the time to vote on all comments, proposals and select a group representative to continue the next round."
     for g in groups:
+
         await send_button_to_group(
             db=db,
             group_id=g.id,
@@ -893,7 +886,8 @@ async def round_half_way_service(db, fractal_id: int):
         await send_message_to_web_app_group(
             db=db,
             group_id=g.id,
-            text=text, event_type = "half_time"
+            text=text, 
+            event_type = "half_time"
         )
 
-    await set_round_status_repo(db, last_round.id, "vote")
+    await set_round_status_repo(db, round.id, "vote")
