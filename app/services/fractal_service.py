@@ -834,7 +834,7 @@ async def check_fractals(db: AsyncSession):
                 half_window_start = half_way_time
                 half_window_end = half_way_time + timedelta(minutes=2)
 
-                if fractal.status == "open" and half_window_start <= now <= half_window_end:
+                if round_obj.status == "open" and half_window_start <= now <= half_window_end:
                     print(f"         🟡 HALFWAY WINDOW ({(now - half_window_start).total_seconds()/60:.1f}min in)")
                     await round_half_way_service(db, fractal.id)
 
