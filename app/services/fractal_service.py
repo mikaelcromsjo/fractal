@@ -713,6 +713,7 @@ async def send_message_to_web_app_users(telegram_ids: list[int], text: str, even
             print(f"DEBUG: connected_clients keys types: {[type(k) for k in connected_clients.keys()]}")
             print(f"DEBUG: user_id in connected_clients: {user_id in connected_clients}")
             if user_id in connected_clients:
+                print ("Sent")
                 event = {"type": event_type, "message": text, "timestamp": datetime.now(timezone.utc).isoformat()}
                 disconnected = []
                 
@@ -833,7 +834,7 @@ async def check_fractals(db: AsyncSession):
                 half_window_start = half_way_time
                 half_window_end = half_way_time + timedelta(minutes=2)
 
-                if half_window_start <= now <= half_window_end:
+                if fractal.status == "open" and half_window_start <= now <= half_window_end:
                     print(f"         🟡 HALFWAY WINDOW ({(now - half_window_start).total_seconds()/60:.1f}min in)")
                     await round_half_way_service(db, fractal.id)
 
