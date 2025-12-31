@@ -628,7 +628,7 @@ async def fsm_get_start_date(message: types.Message, state: FSMContext):
                 f"📅 {start_date_formatted}\n\n"
                 f"{international_times}\n\n"
                 f"🔄 {round_time} minutes rounds\n\n"
-                f"Share this link `https://t.me/FractalCircleBot/app?startapp=fractal_{fractal_id}`"
+                f"Share this link `https://t.me/{settings.bot_username}?start=fractal_{fractal_id}`"
             )
 
             await message.answer(share_text, parse_mode="Markdown")
