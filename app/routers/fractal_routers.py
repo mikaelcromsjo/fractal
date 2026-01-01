@@ -41,7 +41,7 @@ from services.fractal_service import (
     get_proposals_comments_tree,
     get_proposal_comments_tree,
     get_representatives_for_group_repo,
-    vote_representative,
+    vote_representative_repo,
     get_group_members,
     get_fractal,
     get_user,
