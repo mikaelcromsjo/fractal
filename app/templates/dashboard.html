@@ -137,6 +137,73 @@ body {
   }
 }
 
+.rep-member {
+  display: flex;
+  align-items: center;          /* vertically center everything */
+  justify-content: space-between;
+  padding: 10px 12px;
+  border-bottom: 1px solid #eee;
+  background: #fff;
+  transition: background 0.2s ease;
+  cursor: pointer;
+}
+
+.rep-member:not(.disabled):hover {
+  background: #fafafa;
+}
+
+.rep-member.disabled {
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+.proposal-comment-avatar {
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.rep-member .name {
+  flex: 1;                      /* stretch to fill space between avatar and medal */
+  margin-left: 12px;
+  font-size: 1rem;
+  font-weight: 500;
+  color: #222;
+  display: flex;
+  align-items: center;          /* vertical centering */
+}
+
+.rep-member .medal {
+  font-size: 1.5rem;
+  min-width: 1.8rem;
+  text-align: center;
+  opacity: 0.4;
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.rep-member .medal:not(.dimmed) {
+  opacity: 1;
+}
+
+/* Bounce animation for highlight */
+@keyframes bounceMedal {
+  0%   { transform: scale(1); }
+  40%  { transform: scale(1.4); }
+  70%  { transform: scale(1.15); }
+  100% { transform: scale(1); }
+}
+
+.medal.bounce {
+  animation: bounceMedal 0.5s ease;
+}
+
+/* Optional glow on highlight */
+.medal:not(.dimmed).bounce {
+  filter: drop-shadow(0 0 4px rgba(255, 215, 0, 0.8));
+}
+
 .vote-btn.active {
     background: #4CAF50 !important;
     color: white;
@@ -1566,46 +1633,64 @@ async function vote_rep(e, groupId) {
   // Remove dim from current medal for this rank, dim old one if already selected
   if (votedCandidates[currentRepPoints]) {
     const oldRow = document.querySelector(`.rep-member[data-user-id="${votedCandidates[currentRepPoints]}"]`);
-    if (oldRow) oldRow.querySelector(".medal").classList.add("dimmed");
+    if (oldRow) {
+      const oldMedal = oldRow.querySelector(".medal");
+      if (oldMedal) oldMedal.classList.add("dimmed");
+    }
   }
 
-  // Highlight this medal as active
-  const medal = memberEl.querySelector(".medal");
+  // 🏅 Get or create medal inside this row
+  let medal = memberEl.querySelector(".medal");
+  if (!medal) {
+    medal = document.createElement("span");
+    medal.className = "medal dimmed";
+    memberEl.appendChild(medal);
+  }
+
+  // Set the correct medal icon for currentRepPoints
+  const medalIcons = { 3: "🥇", 2: "🥈", 1: "🥉" };
+  medal.textContent = medalIcons[currentRepPoints] || "";
+
+  // Animate & highlight it
   medal.classList.remove("dimmed");
+  medal.classList.add("bounce"); // trigger bounce animation
+  setTimeout(() => medal.classList.remove("bounce"), 500); // remove after animation completes
+
   votedCandidates[currentRepPoints] = candidateId;
 
-  // Send vote
+  // Send vote to backend
   const payload = {
     group_id: groupId,
     round_id: currentRoundId,
-    voter_user_id: currentUserId,
+    voter_user_id: tg.initDataUnsafe.user.id,
     candidate_user_id: candidateId,
-    points: currentRepPoints
+    points: currentRepPoints,
   };
 
   try {
     const res = await fetch("/api/v1/fractals/vote_representative", {
       method: "POST",
-      headers: {"Content-Type": "application/json"},
-      body: JSON.stringify(payload)
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
     });
 
     const result = await res.json();
     if (!result.ok) throw new Error("Vote not accepted");
 
-    console.log(`✅ Voted ${currentRepPoints} points for ${candidateId}`);
+    console.log(`✅ Voted ${currentRepPoints} points for user ${candidateId}`);
 
-    // Decrease rank for next click
+    // Move to next point value (🥇→🥈→🥉)
     currentRepPoints -= 1;
 
-    // Optional: stop interaction when all medals assigned
+    // All medals assigned → disable further clicks
     if (currentRepPoints === 0) {
       document.querySelectorAll(".rep-member").forEach(el => el.classList.add("disabled"));
-      document.querySelector(".instructions").textContent = "✅ Your votes have been submitted.";
+      const instr = document.querySelector(".instructions");
+      if (instr) instr.textContent = "✅ Your representative votes are submitted.";
     }
   } catch (err) {
     console.error("Voting error:", err);
-    medal.classList.add("dimmed"); // revert UI on error
+    medal.classList.add("dimmed");
     alert("Vote failed. Please try again.");
   }
 }
