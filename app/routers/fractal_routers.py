@@ -24,6 +24,8 @@ from typing import Dict, List
 
 # Service imports - replace direct DB access
 from services.fractal_service import (
+
+    rep_vote_card,
     create_fractal,
     create_user,
     join_fractal,
@@ -794,24 +796,15 @@ async def test_status(fractal_id: int, db: AsyncSession = Depends(get_db)):
 import subprocess
 from fastapi import APIRouter, HTTPException
 
-
-@router.post("test/git_pull_reload")
-async def git_pull_reload():
-    """⚙️ Pull latest code and rely on --reload to pick up changes."""
-
-    try:
-        git_output = subprocess.check_output(
-            ["git", "pull", "origin", "main"],
-            cwd="/app",
-            text=True,
-            stderr=subprocess.STDOUT
-        )
-
-        return {
-            "ok": True,
-            "message": "Git pull complete — reload will trigger automatically via --reload.",
-            "git_output": git_output.strip()
-        }
-
-    except subprocess.CalledProcessError as e:
-        raise HTTPException(500, f"Git error: {e.output}")
+    
+@router.get("/rep_vote_card/{group_id}")
+async def get_rep_vote_card(
+    group_id: int,
+    user_id: int,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Builds and returns the representative vote card HTML for a given group and user.
+    """
+    html = await rep_vote_card(db, user_id=user_id, group_id=group_id)
+    return {"ok": True, "html": html}

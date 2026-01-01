@@ -14,7 +14,7 @@ from repositories.fractal_repos import (
     get_rep_votes_for_round_repo,
     save_rep_vote_repo,
     get_representatives_for_group_repo,
-    get_user_rep_points_used_repo,
+    get_user_rep_points_repo,
     get_votes_for_group_comments_repo,
     get_votes_for_group_proposals_repo,
     set_round_status_repo,
@@ -640,18 +640,18 @@ async def get_proposal_comments_tree(db: AsyncSession, proposal_id: int):
 
 
 # app/services/representative_service.py
-async def vote_representative(db: AsyncSession, group_id: int, round_id: int, voter_id: int, candidate_id: int, points: int):
-    # Check points limit (max 5 total)
-    used_points = await get_user_rep_points_used_repo(db, group_id, round_id, voter_id)
-    if used_points + points > 5:
-        raise ValueError(f"Max 5 points total. Used: {used_points}")
+#async def vote_representative(db: AsyncSession, group_id: int, round_id: int, voter_id: int, candidate_id: int, points: int):
+#    # Check points limit (max 5 total)
+#    used_points = await get_user_rep_points_used_repo(db, group_id, round_id, voter_id)
+#    if used_points + points > 5:
+#        raise ValueError(f"Max 5 points total. Used: {used_points}")
     
     # Save vote
-    await save_rep_vote_repo(db, group_id, round_id, voter_id, candidate_id, points)
+#    await save_rep_vote_repo(db, group_id, round_id, voter_id, candidate_id, points)
     
     # Recalculate live results
-    results = await calculate_rep_results(db, group_id, round_id)
-    return results
+#    results = await calculate_rep_results(db, group_id, round_id)
+#    return results
 
 async def calculate_rep_results(db: AsyncSession, group_id: int, round_id: int):
     votes = await get_rep_votes_for_round_repo(db, group_id)
@@ -890,3 +890,39 @@ async def round_half_way_service(db, fractal_id: int):
         )
 
     await set_round_status_repo(db, round.id, "vote")
+
+async def rep_vote_card(db: AsyncSession, user_id: int, group_id: int) -> str:
+    members = await get_group_members_repo(db, group_id)
+    votes = await get_user_rep_points_repo(db, group_id, user_id)
+    vote_map = {v.candidate_user_id: v.points for v in votes}
+
+    html = [
+        "<div class='rep-vote-card'>",
+        "<div class='instructions'>Select representative: 🥇 🥈 🥉</div>",
+    ]
+
+    for m in members:
+        points = vote_map.get(m.user_id, 0)
+        medal, dimmed = "", "dimmed"
+
+        if points == 3:
+            medal, dimmed = "🥇", ""
+        elif points == 2:
+            medal, dimmed = "🥈", ""
+        elif points == 1:
+            medal, dimmed = "🥉", ""
+
+        # avatar image based on user_id mod 16
+        avatar = f"/static/img/64_{(m.user_id % 16) + 1}.png"
+
+        html.append(f"""
+            <div class="rep-member" data-user-id="{m.user_id}">
+                <img src="{avatar}" alt="">
+                <span class="name">{getattr(m, 'username', f'User {m.user_id}')}</span>
+                <span class="medal {dimmed}">{medal}</span>
+            </div>
+        """)
+
+    html.append("</div>")
+    return "\n".join(html)
+

@@ -1518,6 +1518,94 @@ window.addEventListener("focus", () => {
 });
 
 
+let currentRepPoints = 3; // 🥇 is 3, next votes are 2, then 1
+let votedCandidates = {}; // {3:userId, 2:userId, 1:userId}
+let repCardLoaded = false;
+
+async function get_rep_vote_card(groupId) {
+  try {
+    console.log("Fetching representative vote card...");
+
+    // optional: reset voting state each time
+    currentRepPoints = 3;
+    votedCandidates = {};
+
+    const res = await fetch(`/api/v1/fractals/rep_vote_card/${groupId}?user_id=${tg.initDataUnsafe.user.id}`);
+    const data = await res.json();
+
+    if (!data.ok) {
+      console.error("Failed to load rep card:", data);
+      return;
+    }
+
+    // Display HTML in a card
+    addCardDiv(data.html);
+
+    // Attach click listeners
+    document.querySelectorAll(".rep-member").forEach(el => {
+      el.addEventListener("click", (e) => vote_rep(e, groupId));
+    });
+
+    repCardLoaded = true;
+  } catch (err) {
+    console.error("Error loading rep vote card:", err);
+  }
+}
+
+
+async function vote_rep(e, groupId) {
+  const memberEl = e.currentTarget || e.target.closest(".rep-member");
+  if (!memberEl || currentRepPoints <= 0) return;
+
+  const candidateId = parseInt(memberEl.dataset.userId);
+
+  // Remove dim from current medal for this rank, dim old one if already selected
+  if (votedCandidates[currentRepPoints]) {
+    const oldRow = document.querySelector(`.rep-member[data-user-id="${votedCandidates[currentRepPoints]}"]`);
+    if (oldRow) oldRow.querySelector(".medal").classList.add("dimmed");
+  }
+
+  // Highlight this medal as active
+  const medal = memberEl.querySelector(".medal");
+  medal.classList.remove("dimmed");
+  votedCandidates[currentRepPoints] = candidateId;
+
+  // Send vote
+  const payload = {
+    group_id: groupId,
+    round_id: currentRoundId,
+    voter_user_id: tg.initDataUnsafe.user.id,
+    candidate_user_id: candidateId,
+    points: currentRepPoints
+  };
+
+  try {
+    const res = await fetch("/api/v1/fractals/vote_representative", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify(payload)
+    });
+
+    const result = await res.json();
+    if (!result.ok) throw new Error("Vote not accepted");
+
+    console.log(`✅ Voted ${currentRepPoints} points for ${candidateId}`);
+
+    // Decrease rank for next click
+    currentRepPoints -= 1;
+
+    // Optional: stop interaction when all medals assigned
+    if (currentRepPoints === 0) {
+      document.querySelectorAll(".rep-member").forEach(el => el.classList.add("disabled"));
+      document.querySelector(".instructions").textContent = "✅ Your votes have been submitted.";
+    }
+  } catch (err) {
+    console.error("Voting error:", err);
+    medal.classList.add("dimmed"); // revert UI on error
+    alert("Vote failed. Please try again.");
+  }
+}
+
     </script>
 </%text>
 
