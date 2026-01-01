@@ -1472,8 +1472,6 @@ async function onVoteClick(row, candidateId) {
   row.classList.add("voted");
   row.querySelector(".medal").textContent = medalIcon;
 
-  AuthenticatorAssertionResponse
-  
   const payload = {
     group_id: currentGroupId,
     round_id: currentRoundId,
@@ -1536,7 +1534,7 @@ async function get_rep_vote_card(groupId) {
     currentRepPoints = 3;
     votedCandidates = {};
 
-    const res = await fetch(`/api/v1/fractals/rep_vote_card/${groupId}?user_id=${tg.initDataUnsafe.user.id}`);
+    const res = await fetch(`/api/v1/fractals/rep_vote_card/${groupId}?user_id=${currentUserId}`);
     const data = await res.json();
 
     if (!data.ok) {
@@ -1580,7 +1578,7 @@ async function vote_rep(e, groupId) {
   const payload = {
     group_id: groupId,
     round_id: currentRoundId,
-    voter_user_id: tg.initDataUnsafe.user.id,
+    voter_user_id: currentUserId,
     candidate_user_id: candidateId,
     points: currentRepPoints
   };
