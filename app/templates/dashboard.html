@@ -32,7 +32,8 @@ body {
     -webkit-font-smoothing: antialiased;
 }
 
-#representative-vote-card {
+
+.rep-vote-card {
   background: #fff;
   border-radius: 10px;
   padding: 14px;
@@ -41,100 +42,17 @@ body {
   font-family: system-ui, sans-serif;
 }
 
-#representative-vote-card .instructions {
+.rep-vote-card .instructions {
   font-size: 0.95rem;
   color: #444;
   margin-bottom: 8px;
   text-align: center;
 }
 
-/* Member list rows */
-#members-list {
-  width: 100%;
-}
-
-.member-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 10px 12px;
-  border-bottom: 1px solid #eee;
-  transition: background 0.2s;
-  cursor: pointer;
-}
-
-.member-row:last-child {
-  border-bottom: none;
-}
-
-.member-row:hover {
-  background: #fafafa;
-}
-
-/* Avatar + name container */
-.member-row .left {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex: 1;
-}
-
-.member-row img {
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  object-fit: cover;
-  background: #f0f0f0;
-}
-
-.dimmed {
-  transition: transform 0.s, opacity 0.1s;
-}
-
-/* Medal area */
-.member-row .medal {
-  font-size: 1.4rem;
-  width: 1.6rem;
-  text-align: right;
-  transition: transform 0.2s, opacity 0.2s;
-  opacity: 0.4;
-}
-
-/* When a medal appears */
-.member-row.voted .medal {
-  opacity: 1;
-  transform: scale(1.15);
-}
-
-/* Visual feedback for completed vote */
-.member-row.voted {
-  background: #f9f9f9;
-}
-
-
-/* Responsive adjustments for mobile */
-@media (max-width: 600px) {
-  #representative-vote-card {
-    padding: 12px;
-  }
-
-  .member-row {
-    padding: 12px 10px;
-  }
-
-  .member-row img {
-    width: 36px;
-    height: 36px;
-  }
-
-  .member-row .medal {
-    font-size: 1.3rem;
-  }
-}
-
+/* Member row container */
 .rep-member {
   display: flex;
-  align-items: center;          /* vertically center everything */
+  align-items: center;         /* Vertically centers avatar & name */
   justify-content: space-between;
   padding: 10px 12px;
   border-bottom: 1px solid #eee;
@@ -143,21 +61,8 @@ body {
   cursor: pointer;
 }
 
-/* medals start slightly transparent */
-.rep-member .medal {
-  font-size: 1.5rem;
-  min-width: 1.8rem;
-  text-align: center;
-  opacity: 0.6;                     /* ← initial semi-visible state */
-  transition: opacity 0.25s ease, transform 0.25s ease;
-}
-
-.rep-member .medal.active {
-  opacity: 1;                       /* ← fully visible when voted */
-}
-
-.medal.active.bounce {
-  filter: drop-shadow(0 0 4px rgba(255, 215, 0, 0.7));
+.rep-member:last-child {
+  border-bottom: none;
 }
 
 .rep-member:not(.disabled):hover {
@@ -165,9 +70,78 @@ body {
 }
 
 .rep-member.disabled {
-  opacity: 1;
+  opacity: 0.6;
   pointer-events: none;
 }
+
+/* Avatar on left */
+.proposal-comment-avatar {
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+/* Name centered vertically */
+.rep-member .name {
+  flex: 1;
+  margin-left: 12px;
+  font-size: 1rem;
+  font-weight: 500;
+  color: #222;
+  display: flex;
+  align-items: center;
+}
+
+/* Medal on right */
+.rep-member .medal {
+  font-size: 1.5rem;
+  min-width: 1.8rem;
+  text-align: center;
+  opacity: 0.6;                                /* start dimmed */
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+
+.rep-member .medal.active {
+  opacity: 1;                                  /* brighten when selected */
+}
+
+/* Bounce animation */
+@keyframes bounceMedal {
+  0%   { transform: scale(1);   }
+  40%  { transform: scale(1.4); }
+  70%  { transform: scale(1.15);}
+  100% { transform: scale(1);   }
+}
+
+.medal.bounce {
+  animation: bounceMedal 0.5s ease;
+}
+
+/* Soft glow on active bounce */
+.medal.active.bounce {
+  filter: drop-shadow(0 0 4px rgba(255, 215, 0, 0.7));
+}
+
+/* Mobile adjustments */
+@media (max-width: 600px) {
+  .rep-vote-card {
+    padding: 12px;
+  }
+  .proposal-comment-avatar {
+    width: 40px;
+    height: 40px;
+  }
+  .rep-member {
+    padding: 12px 10px;
+  }
+  .rep-member .medal {
+    font-size: 1.3rem;
+  }
+}
+
+
 
 .proposal-comment-avatar {
   width: 46px;
@@ -177,44 +151,6 @@ body {
   flex-shrink: 0;
 }
 
-.rep-member .name {
-  flex: 1;                      /* stretch to fill space between avatar and medal */
-  margin-left: 12px;
-  font-size: 1rem;
-  font-weight: 500;
-  color: #222;
-  display: flex;
-  align-items: center;          /* vertical centering */
-}
-
-.rep-member .medal {
-  font-size: 1.5rem;
-  min-width: 1.8rem;
-  text-align: center;
-  opacity: 0.1;
-  transition: opacity 0.3s ease, transform 0.3s ease;
-}
-
-.rep-member .medal:not(.dimmed) {
-  opacity: 1;
-}
-
-/* Bounce animation for highlight */
-@keyframes bounceMedal {
-  0%   { transform: scale(1); }
-  40%  { transform: scale(1.4); }
-  70%  { transform: scale(1.15); }
-  100% { transform: scale(1); }
-}
-
-.medal.bounce {
-  animation: bounceMedal 0.5s ease;
-}
-
-/* Optional glow on highlight */
-.medal:not(.dimmed).bounce {
-  filter: drop-shadow(0 0 4px rgba(255, 215, 0, 0.8));
-}
 
 .vote-btn.active {
     background: #4CAF50 !important;
