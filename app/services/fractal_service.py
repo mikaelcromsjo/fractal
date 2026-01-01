@@ -11,7 +11,6 @@ import asyncio
 
 
 from repositories.fractal_repos import (
-    vote_representative,
     get_rep_votes_for_round_repo,
     save_rep_vote_repo,
     get_representatives_for_group_repo,
@@ -635,9 +634,8 @@ async def get_proposal_comments_tree(db: AsyncSession, proposal_id: int):
 # Representative Selection
 # ----------------------------
 
-#async def vote_representative(db: AsyncSession, group_id: int, voter_user_id: int, candidate_user_id: int):
-#    # You can add extra logic here, e.g., check if voter belongs to the group
-#    return await vote_representative_repo(db, group_id, voter_user_id, candidate_user_id)
+async def vote_representative(db: AsyncSession, group_id: int, voter_user_id: int, candidate_user_id: int):
+    return await vote_representative_repo(db, group_id, voter_user_id, candidate_user_id)
 
 
 # app/services/representative_service.py
