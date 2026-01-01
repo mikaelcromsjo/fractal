@@ -529,11 +529,10 @@ async def get_rep_votes_for_round_repo(db: AsyncSession, group_id: int):
     )
     return result.scalars().all()
 
-async def get_user_rep_points_used_repo(db: AsyncSession, group_id: int, round_id: int, voter_id: int):
+async def get_user_rep_points_repo(db: AsyncSession, group_id: int, voter_id: int):
     result = await db.execute(
-        select(func.sum(RepresentativeVote.points))
+        select(RepresentativeVote)
         .where(RepresentativeVote.group_id == group_id)
-        .where(RepresentativeVote.round_id == round_id)
         .where(RepresentativeVote.voter_user_id == voter_id)
     )
     return result.scalar() or 0
