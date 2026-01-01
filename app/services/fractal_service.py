@@ -901,8 +901,9 @@ async def rep_vote_card(db: AsyncSession, user_id: int, group_id: int) -> str:
     ]
 
     for m in members:
+        user = get_user(m.id)
         points = vote_map.get(m.user_id, 0)
-        medal, dimmed = "", "dimmed"
+        medal, dimmed = "🥉", "dimmed"
 
         if points == 3:
             medal, dimmed = "🥇", ""
@@ -916,8 +917,8 @@ async def rep_vote_card(db: AsyncSession, user_id: int, group_id: int) -> str:
 
         html.append(f"""
             <div class="rep-member" data-user-id="{m.user_id}">
-                <img src="{avatar}" alt="">
-                <span class="name">{getattr(m, 'username', f'User {m.user_id}')}</span>
+                <img src="{avatar}" alt="" class="proposal-comment-avatar">
+                <span class="name">{user.username}</span>
                 <span class="medal {dimmed}">{medal}</span>
             </div>
         """)
