@@ -535,7 +535,7 @@ async def get_user_rep_points_repo(db: AsyncSession, group_id: int, voter_id: in
         .where(RepresentativeVote.group_id == group_id)
         .where(RepresentativeVote.voter_user_id == voter_id)
     )
-    return result.scalar() or 0
+    return result.scalars().all()
 
 
 
