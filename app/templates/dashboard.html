@@ -111,11 +111,6 @@ body {
   background: #f9f9f9;
 }
 
-/* Optional: fadeout for disabled state */
-.member-row.disabled {
-  opacity: 1;
-  pointer-events: none;
-}
 
 /* Responsive adjustments for mobile */
 @media (max-width: 600px) {
@@ -148,12 +143,29 @@ body {
   cursor: pointer;
 }
 
+/* medals start slightly transparent */
+.rep-member .medal {
+  font-size: 1.5rem;
+  min-width: 1.8rem;
+  text-align: center;
+  opacity: 0.6;                     /* ← initial semi-visible state */
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+
+.rep-member .medal.active {
+  opacity: 1;                       /* ← fully visible when voted */
+}
+
+.medal.active.bounce {
+  filter: drop-shadow(0 0 4px rgba(255, 215, 0, 0.7));
+}
+
 .rep-member:not(.disabled):hover {
   background: #fafafa;
 }
 
 .rep-member.disabled {
-  opacity: 0.6;
+  opacity: 1;
   pointer-events: none;
 }
 
@@ -1631,35 +1643,27 @@ async function vote_rep(e, groupId) {
 
   const candidateId = parseInt(memberEl.dataset.userId);
 
-  // Remove dim from current medal for this rank, dim old one if already selected
+  // reset previous for same rank
   if (votedCandidates[currentRepPoints]) {
     const oldRow = document.querySelector(`.rep-member[data-user-id="${votedCandidates[currentRepPoints]}"]`);
-    if (oldRow) {
-      const oldMedal = oldRow.querySelector(".medal");
-      if (oldMedal) oldMedal.classList.add("dimmed");
-    }
+    if (oldRow) oldRow.querySelector(".medal")?.classList.remove("active");
   }
 
-  // 🏅 Get or create medal inside this row
+  // create medal if not present
   let medal = memberEl.querySelector(".medal");
   if (!medal) {
     medal = document.createElement("span");
-    medal.className = "medal dimmed";
+    medal.className = "medal";
     memberEl.appendChild(medal);
   }
 
-  // Set the correct medal icon for currentRepPoints
-  const medalIcons = { 3: "🥇", 2: "🥈", 1: "🥉" };
-  medal.textContent = medalIcons[currentRepPoints] || "";
-
-  // Animate & highlight it
-  medal.classList.remove("dimmed");
-  medal.classList.add("bounce"); // trigger bounce animation
-  setTimeout(() => medal.classList.remove("bounce"), 500); // remove after animation completes
+  const medalIcons = {3: "🥇", 2: "🥈", 1: "🥉"};
+  medal.textContent = medalIcons[currentRepPoints];
+  medal.classList.add("active", "bounce");
+  setTimeout(() => medal.classList.remove("bounce"), 500);
 
   votedCandidates[currentRepPoints] = candidateId;
 
-  // Send vote to backend
   const payload = {
     group_id: groupId,
     round_id: currentRoundId,
@@ -1671,31 +1675,23 @@ async function vote_rep(e, groupId) {
   try {
     const res = await fetch("/api/v1/fractals/vote_representative", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {"Content-Type": "application/json"},
       body: JSON.stringify(payload),
     });
 
     const result = await res.json();
     if (!result.ok) throw new Error("Vote not accepted");
 
-    console.log(`✅ Voted ${currentRepPoints} points for user ${candidateId}`);
-
-    // Move to next point value (🥇→🥈→🥉)
     currentRepPoints -= 1;
-
-    // All medals assigned → disable further clicks
     if (currentRepPoints === 0) {
+      document.querySelector(".instructions").textContent = "✅ All votes submitted.";
       document.querySelectorAll(".rep-member").forEach(el => el.classList.add("disabled"));
-      const instr = document.querySelector(".instructions");
-      if (instr) instr.textContent = "✅ Your representative votes are submitted.";
     }
   } catch (err) {
     console.error("Voting error:", err);
-    medal.classList.add("dimmed");
     alert("Vote failed. Please try again.");
   }
 }
-
     </script>
 </%text>
 
