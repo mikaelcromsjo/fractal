@@ -1475,7 +1475,7 @@ async function onVoteClick(row, candidateId) {
   const payload = {
     group_id: currentGroupId,
     round_id: currentRoundId,
-    voter_user_id: tg.initDataUnsafe.user.id,
+    voter_user_id: currentUserId,
     candidate_user_id: parseInt(candidateId),
     points: points
   };
