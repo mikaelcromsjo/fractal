@@ -905,7 +905,7 @@ async def rep_vote_card(db: AsyncSession, user_id: int, group_id: int) -> str:
             continue
         user = await get_user(db, m.user_id)
         points = vote_map.get(m.user_id, 0)
-        medal, dimmed = "🥉", "dimmed"
+        medal, dimmed = "", "dimmed"
 
         if points == 3:
             medal, dimmed = "🥇", ""
