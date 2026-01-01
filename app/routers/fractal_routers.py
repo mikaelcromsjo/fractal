@@ -24,7 +24,7 @@ from typing import Dict, List
 
 # Service imports - replace direct DB access
 from services.fractal_service import (
-
+    vote_representative,
     rep_vote_card,
     create_fractal,
     create_user,
@@ -517,19 +517,29 @@ async def select_representative_endpoint(
 #    vote = await vote_representative(db, group_id, voter_user_id, candidate_user_id)
 #    return JSONResponse(content={"ok": True, "vote": orm_to_dict(vote)})
 
+class VoteRepresentativePayload(BaseModel):
+    group_id: int
+    round_id: int
+    voter_user_id: int
+    candidate_user_id: int
+    points: int
 
 @router.post("/vote_representative")
 async def vote_representative_endpoint(
-    group_id: int = Query(...),
-    round_id: int = Query(...),
-    voter_id: int = Query(...),
-    candidate_id: int = Query(...),
-    points: int = Query(..., ge=1, le=3),
+    payload: VoteRepresentativePayload,
     db: AsyncSession = Depends(get_db)
 ):
-    """Fixed: Query params + validation"""
-    vote = await vote_representative_repo(db, group_id, round_id, voter_id, candidate_id, points)
-    return {"status": "ok", "vote": orm_to_dict(vote)}
+    data = payload.dict()
+    vote = await vote_representative_repo(
+        db=db,
+        group_id=data["group_id"],
+        round_id=data["round_id"],
+        voter_user_id=data["voter_user_id"],
+        candidate_user_id=data["candidate_user_id"],
+        points=data["points"],
+    )
+    return {"ok": True, "vote": orm_to_dict(vote)}
+
 
 @router.get("/rep_results/{group_id}/{round_id}")
 async def get_rep_results(group_id: int, round_id: int, db: AsyncSession = Depends(get_db)):
