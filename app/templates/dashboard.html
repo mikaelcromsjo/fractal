@@ -88,7 +88,7 @@ body {
 }
 
 .dimmed {
-  transition: transform 0.2s, opacity 0.2s;
+  transition: transform 0.s, opacity 0.1s;
 }
 
 /* Medal area */
@@ -113,7 +113,7 @@ body {
 
 /* Optional: fadeout for disabled state */
 .member-row.disabled {
-  opacity: 0.5;
+  opacity: 1;
   pointer-events: none;
 }
 
@@ -179,7 +179,7 @@ body {
   font-size: 1.5rem;
   min-width: 1.8rem;
   text-align: center;
-  opacity: 0.4;
+  opacity: 0.1;
   transition: opacity 0.3s ease, transform 0.3s ease;
 }
 
@@ -1364,6 +1364,7 @@ async function connectWS() {
                 if (data.type === 'half_time' && data.message) {
                     console.log(data.message);
                     addCardDiv(data.message)
+                    get_rep_vote_card(currentGroupId)
                 }
 
                 if (data.type === 'end' && data.message) {
