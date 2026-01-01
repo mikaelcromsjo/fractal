@@ -528,7 +528,7 @@ async def vote_representative_endpoint(
     db: AsyncSession = Depends(get_db)
 ):
     """Fixed: Query params + validation"""
-    vote = await vote_representative(db, group_id, round_id, voter_id, candidate_id, points)
+    vote = await vote_representative_repo(db, group_id, round_id, voter_id, candidate_id, points)
     return {"status": "ok", "vote": orm_to_dict(vote)}
 
 @router.get("/rep_results/{group_id}/{round_id}")
