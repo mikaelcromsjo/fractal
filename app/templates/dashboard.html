@@ -801,7 +801,7 @@ function getNextCard() {
 
 
     if(fractalStatus != "open"){
-        getAllCards();
+        await getAllCards();
         getRepVoteCard(currentGroupId);
         return;
     }
@@ -830,7 +830,7 @@ function getNextCard() {
                 addCard(html);
             }
             else {
-                getAllCards();
+                await getAllCards();
                 getRepVoteCard(currentGroupId);
 
             }
@@ -932,7 +932,7 @@ function addCardDiv(html) {
 document.body.addEventListener('noMoreCards', function() {
     noMoreCards = true;
     console.log('No more cards available');
-    getAllCards();
+    await getAllCards();
     getRepVoteCard(currentGroupId);
 });
 
@@ -1418,7 +1418,7 @@ async function initRepresentativeVote() {
 
   const instructions = document.createElement("div");
   instructions.className = "instructions";
-  instructions.textContent = "Select representative: 🥇 first, 🥈 second, 🥉 third";
+  instructions.textContent = "Group Representative: 🥇 first, 🥈 second, 🥉 third";
 
   const listContainer = document.createElement("div");
   listContainer.id = "members-list";
