@@ -896,14 +896,14 @@ async def rep_vote_card(db: AsyncSession, user_id: int, group_id: int) -> str:
     vote_map = {v.candidate_user_id: v.points for v in votes}
 
     html = [
-        "<div class='rep-vote-card'>",
+        "<div class='proposal-card rep-vote-card'>",
         "<div class='instructions'>Select representative: 🥇 🥈 🥉</div>",
     ]
 
     for m in members:
-        if m.id == user_id:
-            continue
         user = await get_user(db, m.user_id)
+        if user.id == user_id:
+            continue
         points = vote_map.get(m.user_id, 0)
         medal, dimmed = "", "dimmed"
 

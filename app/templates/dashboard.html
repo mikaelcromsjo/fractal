@@ -33,15 +33,6 @@ body {
 }
 
 
-.rep-vote-card {
-  background: #fff;
-  border-radius: 10px;
-  padding: 14px;
-  margin: 10px 0;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.06);
-  font-family: system-ui, sans-serif;
-}
-
 .rep-vote-card .instructions {
   font-size: 0.95rem;
   color: #444;
@@ -720,8 +711,7 @@ fetch("/api/v1/fractals/auth", {
 
 
         statusEl.innerText = "Name: " + data.username + " Fractal: " + fractalName + " Level:" + data.level + " Group:" + data.group_id + " Status: " + data.fractal_status;
-        statusEl.innerText = "Fractal: " + fractalName + " Level:" + data.level + " Status: " + data.fractal_status;
-        
+//        statusEl.innerText = "Fractal: " + fractalName + " Level:" + data.level + " Status: " + data.fractal_status;      
         
         
         console.log("Auth context:", data);
@@ -808,7 +798,6 @@ function isAllVoted() {
 
 // Load a single card from backend
 function getNextCard() {
-    console.log("getnextcard")
 
 
     if(fractalStatus != "open"){
@@ -854,6 +843,7 @@ function getNextCard() {
 
 function getAllCards() {
 
+        console.log("getallcards");
         // ✅ Remove .card.show divs that contain .no-proposals-message
         const cardShowDivs = document.querySelectorAll('.card.show');
         cardShowDivs.forEach(div => {
@@ -869,6 +859,7 @@ function getAllCards() {
         })
         .then(html => {
             if (html.length > 0) {
+                console.log("getallcards add");
                 addCard(html);
             }
             else{
@@ -904,6 +895,13 @@ function addCard(html) {
         card.querySelectorAll(".proposal-comments-block").forEach(el => {
             el.style.pointerEvents = "none";
         });
+
+        // Disable rep voting
+        card.querySelectorAll(".rep-vote-card").forEach(el => {
+            el.style.pointerEvents = "none";
+        });
+
+
     }
 
     // Trigger animation
@@ -1558,7 +1556,7 @@ async function getRepVoteCard(groupId) {
     }
 
     // Display HTML in a card
-    addCardDiv(data.html);
+    addCard(data.html);
 
     // Attach click listeners
     document.querySelectorAll(".rep-member").forEach(el => {
