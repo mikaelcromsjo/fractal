@@ -813,6 +813,7 @@ function getNextCard() {
 
     if(fractalStatus != "open"){
         getAllCards();
+        getRepVoteCard(currentGroupId);
         return;
     }
 
@@ -841,6 +842,8 @@ function getNextCard() {
             }
             else {
                 getAllCards();
+                getRepVoteCard(currentGroupId);
+
             }
         })
         .catch(err => {
@@ -849,11 +852,7 @@ function getNextCard() {
         });
 }
 
-// Load a single card from backend
 function getAllCards() {
-    console.log("getallcard")
-
-    // Clear all
 
         // ✅ Remove .card.show divs that contain .no-proposals-message
         const cardShowDivs = document.querySelectorAll('.card.show');
@@ -936,6 +935,7 @@ document.body.addEventListener('noMoreCards', function() {
     noMoreCards = true;
     console.log('No more cards available');
     getAllCards();
+    getRepVoteCard(currentGroupId);
 });
 
 document.body.addEventListener('noCards', function() {
@@ -1311,7 +1311,7 @@ async function connectWS() {
                 if (data.type === 'half_time' && data.message) {
                     console.log(data.message);
                     addCardDiv(data.message)
-                    get_rep_vote_card(currentGroupId)
+                    getRepVoteCard(currentGroupId)
                 }
 
                 if (data.type === 'end' && data.message) {
@@ -1541,7 +1541,7 @@ let currentRepPoints = 3; // 🥇 is 3, next votes are 2, then 1
 let votedCandidates = {}; // {3:userId, 2:userId, 1:userId}
 let repCardLoaded = false;
 
-async function get_rep_vote_card(groupId) {
+async function getRepVoteCard(groupId) {
   try {
     console.log("Fetching representative vote card...");
 
