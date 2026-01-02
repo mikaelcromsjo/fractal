@@ -431,7 +431,7 @@ async def close_round(db: AsyncSession, fractal_id: int):
     text = "ℹ️ The round has ended!"
     for g in groups:
         await send_message_to_group(db, g.id, text)
-        await send_message_to_web_app_group(db, g.id, text)
+        await send_message_to_web_app_group(db, g.id, text, "end")
 
     # Step 1: Mark round as closed
     round_obj = await close_round_repo(db, fractal_id)
@@ -897,7 +897,7 @@ async def rep_vote_card(db: AsyncSession, user_id: int, group_id: int) -> str:
 
     html = [
         "<div class='proposal-card rep-vote-card'>",
-        "<div class='instructions'>Select representative: 🥇 🥈 🥉</div>",
+        "<div class='instructions'>Group Representative: 🥇 🥈 🥉</div>",
     ]
 
     for m in members:
