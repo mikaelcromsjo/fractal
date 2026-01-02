@@ -153,7 +153,8 @@ async def handle_inline_share(query: InlineQuery):
         f"📝 {sanitize_text(fractal.description)}\n\n"
         f"📅 {start_date}\n\n"
         f"{format_international_times(fractal.start_date, round_time)}\n\n"
-        f"🔄 {round_time} rounds • t.me/FractalCircleBot"
+        f"🔄 {round_time} rounds\n\n"
+        f"⚡️ Share this link `https://t.me/{settings.bot_username}?start=fractal_{fractal_id}`"
     )
 
     await query.answer(
@@ -503,7 +504,8 @@ async def cmd_start(message: types.Message, state: FSMContext):
                     f"📝 {sanitize_text(fractal.description)}\n\n"
                     f"📅 {start_date_formatted}\n\n"  # Date only
                     f"{international_times}\n\n"    # Times only
-                    f"🔄 {round_time} rounds",
+                    f"🔄 {round_time} rounds\n\n"
+                    f"⚡️ Share this link `https://t.me/{settings.bot_username}?start=fractal_{fractal_id}`",
                     reply_markup=button, 
                     parse_mode=None
                 )

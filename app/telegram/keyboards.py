@@ -121,9 +121,10 @@ def share_to_group_button(fractal_id: int) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
+                
                 InlineKeyboardButton(
-                    text="🚀 Show Fractal",
-                    url=f"https://t.me/{settings.bot_username}?start=fractal_{fractal_id}"
+                    text="🙋 Join Fractal",
+                    callback_data=f"join:{fractal_id}"
                 )
             ],
             [
