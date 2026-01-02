@@ -869,6 +869,7 @@ async def get_user_info_by_telegram_id_repo(
         .join(GroupMember, Group.id == GroupMember.group_id)
         .where(
             Group.fractal_id == fractal_id,
+            Group.round_id == last_round.id,
             GroupMember.user_id == user_id,
 #            GroupMember.left_at.is_(None),  # currently in group
         )
