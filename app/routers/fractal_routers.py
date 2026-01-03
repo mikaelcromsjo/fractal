@@ -24,7 +24,7 @@ from typing import Dict, List
 
 # Service imports - replace direct DB access
 from services.fractal_service import (
-    vote_representative,
+    vote_representative_repo,
     rep_vote_card,
     create_fractal,
     create_user,
