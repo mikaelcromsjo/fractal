@@ -634,8 +634,8 @@ async def get_proposal_comments_tree(db: AsyncSession, proposal_id: int):
 # Representative Selection
 # ----------------------------
 
-async def vote_representative(db: AsyncSession, group_id: int, voter_user_id: int, candidate_user_id: int):
-    return await vote_representative_repo(db, group_id, voter_user_id, candidate_user_id)
+#async def vote_representative(db: AsyncSession, group_id: int, voter_user_id: int, candidate_user_id: int):
+#    return await vote_representative_repo(db, group_id, voter_user_id, candidate_user_id)
 
 
 # app/services/representative_service.py
@@ -893,8 +893,8 @@ async def round_half_way_service(db, fractal_id: int):
 async def rep_vote_card(db: AsyncSession, user_id: int, group_id: int) -> str:
 
 
-    group = await get_group_repo(group_id)
-    round = await get_round_repo(group.round_id)
+    group = await get_group_repo(db, group_id)
+    round = await get_round_repo(db, group.round_id)
     if (round.status != "open"):
         # if round is closed return the representatives total score
         reps = await get_representatives_for_group_repo(db, group_id, round.id)
