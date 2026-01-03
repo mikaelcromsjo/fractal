@@ -44,7 +44,7 @@ from services.fractal_service import (
     create_comment,
     vote_proposal,
     vote_comment,
-    vote_representative,
+    vote_representative_repo,
     get_proposals_comments_tree,
     get_proposal_comments_tree,
     get_user_by_telegram_id,
@@ -400,7 +400,7 @@ async def dashboard_command(message: types.Message):
                     text="🚀 Open Dashboard",
                     web_app=WebAppInfo(url=dashboard_url),
                 )   
-         ]
+        ]
     ])
     
     await message.answer(
