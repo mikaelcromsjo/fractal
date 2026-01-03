@@ -390,9 +390,9 @@ from telegram.keyboards import default_menu  # adjust import to your structure
 from aiogram.types import BotCommand, MenuButtonCommands
 
 
-@router.message(commands=["dashboard"])
+@router.message(Command=["dashboard"])
 async def dashboard_command(message: types.Message):
-    dashboard_url = f"{settings.public_base_url}/api/v1/fractals/dashboard?fractal_id={fractal_id}"
+    dashboard_url = f"{settings.public_base_url}/api/v1/fractals/dashboard"
 
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="🚀 Open Dashboard", url=dashboard_url)]
@@ -1142,7 +1142,7 @@ async def cmd_rep(message: types.Message):
             else:
                 candidate_id = int(arg)
             user = get_user(message.from_user_id)
-            await vote_representative(db=db, group_id=user["group_id"], voter_user_id=user["user_id"], candidate_user_id=candidate_id)
+            await vote_representative_repo(db=db, group_id=user["group_id"], voter_user_id=user["user_id"], candidate_user_id=candidate_id)
             await message.answer("Representative vote recorded.")
         except Exception as e:
             logger.exception("vote representative failed")
