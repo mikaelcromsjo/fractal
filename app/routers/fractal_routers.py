@@ -527,6 +527,72 @@ class VoteRepresentativePayload(BaseModel):
     candidate_user_id: int
     points: int
 
+@router.post("/test/generate_representative_votes")
+async def test_generate_representative_votes(fractal_id: int, db: AsyncSession = Depends(get_db)):
+    """
+    For every group in the latest round, every member votes on every other member:
+    - Highest user_id gets 3 points from everyone
+    - Two other members get 2 and 1 point each
+    """
+    round_obj = await get_last_round_repo(db, fractal_id)
+    groups = await get_groups_for_round(db, round_obj.id)
+    
+    votes = []
+    
+    for g in groups:
+        members = await get_group_members(db, g.id)
+        member_ids = sorted([m.user_id for m in members])  # sort by user_id
+        
+        if len(member_ids) < 2:
+            continue
+            
+        # highest gets 3 from everyone
+        highest_id = member_ids[-1]
+        
+        for voter_id in member_ids:
+            # voter always gives 3 to highest
+            vote = await vote_representative_repo(
+                db=db,
+                group_id=g.id,
+                round_id=round_obj.id,
+                voter_user_id=voter_id,
+                candidate_user_id=highest_id,
+                points=3,
+            )
+            votes.append(vote)
+            
+            # skip if voter is the highest (no additional votes needed)
+            if voter_id == highest_id:
+                continue
+                
+            # pick two other candidates randomly or by index
+            other_candidates = [uid for uid in member_ids if uid != voter_id and uid != highest_id]
+            if len(other_candidates) >= 2:
+                c1, c2 = other_candidates[:2]  # or random.sample(other_candidates, 2)
+                # 2 points to first other
+                vote2 = await vote_representative_repo(
+                    db=db,
+                    group_id=g.id,
+                    round_id=round_obj.id,
+                    voter_user_id=voter_id,
+                    candidate_user_id=c1,
+                    points=2,
+                )
+                votes.append(vote2)
+                # 1 point to second other
+                vote3 = await vote_representative_repo(
+                    db=db,
+                    group_id=g.id,
+                    round_id=round_obj.id,
+                    voter_user_id=voter_id,
+                    candidate_user_id=c2,
+                    points=1,
+                )
+                votes.append(vote3)
+    
+    await db.commit()
+    return {"ok": True, "votes": len(votes)}
+
 @router.post("/vote_representative")
 async def vote_representative_endpoint(
     payload: VoteRepresentativePayload,
@@ -737,6 +803,38 @@ async def test_rep_votes(fractal_id: int, db: AsyncSession = Depends(get_db)):
     
     await db.commit()
     return {"ok": True, "rep_votes": "generated"}
+
+
+@router.post("/test/generate_comments")
+async def test_generate_comments(fractal_id: int, db: AsyncSession = Depends(get_db)):
+    """
+    Generate one comment per member per proposal in each group of the latest round.
+    """
+    round_obj = await get_last_round_repo(db, fractal_id)
+    groups = await get_groups_for_round(db, round_obj.id)
+    
+    comments = []
+    
+    for g in groups:
+        members = await get_group_members(db, g.id)
+        member_ids = [m.user_id for m in members]
+        
+        proposals = await get_proposals_for_group_repo(db, g.id)
+        
+        for p in proposals:
+            for commenter_id in member_ids:
+                c = await create_comment(
+                    db=db,
+                    proposal_id=p.id,
+                    user_id=commenter_id,
+                    text=f"Comment on proposal {p.id} by user {commenter_id}",
+                    parent_comment_id=None,
+                    group_id=g.id,
+                )
+                comments.append(c)
+    
+    await db.commit()
+    return {"ok": True, "comments": len(comments)}
 
 @router.post("/test/full_simulation")
 async def test_full_simulation(num_users: int = 25, db: AsyncSession = Depends(get_db)):

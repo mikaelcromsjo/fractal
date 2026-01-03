@@ -891,40 +891,73 @@ async def round_half_way_service(db, fractal_id: int):
     await set_round_status_repo(db, round.id, "vote")
 
 async def rep_vote_card(db: AsyncSession, user_id: int, group_id: int) -> str:
-    members = await get_group_members_repo(db, group_id)
-    votes = await get_user_rep_points_repo(db, group_id, user_id)
-    vote_map = {v.candidate_user_id: v.points for v in votes}
 
-    html = [
-        "<div class='proposal-card rep-vote-card'>",
-        "<div class='instructions'>Group Representative: 🥇 🥈 🥉</div>",
-    ]
 
-    for m in members:
-        user = await get_user(db, m.user_id)
-        if user.id == user_id:
-            continue
-        points = vote_map.get(m.user_id, 0)
-        medal, dimmed = "", "dimmed"
+    group = await get_group_repo(group_id)
+    round = await get_round_repo(group.round_id)
+    if (round.status != "open"):
+        # if round is closed return the representatives total score
+        reps = await get_representatives_for_group_repo(db, group_id, round.id)
+        if not reps:
+            return "<div class='proposal-card rep-vote-card'><div class='instructions'>No representatives chosen.</div></div>"
 
-        if points == 3:
-            medal, dimmed = "🥇", ""
-        elif points == 2:
-            medal, dimmed = "🥈", ""
-        elif points == 1:
-            medal, dimmed = "🥉", ""
+        html = [
+            "<div class='proposal-card rep-vote-card'>",
+            "<div class='instructions'>Group Representatives 🥇 🥈 🥉</div>",
+        ]
 
-        # avatar image based on user_id mod 16
-        avatar = f"/static/img/64_{(m.user_id % 16) + 1}.png"
+        for rank, user_id in reps.items():
+            user = await get_user(db, user_id)
+            avatar = f"/static/img/64_{(user_id % 16) + 1}.png"
+            medal = {1: "🥇", 2: "🥈", 3: "🥉"}.get(rank, "")
+            html.append(f"""
+                <div class="rep-member">
+                    <img src="{avatar}" alt="" class="proposal-comment-avatar">
+                    <span class="name">{user.username}</span>
+                    <span class="medal">{medal}</span>
+                </div>
+            """)
 
-        html.append(f"""
-            <div class="rep-member" data-user-id="{m.user_id}">
-                <img src="{avatar}" alt="" class="proposal-comment-avatar">
-                <span class="name">{user.username}</span>
-                <span class="medal {dimmed}">{medal}</span>
-            </div>
-        """)
+        html.append("</div>")
+        return "\n".join(html)        
 
-    html.append("</div>")
-    return "\n".join(html)
+    else:
+        # if round open return vore card
+        
+        members = await get_group_members_repo(db, group_id)
+        votes = await get_user_rep_points_repo(db, group_id, user_id)
+        vote_map = {v.candidate_user_id: v.points for v in votes}
+
+        html = [
+            "<div class='proposal-card rep-vote-card'>",
+            "<div class='instructions'>Group Representative: 🥇 🥈 🥉</div>",
+        ]
+
+        for m in members:
+            user = await get_user(db, m.user_id)
+            if user.id == user_id:
+                continue
+            points = vote_map.get(m.user_id, 0)
+            medal, dimmed = "", "dimmed"
+
+            if points == 3:
+                medal, dimmed = "🥇", ""
+            elif points == 2:
+                medal, dimmed = "🥈", ""
+            elif points == 1:
+                medal, dimmed = "🥉", ""
+
+            # avatar image based on user_id mod 16
+            avatar = f"/static/img/64_{(m.user_id % 16) + 1}.png"
+
+            html.append(f"""
+                <div class="rep-member" data-user-id="{m.user_id}">
+                    <img src="{avatar}" alt="" class="proposal-comment-avatar">
+                    <span class="name">{user.username}</span>
+                    <span class="medal {dimmed}">{medal}</span>
+                </div>
+            """)
+
+        html.append("</div>")
+        return "\n".join(html)
 

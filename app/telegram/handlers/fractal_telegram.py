@@ -389,6 +389,20 @@ def sanitize_text(s: str) -> str:
 from telegram.keyboards import default_menu  # adjust import to your structure
 from aiogram.types import BotCommand, MenuButtonCommands
 
+
+@router.message(commands=["dashboard"])
+async def dashboard_command(message: types.Message):
+    dashboard_url = f"{settings.public_base_url}/api/v1/fractals/dashboard?fractal_id={fractal_id}"
+
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🚀 Open Dashboard", url=dashboard_url)]
+    ])
+    
+    await message.answer(
+        text="Here’s your Fractal Dashboard:",
+        reply_markup=keyboard
+    )
+
 @router.message(Command("invite"), F.chat.type.in_([ChatType.GROUP, ChatType.SUPERGROUP]))
 async def cmd_invite_group(message: types.Message):
     fractal_id = int(message.text.split()[1])
@@ -427,6 +441,7 @@ async def cmd_start(message: types.Message, state: FSMContext):
     commands = [
         BotCommand(command="start", description="Start Menu"),
         BotCommand(command="help", description="Information"),
+        BotCommand(command="dashboard", description="Dashboard"),
     ]
     await bot.set_my_commands(commands)
     
