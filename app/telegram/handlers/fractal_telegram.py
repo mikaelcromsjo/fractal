@@ -152,7 +152,7 @@ async def handle_inline_share(query: InlineQuery):
         f"🎉 Click to Join Fractal Meeting: \"{sanitize_text(fractal.name)}\"\n\n"
         f"📝 {sanitize_text(fractal.description)}\n\n"
         f"📅 {start_date}\n\n"
-        f"{format_international_times(fractal.start_date, round_time)}\n\n"
+        f"{format_international_times(fractal.start_date.isoformat(), round_time)}\n\n"
         f"🔄 {round_time} rounds\n\n"
         f"⚡️ Share this link `https://t.me/{settings.bot_username}?start=fractal_{fractal_id}`"
     )
@@ -474,7 +474,7 @@ async def cmd_start(message: types.Message, state: FSMContext):
                     )
                     
                     await message.answer(
-                        f"❌ Cannot join Fractal Meeting: \"{sanitize_text(fractal.name)}\"\n\n"
+                        f"❌ The Fractal is not open: \"{sanitize_text(fractal.name)}\"\n\n"
                         f"📝 {sanitize_text(fractal.description)}\n\n"
                         f"📅 {start_date}\n"
                         f"{international_times}\n\n"
