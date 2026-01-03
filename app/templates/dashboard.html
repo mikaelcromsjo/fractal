@@ -713,12 +713,14 @@ fetch("/api/v1/fractals/auth", {
         statusEl.innerText = "Name: " + data.username + " Fractal: " + fractalName + " Level:" + data.level + " Group:" + data.group_id + " Status: " + data.fractal_status;
 //        statusEl.innerText = "Fractal: " + fractalName + " Level:" + data.level + " Status: " + data.fractal_status;      
         
-        
         console.log("Auth context:", data);
 
 
         if (!currentGroupId){
             addCardDiv('You are not in any active group at the moment. <p>'+fractalName+'<p>'+fractalDescription+'<p>Round Time: ' + fractalRoundTime +' minutes<p>Start Date: '+fractalStartDate+'');
+            fractalStatus = "closed";
+        } else {
+            lastGroupId == currentGroupId
         }
         console.log(currentLevel)
         console.log(fractalStatus)
@@ -1294,11 +1296,6 @@ async function connectWS() {
                     onNewCardsWebhook();
                 }
 
-                if (data.type === 'start' && data.message) {
-                    addCardDiv(data.message)
-                    onNewCardsWebhook();
-                }
-
                 if (data.type === 'refresh' && data.message) {
                     console.log(data.message);
                     if (data.message != currentUserId)
@@ -1308,7 +1305,6 @@ async function connectWS() {
                 if (data.type === 'half_time' && data.message) {
                     console.log(data.message);
                     addCardDiv(data.message)
-                    getRepVoteCard(currentGroupId)
                 }
 
                 if (data.type === 'end' && data.message) {

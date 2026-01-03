@@ -24,6 +24,7 @@ from typing import Dict, List
 
 # Service imports - replace direct DB access
 from services.fractal_service import (
+    get_proposals_for_group_repo,
     vote_representative_repo,
     rep_vote_card,
     create_fractal,
@@ -546,8 +547,8 @@ async def test_generate_representative_votes(fractal_id: int, db: AsyncSession =
         if len(member_ids) < 2:
             continue
             
-        # highest gets 3 from everyone
-        highest_id = member_ids[-1]
+        # lowest gets 3 from everyone
+        highest_id = member_ids[0]
         
         for voter_id in member_ids:
             # voter always gives 3 to highest
