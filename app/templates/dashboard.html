@@ -89,7 +89,7 @@ body {
   font-size: 1.5rem;
   min-width: 1.8rem;
   text-align: center;
-  opacity: 0.6;                                /* start dimmed */
+  opacity: 1;                                /* start dimmed */
   transition: opacity 0.25s ease, transform 0.25s ease;
 }
 
@@ -1458,10 +1458,17 @@ async function vote_rep(e, groupId) {
   const candidateId = parseInt(memberEl.dataset.userId);
 
   // reset previous for same rank
-  if (votedCandidates[currentRepPoints]) {
-    const oldRow = document.querySelector(`.rep-member[data-user-id="${votedCandidates[currentRepPoints]}"]`);
-    if (oldRow) oldRow.querySelector(".medal")?.classList.remove("active");
-  }
+//  if (votedCandidates[currentRepPoints]) {
+//    const oldRow = document.querySelector(`.rep-member[data-user-id="${votedCandidates[currentRepPoints]}"]`);
+//    if (oldRow) oldRow.querySelector(".medal")?.classList.remove("active");
+//  }
+
+    // reset previous for same rank
+    if (currentRepPoints==3) {
+        document.querySelectorAll(".rep-member").forEach(
+            el.querySelector(".medal")?.textContent = ""
+        );
+    }
 
   // create medal if not present
   let medal = memberEl.querySelector(".medal");
