@@ -395,7 +395,12 @@ async def dashboard_command(message: types.Message):
     dashboard_url = f"{settings.public_base_url}/api/v1/fractals/dashboard"
 
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🚀 Open Dashboard", url=dashboard_url)]
+
+        [        InlineKeyboardButton(
+                    text="🚀 Open Dashboard",
+                    web_app=WebAppInfo(url=dashboard_url),
+                )   
+         ]
     ])
     
     await message.answer(
