@@ -390,7 +390,7 @@ from telegram.keyboards import default_menu  # adjust import to your structure
 from aiogram.types import BotCommand, MenuButtonCommands
 
 
-@router.message(Command=["dashboard"])
+@router.message(Command("dashboard"))
 async def dashboard_command(message: types.Message):
     dashboard_url = f"{settings.public_base_url}/api/v1/fractals/dashboard"
 
