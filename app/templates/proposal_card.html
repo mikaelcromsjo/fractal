@@ -81,6 +81,8 @@
                             comment_vote = int(comment.get('vote') or 0)
                             comment_user_id = comment.get('user_id', 0)
                             is_hidden = i >= visible_count and comment_vote != 0
+                            comment_total_score = int(comment.get('total_score') or 0)
+
                         %>
 
                         <!-- Comment Row -->
@@ -120,6 +122,15 @@
                                         </div>
                                     </div>
                                     % endif
+                                    % if comment_total_score:
+                                    <div class="">
+                                        <div class=""
+                                             id="">
+                                             ${comment_total_score}
+                                        </div>
+                                    </div>
+                                    % endif
+                                    
                                 </div>
                                 <div class="proposal-comment-text">
                                     ${comment.get('text','')}
