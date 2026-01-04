@@ -525,7 +525,7 @@ async def cmd_start(message: types.Message, state: FSMContext):
                     f"📅 {start_date_formatted}\n\n"  # Date only
                     f"{international_times}\n\n"    # Times only
                     f"🔄 {round_time} rounds\n\n"
-                    f"📢 Share this link `https://t.me/{settings.bot_username}?start=fractal_{fractal_id}`"
+                    f"📢 Share this link `https://t.me/{settings.bot_username}?start=fractal_{fractal_id}`",
                     reply_markup=button, 
                     parse_mode=None
                 )
