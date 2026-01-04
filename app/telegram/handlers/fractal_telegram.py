@@ -405,22 +405,32 @@ from aiogram.types import BotCommand, MenuButtonCommands
 
 @router.message(Command("dashboard"))
 async def dashboard_command(message: types.Message):
-    dashboard_url = f"{settings.public_base_url}/api/v1/fractals/dashboard"
-
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[
-
-        [        InlineKeyboardButton(
-                    text="🚀 Open Dashboard",
-                    web_app=WebAppInfo(url=dashboard_url),
-                )   
-        ]
-    ])
+    if message.chat.type == "private":
+        # ✅ WebApp OK in private
+        dashboard_url = f"{settings.public_base_url}/api/v1/fractals/dashboard"
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(
+                text="🚀 Open Dashboard",
+                web_app=WebAppInfo(url=dashboard_url),
+            )]
+        ])
+        text = "🚀 **Open your Fractal Dashboard:**"
+    else:
+        # ✅ URL fallback for groups/channels
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(
+                text="💬 Open Dashboard in private chat",
+                url=f"https://t.me/{settings.bot_username}?start=dashboard"
+            )]
+        ])
+        text = "💬 **Dashboard available in private chat:**\nTap above to continue."
     
     await message.answer(
-        text="Here’s your Fractal Dashboard:",
-        reply_markup=keyboard
+        text=text,
+        reply_markup=keyboard,
+        parse_mode="MarkdownV2"  # Safe for text
     )
-
+    
 @router.message(Command("invite"), F.chat.type.in_([ChatType.GROUP, ChatType.SUPERGROUP]))
 async def cmd_invite_group(message: types.Message):
     fractal_id = int(message.text.split()[1])
