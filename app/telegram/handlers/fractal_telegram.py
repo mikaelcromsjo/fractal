@@ -651,7 +651,7 @@ async def fsm_get_start_date(message: types.Message, state: FSMContext):
                 settings=meta_settings,
             )
 
-            share_text = format_fractal_invite(fractal, title=f"Fractal *{fractal_name}* created!")
+            share_text = format_fractal_invite(fractal, title=f"Fractal *{fractal.name}* created!")
             await message.answer(share_text, parse_mode="Markdown")
 
             if message.chat.type == ChatType.PRIVATE:
