@@ -148,13 +148,13 @@ def timezone_keyboard():
     ])
 
 
-def default_menu(type=""):
+def default_menu(private=None):
     """
     Create default menu based on chat type.
     - Private: Show Dashboard + Help
     - Public/Group: Show Bot link + Help
     """
-    if type == "private":
+    if private:
         builder = InlineKeyboardBuilder()
 
         # Button 1: Open Telegram Web App dashboard
