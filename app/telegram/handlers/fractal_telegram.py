@@ -558,6 +558,27 @@ async def cmd_start(message: types.Message, state: FSMContext):
 
 
 @router.message(Command("show_help_public"))
+async def cmd_help(message: types.Message):
+    help_text = (
+        "🤖 **Fractal Circle Bot** organizes *fractal meetings* - a powerful method for large group decision-making.\n\n"
+        "🎯 **How it works:**\n\n"
+        "• Large groups split into *small breakout groups* (7 people)\n"
+        "• Each breakout discusses and creates *proposals*\n"
+        "• Groups *vote internally* and select a *group representative*\n"
+        "• Representatives form *next level groups* to refine proposals\n"
+        "• Process repeats until final decisions emerge\n\n"
+        "💫 **Key benefits:**\n"
+        "• Everyone participates meaningfully\n"
+        "• Minimal amount of meetings\n"
+        "• Wisdom emerges from the whole system\n"
+        "• Scalable for hundereds or thousands of people\n\n"
+        "💌 You'll get an *invite link* to join a existing meeting.\n"
+        "🧩 Organizers can *create new fractals* to invite others.\n\n"
+        "🌐 Learn more: https://FractalCircles.org"
+    )
+    await message.answer(help_text, parse_mode="MarkdownV2")
+
+
 @router.message(Command("help"))
 async def cmd_help(message: types.Message):
 
