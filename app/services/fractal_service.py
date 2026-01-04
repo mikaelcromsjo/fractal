@@ -384,6 +384,7 @@ async def calculate_comment_scores(db, group_id: int, round_obj):
     """
     Normalize user votes, then apply Bayesian weighted average.
     """
+    print ("get all votes")
     all_votes = await get_votes_for_group_comments_repo(db, group_id)
     if not all_votes:
         return
@@ -417,6 +418,8 @@ async def calculate_comment_scores(db, group_id: int, round_obj):
             MIN_VOTES_FOR_BAYES / (n + MIN_VOTES_FOR_BAYES)
         ) * global_avg
         await save_comment_score_repo(db, comment_id, round_obj.level, adjusted)
+        print ("save comment score", adjusted)
+
 
 
 # ===================== ROUND CLOSURE ===========================
