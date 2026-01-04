@@ -570,7 +570,7 @@ async def cmd_help(message: types.Message):
             "🎯 A Fractal meeting is divided into separate rounds in which breakout groups create proposals, discuss them, and vote on them. Most participants attend only one round; only the selected representatives continue to the next round. "
             "Collaborate, connect, and grow your circle!\n\nRead more on https://FractalCircles.org"
         )
-        await message.answer(help_text, reply_markup=default_menu(), parse_mode="Markdown")
+        await message.answer(help_text, parse_mode="Markdown")
 
 @router.message(CreateFractal.name)
 async def fsm_get_name(message: types.Message, state: FSMContext):
