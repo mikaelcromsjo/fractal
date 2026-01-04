@@ -153,27 +153,25 @@ def timezone_keyboard():
         [InlineKeyboardButton(text="Cancel", callback_data="cancel")]
     ])
 
-def default_menu():
-    builder = InlineKeyboardBuilder()
+from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
 
-    # Button 1: Open Telegram Web App dashboard
-    builder.button(
-        text="🚀 Open Dashboard",
-        web_app=WebAppInfo(
-            url=f"{settings.public_base_url}/api/v1/fractals/dashboard"
+def default_menu(chat_type=""):
+    """Default meny - WebApp endast private, enkel reply för grupper."""
+    if chat_type == "private":
+        # PRIVATE: Inline med WebApp ✅
+        builder = InlineKeyboardBuilder()
+        builder.button(
+            text="🚀 Open Dashboard",
+            web_app=WebAppInfo(url=f"{settings.public_base_url}/api/v1/fractals/dashboard")
         )
-    )
-
-    # Button 2: Show help menu via callback
-    builder.button(
-        text="ℹ️ Get more information",
-        callback_data="cmd:help"
-    )
-
-    # 1 column (stacked) or set to (2,) for side-by-side
-    builder.adjust(1, 1)
-
-    return builder.as_markup()
+        builder.button(text="ℹ️ Get more information", callback_data="cmd:help")
+        builder.adjust(1)
+        return builder.as_markup()
+    else:
+        # GROUP/CHANNEL: Enkel reply-keyboard (inga WebApps) ✅
+        kb = [[KeyboardButton(text="🚀 Dashboard"), KeyboardButton(text="ℹ️ Help")]]
+        return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
+    
 
 def cancel_keyboard():
     builder = InlineKeyboardBuilder()
