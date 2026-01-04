@@ -59,6 +59,17 @@ from aiogram.filters import CommandStart
 logger = logging.getLogger(__name__)
 router = Router()
 
+def escape_markdown_v2(text: str) -> str:
+    """
+    Escapes special characters for Telegram MarkdownV2 parse mode.
+    
+    According to Telegram Bot API, these characters must be escaped:
+    _ * [ ] ( ) ~ ` > # + - = | { } . !
+    """
+    special_chars = r'_*[]()~`>#+-=|{}.!'
+    escaped = ''.join('\\' + char if char in special_chars else char for char in text)
+    return escaped
+
 def format_international_times(start_date, round_time):
     start_dt = datetime.fromisoformat(start_date).replace(tzinfo=timezone.utc)
     
@@ -75,8 +86,8 @@ def format_international_times(start_date, round_time):
     }
     
     time_lines = [f"{flag}: {time}" for flag, time in times.items()]
-    return ' ' + ' '.join(time_lines[:7])  # Show first 7 for Telegram width
-
+    result = ' '.join(time_lines[:9])  # Show first 7 for Telegram width
+    return escape_markdown_v2(result)
 
 # Central command list (help)
 COMMANDS = [
@@ -221,7 +232,7 @@ async def handle_timezone(callback: types.CallbackQuery, state: FSMContext):
     print(f"🔍 STATE AFTER BUTTON: {data}")  # Check if saved
     
     await callback.message.edit_text(
-        f"✅ TZ set! *UTC +{offset:+g}* Enter start time:\n"
+        f"✅ TZ set! *UTC {offset:+g}* Enter start time:\n"
         "• `30` = 30 min from now\n"
         "• `202701011700` = Jan 1st 17:00 (*your local time*)",
         parse_mode="Markdown"
