@@ -14,7 +14,7 @@
     comments = proposal.get('comments') or []
 
     current_group = current_group_id if current_group_id is not None else None
-    visible_count = 1
+    visible_count = 5
     hidden_comments_count = 0
 %>
 
@@ -137,7 +137,7 @@
                             % endif
                         </div>
 
-                        <% hidden_comments_count += 1 if i >= visible_count else 0 %>
+                        <% hidden_comments_count += 1 if i >= visible_count and comment_vote != -1 else 0 %>
                     % endfor
 
                     % if hidden_comments_count > 0:

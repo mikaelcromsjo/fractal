@@ -1081,7 +1081,7 @@ async def _enrich_proposal_with_comments_repo(
         author = author_result.scalars().first()
 
         # Comment vote
-        # take away users own vote
+        # take away users own vote and comments from other groups
         if (comment.user_id == current_user_id or group.id != comment.group_id ):
             vote = -1
         else:        
@@ -1107,7 +1107,8 @@ async def _enrich_proposal_with_comments_repo(
             # Add other template fields
         }
         template_comments.append(comment_card)        
-
+        # Sort so vote -1 comments appear last
+        template_comments.sort(key=lambda c: (c["vote"] == -1, c["vote"]))
     
     # ✅ EXACT TEMPLATE STRUCTURE
     card = {
