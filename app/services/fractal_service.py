@@ -895,7 +895,8 @@ async def rep_vote_card(db: AsyncSession, user_id: int, group_id: int) -> str:
 
     group = await get_group_repo(db, group_id)
     round = await get_round_repo(db, group.round_id)
-    if (round.status != "active" or round.status != "vote"):
+    print("Round Status", round.status)
+    if (round.status == "closed"):
         # if round is closed return the representatives total score
         reps = await get_representatives_for_group_repo(db, group_id, round.id)
         if not reps:
