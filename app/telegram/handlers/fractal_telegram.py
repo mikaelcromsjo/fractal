@@ -659,7 +659,6 @@ async def fsm_get_start_date(message: types.Message, state: FSMContext):
                     text="📢 Join and Share your Fractal to a group:",
                     reply_markup=share_to_group_button(fractal.id),
                 )
-            # Inget else!
             return
 
         except Exception as e:
@@ -766,8 +765,6 @@ async def cmd_create_fractal(message: types.Message):
                     text="📢 Join and Share your Fractal to a group:",
                     reply_markup=share_to_group_button(fractal_id),
                 )
-            else:
-                await message.answer(share_text, parse_mode="Markdown")
             return
 
         except Exception as e:
