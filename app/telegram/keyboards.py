@@ -155,7 +155,7 @@ def timezone_keyboard():
 
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
 
-def default_menu(chat_type="private"):
+def default_menu(chat_type=""):
     """Default meny - WebApp endast private, enkel reply för grupper."""
     if chat_type == "private":
         # PRIVATE: Inline med WebApp ✅
