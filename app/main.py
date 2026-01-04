@@ -17,7 +17,7 @@ import os
 
 from contextlib import asynccontextmanager
 from telegram.bot import init_bot
-from aiogram.types import BotCommand, MenuButtonCommands, BotCommandScope
+from aiogram.types import BotCommand, MenuButtonCommands, BotCommandScopeAllPrivateChats
 
 from services.fractal_service import poll_worker
 from infrastructure.db.session import AsyncSessionLocal
@@ -78,7 +78,7 @@ async def lifespan(app: FastAPI):
     # Set PRIVATE chat commands
     await bot.set_my_commands(
         private_commands,
-        scope=BotCommandScope(type="all_private_chats")
+        scope=BotCommandScopeAllPrivateChats()
     )
     print("✅ Bot menu commands set!")
 
