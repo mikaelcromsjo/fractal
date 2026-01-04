@@ -597,6 +597,7 @@ async def save_comment_score_repo(
     level: int,
     score: float,
 ):
+    print("save_score", comment_id, level, score)
     """
     Update comment.score_per_level for this round,
     then compute and persist weighted total_score.
@@ -624,6 +625,7 @@ async def save_comment_score_repo(
     )
     await db.commit()
 
+    print("total_score", total_score)
 
 
 #----------------------------
