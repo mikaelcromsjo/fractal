@@ -70,15 +70,6 @@ from aiogram.types import InlineKeyboardButton
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
 
 
-
-def default_menu():
-    builder = InlineKeyboardBuilder()
-
-    builder.button(text="Get more information", callback_data="cmd:help")
-
-    builder.adjust(1, 1, 1)
-    return builder.as_markup()
-
 def help_menu():
     builder = InlineKeyboardBuilder()
 
