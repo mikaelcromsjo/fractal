@@ -391,21 +391,29 @@ from aiogram.types import BotCommand, MenuButtonCommands
 
 @router.message(Command("dashboard"))
 async def dashboard_command(message: types.Message):
+    if message.
     dashboard_url = f"{settings.public_base_url}/api/v1/fractals/dashboard"
 
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+    if message.chat.type == ChatType.PRIVATE:
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
 
-        [        InlineKeyboardButton(
-                    text="🚀 Open Dashboard",
-                    web_app=WebAppInfo(url=dashboard_url),
-                )   
-         ]
-    ])
-    
-    await message.answer(
-        text="Here’s your Fractal Dashboard:",
-        reply_markup=keyboard
-    )
+            [        InlineKeyboardButton(
+                        text="🚀 Open Dashboard",
+                        web_app=WebAppInfo(url=dashboard_url),
+                    )   
+            ]
+        ])
+        
+        await message.answer(
+            text="Here’s your Fractal Dashboard:",
+            reply_markup=keyboard
+        )
+    else:
+        await message.answer(
+            text=f"Go to https://t.me/{settings.bot_username}"
+        )
+
+
 
 @router.message(Command("invite"), F.chat.type.in_([ChatType.GROUP, ChatType.SUPERGROUP]))
 async def cmd_invite_group(message: types.Message):
