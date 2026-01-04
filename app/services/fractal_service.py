@@ -911,7 +911,7 @@ async def rep_vote_card(db: AsyncSession, user_id: int, group_id: int) -> str:
             avatar = f"/static/img/64_{(user_id % 16) + 1}.png"
             medal = {1: "🥇", 2: "🥈", 3: "🥉"}.get(rank, "")
             html.append(f"""
-                <div class="rep-member" data-user-id="user_id}">
+                <div class="rep-member" data-user-id="{user_id}">
                     <img src="{avatar}" alt="" class="proposal-comment-avatar">
                     <span class="name">{user.username}</span>
                     <span class="medal">{medal}</span>
