@@ -307,8 +307,7 @@ async def cb_cancel(call: types.CallbackQuery, state: FSMContext):
     await call.answer()  # stops the spinner
     await state.clear()  # cancels any FSM
     await call.message.answer(
-        "❌ Operation canceled.",
-        reply_markup=default_menu()
+        "❌ Operation canceled."
     )
 
 # -----------------------
