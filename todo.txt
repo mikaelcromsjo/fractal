@@ -1,23 +1,12 @@
-Add scheduler for sending websocket messages (optional for testing)
+Show results for fractal
+- get last round. get last group.
+Telegram Similar to the get all cards.
+Web app with the fractal nr. 
 
-Show results in telegram
+Comment - Only vote for comment created in current round or vote for all comments.
+Hide comment that has no vote, or <20 popular.
 
-Add Voting system for Representatives
-
-Dates in local timeformat (utc)
-
-Test Rep Voting - Add default points for rep based on their totals.
-
-
-Double messages
-🚀 Fractal 'test3' has started!
-💬 Now you can chat with your group members in this private chat. Try writing 'Hi!'
-
-📝 And you can write and vote on proposlas in the Fractal Dashboard!
-
-
-
-ADD GET MEMBERS AND VOTES
-
-
-
+Security
+Add auth for every call.
+Add logic for every call. status = open. Is member or group.
+Hide all test routers
