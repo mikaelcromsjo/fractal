@@ -1093,6 +1093,10 @@ async def _enrich_proposal_with_comments_repo(
             vote_record = vote_result.scalars().first()
             vote = vote_record.vote if vote_record else 0
         # ADD THIS: Build and append comment structure
+
+        print("total",comment.total_score)
+        print("total",comment.score_per_level)
+        
         comment_card = {
             "id": comment.id,
             "message": comment.text,
