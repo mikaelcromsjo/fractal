@@ -278,7 +278,7 @@ async def simulate_round(
 
         for voter_id in member_ids:
             # Vote for candidate_id (test user where available)
-            await vote_representative(db, g.id, voter_id, candidate_id)
+            await vote_representative_repo(db, g.id, voter_id, candidate_id)
 
     # STEP D: Print proposal vote totals
     print("\nProposal vote totals (per group):")
