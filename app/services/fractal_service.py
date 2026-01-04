@@ -469,7 +469,7 @@ async def promote_to_next_round(db: AsyncSession, prev_round_id: int, fractal_id
     """
     # Step 1: Get all groups in previous round
     prev_groups = await get_groups_for_round(db, prev_round_id)
-    if len(prev_groups) <= 2:
+    if len(prev_groups) < 2:
         return None  # No next round
 
     # Step 2: Gather representatives from each group
