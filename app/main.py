@@ -17,7 +17,7 @@ import os
 
 from contextlib import asynccontextmanager
 from telegram.bot import init_bot
-from aiogram.types import BotCommand, MenuButtonCommands
+from aiogram.types import BotCommand, MenuButtonCommands, BotCommandScope
 
 from services.fractal_service import poll_worker
 from infrastructure.db.session import AsyncSessionLocal
@@ -68,12 +68,18 @@ async def lifespan(app: FastAPI):
 #    await bot.delete_webhook(drop_pending_updates=True)
 #    await bot.set_webhook("https://fractal.ia-ai.se/api/v1/fractals/webhook/8568824507:AAHGONnctVOq0L7IC9O_ZewzYNpqj4CSWkU")
 
-    commands = [
+    # Private chat commands
+    private_commands = [
         BotCommand(command="start", description="Show Menu"),
         BotCommand(command="help", description="Information"),
         BotCommand(command="dashboard", description="Dashboard"),
     ]
-    await bot.set_my_commands(commands)
+
+    # Set PRIVATE chat commands
+    await bot.set_my_commands(
+        private_commands,
+        scope=BotCommandScope(type="all_private_chats")
+    )
     print("✅ Bot menu commands set!")
 
     if getattr(app.state, "poller_started", False):

@@ -1463,12 +1463,14 @@ async function vote_rep(e, groupId) {
 //    if (oldRow) oldRow.querySelector(".medal")?.classList.remove("active");
 //  }
 
-    // reset previous for same rank
-    if (currentRepPoints==3) {
-        document.querySelectorAll(".rep-member").forEach(
-            el.querySelector(".medal")?.textContent = ""
-        );
-    }
+if (currentRepPoints == 3) {
+    document.querySelectorAll(".rep-member").forEach((el) => {
+        el.querySelector(".medal")?.remove();  // If you want to remove it entirely
+        // OR
+        const medal = el.querySelector(".medal");
+        if (medal) medal.textContent = "";
+    });
+}
 
   // create medal if not present
   let medal = memberEl.querySelector(".medal");

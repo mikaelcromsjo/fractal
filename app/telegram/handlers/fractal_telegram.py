@@ -154,7 +154,7 @@ async def handle_inline_share(query: InlineQuery):
         f"📅 {start_date}\n\n"
         f"{format_international_times(fractal.start_date.isoformat(), round_time)}\n\n"
         f"🔄 {round_time} rounds\n\n"
-        f"⚡️ Share this link `https://t.me/{settings.bot_username}?start=fractal_{fractal_id}`"
+        f"📢 Share this link `https://t.me/{settings.bot_username}?start=fractal_{fractal_id}`"
     )
 
     await query.answer(
@@ -525,7 +525,7 @@ async def cmd_start(message: types.Message, state: FSMContext):
                     f"📅 {start_date_formatted}\n\n"  # Date only
                     f"{international_times}\n\n"    # Times only
                     f"🔄 {round_time} rounds\n\n"
-                    f"⚡️ Share this link `https://t.me/{settings.bot_username}?start=fractal_{fractal_id}`",
+                    f"📢 Share this link `https://t.me/{settings.bot_username}?start=fractal_{fractal_id}`"
                     reply_markup=button, 
                     parse_mode=None
                 )
@@ -545,16 +545,26 @@ async def cmd_start(message: types.Message, state: FSMContext):
 @router.message(Command("help"))
 async def cmd_help(message: types.Message):
 
-    help_text = (
-        "🤖 **Fractal Circle Bot** helps you organize fractal meetings in large groups.\n\n"
-        "💌 In most cases, you'll be invited to join a fractal meeting that someone else created. "
-        "You'll receive an invite link when that happens.\n\n"
-        "🧩 If you’re a group organizer, you can also create your own fractal and invite others to join. \n\n"
-        "🎯 A Fractal meeting is divided into separate rounds in which breakout groups create proposals, discuss them, and vote on them. Most participants attend only one round; only the selected representatives continue to the next round. "
-        "Collaborate, connect, and grow your circle!\n\nRead more on https://FractalCircles.org"
-    )
-    await message.answer(help_text, reply_markup=help_menu(), parse_mode="Markdown")
-
+    if message.chat.type == ChatType.PRIVATE:
+        help_text = (
+            "🤖 **Fractal Circle Bot** helps you organize fractal meetings in large groups.\n\n"
+            "💌 In most cases, you'll be invited to join a fractal meeting that someone else created. "
+            "You'll receive an invite link when that happens.\n\n"
+            "🧩 If you’re a group organizer, you can also create your own fractal and invite others to join. \n\n"
+            "🎯 A Fractal meeting is divided into separate rounds in which breakout groups create proposals, discuss them, and vote on them. Most participants attend only one round; only the selected representatives continue to the next round. "
+            "Collaborate, connect, and grow your circle!\n\nRead more on https://FractalCircles.org"
+        )
+        await message.answer(help_text, reply_markup=help_menu(), parse_mode="Markdown")
+    else:
+        help_text = (
+            "🤖 **Fractal Circle Bot** helps you organize fractal meetings in large groups.\n\n"
+            "💌 In most cases, you'll be invited to join a fractal meeting that someone else created. "
+            "You'll receive an invite link when that happens.\n\n"
+            "🧩 If you’re a group organizer, you can also create your own fractal and invite others to join. \n\n"
+            "🎯 A Fractal meeting is divided into separate rounds in which breakout groups create proposals, discuss them, and vote on them. Most participants attend only one round; only the selected representatives continue to the next round. "
+            "Collaborate, connect, and grow your circle!\n\nRead more on https://FractalCircles.org"
+        )
+        await message.answer(help_text, reply_markup=default_menu(), parse_mode="Markdown")
 
 @router.message(CreateFractal.name)
 async def fsm_get_name(message: types.Message, state: FSMContext):
@@ -650,7 +660,7 @@ async def fsm_get_start_date(message: types.Message, state: FSMContext):
                 f"📅 {start_date_formatted}\n\n"
                 f"{international_times}\n\n"
                 f"🔄 {round_time} minutes rounds\n\n"
-                f"Share this link `https://t.me/{settings.bot_username}?start=fractal_{fractal_id}`"
+                f"📢 Share this link `https://t.me/{settings.bot_username}?start=fractal_{fractal_id}`"
             )
 
             await message.answer(share_text, parse_mode="Markdown")
@@ -660,8 +670,6 @@ async def fsm_get_start_date(message: types.Message, state: FSMContext):
                     text="📢 Join and Share your Fractal to a group:",
                     reply_markup=share_to_group_button(fractal_id),
                 )
-            else:
-                await message.answer(share_text, parse_mode="Markdown")
             break  # ✅ Exit loop
 
         except Exception as e:
@@ -840,7 +848,7 @@ async def cmd_join(message: types.Message, state: FSMContext,
             )
 
             await message.answer(
-                f"❌ *Can not join fractal*\n\n"
+                f"❌ *Cannot join fractal*\n\n"
                 f"🆔 {sanitize_text(fractal.name or 'Unknown')}\n\n"
                 f"📝 {sanitize_text(fractal.description or 'No description')}\n\n"
                 f"📅 {start_str}\n\n"
