@@ -59,25 +59,17 @@ from aiogram.filters import CommandStart
 logger = logging.getLogger(__name__)
 router = Router()
 
-def format_fractal_invite(
-    fractal,
-    title: str = "Click to Join Fractal Meeting"  # Endast denna ändras
-) -> str:
-    """Komplett invite-text från fractal (settings global)."""
+def format_fractal_invite(fractal, title: str = "🎉 Click to Join Fractal Meeting") -> str:
+    """Komplett invite - du styr fetstil med * i title."""
     
-    # Allt från fractal (+ global settings)
     fractal_id = fractal.id
     start_date = fractal.start_date.strftime("%A %H:%M, %B %d, %Y")
     minutes = int(fractal.meta["round_time"])
     round_time = f"{minutes} minutes"
-    
-    # Internationella tider
-    international_times = format_international_times(
-        fractal.start_date.isoformat(), minutes
-    )
+    international_times = format_international_times(fractal.start_date.isoformat(), minutes)
     
     text = (
-        f"🎉 *{title}*\n"
+        f"{title}\n"  # Din formatering (med/utan *)
         f"🚀 {sanitize_text(fractal.name)}\n\n"
         f"📝 {sanitize_text(fractal.description)}\n\n"
         f"📅 {start_date}\n\n"
@@ -172,7 +164,7 @@ async def handle_inline_share(query: InlineQuery):
         ]
     )
 
-    share_text = format_fractal_invite(fractal, title="🎉 *Click to Join Fractal Meeting*")
+    share_text = format_fractal_invite(fractal)
 
     await query.answer(
         results=[
@@ -229,7 +221,7 @@ async def handle_manual_offset(message: types.Message, state: FSMContext):
 
 @router.callback_query(F.data.startswith("tz_"))
 async def handle_timezone(callback: types.CallbackQuery, state: FSMContext):
-    tz_map = {"tz_cet +1": 1.0, "tz_eet +2": 2.0, "tz_gmt +0": 0.0, "tz_est -5": -5.0, "tz_pst -8": -8.0}
+    tz_map = {"tz_cet UTC+1": 1.0, "tz_eet UTC+2": 2.0, "tz_gmt UTC+0": 0.0, "tz_est UTC-5": -5.0, "tz_pst UTC-8": -8.0}
     offset = tz_map.get(callback.data, 0.0)
     
     await state.update_data(user_tz_offset=offset)
@@ -237,7 +229,7 @@ async def handle_timezone(callback: types.CallbackQuery, state: FSMContext):
     print(f"🔍 STATE AFTER BUTTON: {data}")  # Check if saved
     
     await callback.message.edit_text(
-        f"✅ TZ set! *UTC +{offset:+g}* Enter start time:\n"
+        f"✅ TZ set! *UTC {offset:+g}* Enter start time:\n"
         "• `30` = 30 min from now\n"
         "• `202701011700` = Jan 1st 17:00 (*your local time*)",
         parse_mode="Markdown"
@@ -659,8 +651,7 @@ async def fsm_get_start_date(message: types.Message, state: FSMContext):
                 settings=meta_settings,
             )
 
-            share_text = format_fractal_invite(fractal, title="🎉 *Click to Join Fractal Meeting*")
-
+            share_text = format_fractal_invite(fractal)
             await message.answer(share_text, parse_mode="Markdown")
 
             if message.chat.type == ChatType.PRIVATE:
@@ -834,22 +825,11 @@ async def cmd_join(message: types.Message, state: FSMContext,
         except Exception as e:
             logger.exception("Join failed")
 
-            round_time_minutes = int(fractal.meta.get("round_time", 0))
-            round_time_str = f"{round_time_minutes} min/round" if round_time_minutes else "N/A"
-            start_str = (
-                fractal.start_date.strftime("%A %H:%M, %B %d, %Y")
-                if fractal.start_date
-                else "Unknown"
-            )
+
+            share_text = format_fractal_invite(fractal, title=f"❌ *Fractal Error* {e}")
 
             await message.answer(
-                f"❌ *Cannot join fractal*\n\n"
-                f"🆔 {sanitize_text(fractal.name or 'Unknown')}\n\n"
-                f"📝 {sanitize_text(fractal.description or 'No description')}\n\n"
-                f"📅 {start_str}\n\n"
-                f"⏰ {round_time_str}\n\n"
-                f"📊 {fractal.status.title()}\n\n"
-                f"⚠️ The fractal has probably already started, so joining is not possible.",
+                share_text,
                 parse_mode="Markdown",
             )
             break
