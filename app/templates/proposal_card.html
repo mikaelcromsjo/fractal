@@ -80,7 +80,7 @@
                             comment_group = comment.get('group_id')
                             comment_vote = int(comment.get('vote') or 0)
                             comment_user_id = comment.get('user_id', 0)
-                            is_hidden = i >= visible_count and comment_vote == -1 or comment_vote > 0
+                            is_hidden = i >= visible_count and comment_vote != 0
                         %>
 
                         <!-- Comment Row -->
@@ -137,7 +137,7 @@
                             % endif
                         </div>
 
-                        <% hidden_comments_count += 1 if i >= visible_count and comment_vote != -1 or comment_vote > 0 else 0 %>
+                        <% hidden_comments_count += 1 if i >= visible_count and comment_vote != 0 else 0 %>
                     % endfor
 
                     % if hidden_comments_count > 0:
