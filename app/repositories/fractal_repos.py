@@ -1082,7 +1082,7 @@ async def _enrich_proposal_with_comments_repo(
 
         # Comment vote
         # take away users own vote
-        if (comment.user_id == current_user_id orgroup.id != comment.group_id ):
+        if (comment.user_id == current_user_id or group.id != comment.group_id ):
             vote = -1
         else:        
             vote_result = await db.execute(
