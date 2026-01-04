@@ -553,7 +553,7 @@ async def cmd_start(message: types.Message, state: FSMContext):
         return  # ✅ Exit after fractal handling
 
     # ✅ DEFAULT /start
-    await message.answer("👋 Hi, I am the Fractal Circle Bot!", reply_markup=default_menu())
+    await message.answer("👋 Hi, I am the Fractal Circle Bot!", reply_markup=default_menu(message.chat.type))
 
 
 

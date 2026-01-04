@@ -153,7 +153,7 @@ def timezone_keyboard():
         [InlineKeyboardButton(text="Cancel", callback_data="cancel")]
     ])
 
-def default_menu(type="private"):
+def default_menu(type=""):
 
     if type=="private":
         builder = InlineKeyboardBuilder()
