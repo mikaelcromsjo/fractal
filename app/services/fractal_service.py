@@ -895,7 +895,7 @@ async def rep_vote_card(db: AsyncSession, user_id: int, group_id: int) -> str:
 
     group = await get_group_repo(db, group_id)
     round = await get_round_repo(db, group.round_id)
-    if (round.status != "open"):
+    if (round.status != "active" or round.status != "vote"):
         # if round is closed return the representatives total score
         reps = await get_representatives_for_group_repo(db, group_id, round.id)
         if not reps:
@@ -911,7 +911,7 @@ async def rep_vote_card(db: AsyncSession, user_id: int, group_id: int) -> str:
             avatar = f"/static/img/64_{(user_id % 16) + 1}.png"
             medal = {1: "🥇", 2: "🥈", 3: "🥉"}.get(rank, "")
             html.append(f"""
-                <div class="rep-member" data-user-id="{user_id}">
+                <div class="rep-member">
                     <img src="{avatar}" alt="" class="proposal-comment-avatar">
                     <span class="name">{user.username}</span>
                     <span class="medal">{medal}</span>
