@@ -229,7 +229,7 @@ async def handle_manual_offset(message: types.Message, state: FSMContext):
 
 @router.callback_query(F.data.startswith("tz_"))
 async def handle_timezone(callback: types.CallbackQuery, state: FSMContext):
-    tz_map = {"tz_cet +1": 1.0, "tz_eet +2": 2.0, "tz_gmt +0": 0.0, "tz_est -5": -5.0, "tz_pst -8": -8.0}
+    tz_map = {"tz_cet \+1": 1.0, "tz_eet \+2": 2.0, "tz_gmt \+0": 0.0, "tz_est \-5": -5.0, "tz_pst \-8": -8.0}
     offset = tz_map.get(callback.data, 0.0)
     
     await state.update_data(user_tz_offset=offset)
@@ -237,7 +237,7 @@ async def handle_timezone(callback: types.CallbackQuery, state: FSMContext):
     print(f"🔍 STATE AFTER BUTTON: {data}")  # Check if saved
     
     await callback.message.edit_text(
-        f"✅ TZ set! *UTC +{offset:+g}* Enter start time:\n"
+        f"✅ TZ set! *UTC {offset:+g}* Enter start time:\n"
         "• `30` = 30 min from now\n"
         "• `202701011700` = Jan 1st 17:00 (*your local time*)",
         parse_mode="Markdown"
