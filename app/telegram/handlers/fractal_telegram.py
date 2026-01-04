@@ -177,7 +177,7 @@ async def handle_inline_share(query: InlineQuery):
                 description="Send a join button to your group",
                 input_message_content=InputTextMessageContent(
                     message_text=share_text,
-                    parse_mode="Markdown",
+                    parse_mode="MarkdownV2",
                 ),
                 reply_markup=join_button,
             )
@@ -199,7 +199,7 @@ async def handle_manual_tz(callback: types.CallbackQuery, state: FSMContext):
         "🇨🇳 `+8` China\n🇷🇺 `+3` Moscow\n🇿🇦 `+2` South Africa\n"
         "🇲🇽 `-6` Mexico\n🇦🇷 `-3` Argentina\n🇸🇬 `+8` Singapore\n\n"
         "_Examples: `+3.5`, `-4.5`, `+11.5`_",
-        parse_mode="Markdown",
+        parse_mode="MarkdownV2",
         reply_markup=cancel_keyboard()
     )
     await state.set_state(CreateFractal.timezone_manual) 
@@ -214,7 +214,7 @@ async def handle_manual_offset(message: types.Message, state: FSMContext):
             f"✅ *Offset {offset:+.1f}h* set! Now enter start time:\n"
             "• `30` = 30 min from now\n"
             "• `202601011700` = exact time",
-            parse_mode="Markdown",
+            parse_mode="MarkdownV2",
             reply_markup=cancel_keyboard()
         )
         await state.set_state(CreateFractal.start_date)  # ✅ Now go to start_date
@@ -235,7 +235,7 @@ async def handle_timezone(callback: types.CallbackQuery, state: FSMContext):
         f"✅ TZ set! *UTC {offset:+g}* Enter start time:\n"
         "• `30` = 30 min from now\n"
         "• `202701011700` = Jan 1st 17:00 (*your local time*)",
-        parse_mode="Markdown"
+        parse_mode="MarkdownV2"
     )
     await state.set_state(CreateFractal.start_date)
     await callback.answer()
@@ -293,7 +293,7 @@ async def cb_start_fractal(call: types.CallbackQuery, state: FSMContext):
 @router.callback_query(lambda c: c.data == "cmd:create_fractal")
 async def cb_start_create_fractal(call: types.CallbackQuery, state: FSMContext):
     await call.answer()
-    await call.message.answer("📝 Please enter name of the meeting:", parse_mode="Markdown", reply_markup=cancel_keyboard())
+    await call.message.answer("📝 Please enter name of the meeting:", parse_mode="MarkdownV2", reply_markup=cancel_keyboard())
     await state.set_state(CreateFractal.name)
 
 
@@ -447,7 +447,7 @@ async def cmd_invite_group(message: types.Message):
         f"🚀 *Fractal {fractal_id} ready for group!*\n\n"
         f"👆 Click button to join via private chat",
         reply_markup=join_menu,
-        parse_mode="Markdown",
+        parse_mode="MarkdownV2",
     )
 
 @router.message(CommandStart())
@@ -483,7 +483,7 @@ async def cmd_start(message: types.Message, state: FSMContext):
                     await message.answer(
                         f"❌ Fractal *{sanitize_text(str(fractal_id))}* not found or not created yet.\n\n"
                         f"ℹ️ It may have been deleted or never initialized properly.",
-                        parse_mode="Markdown",
+                        parse_mode="MarkdownV2",
                     )
                     break
 
@@ -590,7 +590,7 @@ async def cmd_help(message: types.Message):
         "🎯 A Fractal meeting is divided into separate rounds in which breakout groups create proposals, discuss them, and vote on them. Most participants attend only one round; only the selected representatives continue to the next round. "
         "Collaborate, connect, and grow your circle!\n\nRead more on https://FractalCircles.org"
     )
-    await message.answer(help_text, reply_markup=help_menu(), parse_mode="Markdown")
+    await message.answer(help_text, reply_markup=help_menu(), parse_mode="MarkdownV2")
 
 
 @router.message(CreateFractal.name)
@@ -599,7 +599,7 @@ async def fsm_get_name(message: types.Message, state: FSMContext):
     await message.answer(
         "✏️ Now enter the *fractal description*.\n"
         "You can write multiple lines in a single message.",
-        parse_mode="Markdown",
+        parse_mode="MarkdownV2",
         reply_markup=cancel_keyboard()
     )
     await state.set_state(CreateFractal.description)
@@ -609,7 +609,7 @@ async def fsm_get_description(message: types.Message, state: FSMContext):
     await state.update_data(description=message.text.strip())
     await message.answer(
         "⏱ Specify *round time* in minutes per round (e.g. 30):",
-        parse_mode="Markdown",
+        parse_mode="MarkdownV2",
         reply_markup=cancel_keyboard()
     )
     await state.set_state(CreateFractal.round_time)
@@ -629,7 +629,7 @@ async def fsm_get_round_time(message: types.Message, state: FSMContext):
         "🌍 *Pick your timezone*, then enter start time:\n\n"
         "• `30` = 30 min from now\n"
         "• `202601011700` = Jan 1st 17:00",
-        parse_mode="Markdown",
+        parse_mode="MarkdownV2",
         reply_markup=timezone_keyboard()
     )
     await state.set_state(CreateFractal.timezone)
@@ -648,7 +648,7 @@ async def fsm_get_start_date(message: types.Message, state: FSMContext):
             "❌ Invalid format. Use:\n"
             "• `30` = 30 min from now\n"
             "• `202601011700` = exact time",
-            parse_mode="Markdown",
+            parse_mode="MarkdownV2",
             reply_markup=cancel_keyboard()
         )
         return
@@ -691,7 +691,7 @@ async def fsm_get_start_date(message: types.Message, state: FSMContext):
                 f"⚡️ Share this link https://t.me/{settings.bot_username}?start=fractal_{fractal_id}"
             )
 
-            await message.answer(share_text, parse_mode="Markdown")
+            await message.answer(share_text, parse_mode="MarkdownV2")
 
             if message.chat.type == ChatType.PRIVATE:
                 await message.answer(
@@ -699,7 +699,7 @@ async def fsm_get_start_date(message: types.Message, state: FSMContext):
                     reply_markup=share_to_group_button(fractal_id),
                 )
             else:
-                await message.answer(share_text, parse_mode="Markdown")
+                await message.answer(share_text, parse_mode="MarkdownV2")
             break  # ✅ Exit loop
 
         except Exception as e:
@@ -804,7 +804,7 @@ async def cmd_create_fractal(message: types.Message):
                 f"`https://t.me/{settings.bot_username}?start=fractal_{fractal_id}`"
             )
 
-            await message.answer(share_text, parse_mode="Markdown")
+            await message.answer(share_text, parse_mode="MarkdownV2")
 
             if message.chat.type == ChatType.PRIVATE:
                 await message.answer(
@@ -812,7 +812,7 @@ async def cmd_create_fractal(message: types.Message):
                     reply_markup=share_to_group_button(fractal_id),
                 )
             else:
-                await message.answer(share_text, parse_mode="Markdown")
+                await message.answer(share_text, parse_mode="MarkdownV2")
             return
 
         except Exception as e:
@@ -853,7 +853,7 @@ async def cmd_join(message: types.Message, state: FSMContext,
                 await message.answer(
                     f"❌ Fractal *{sanitize_text(str(fractal_id))}* not found or not created yet.\n\n"
                     f"ℹ️ It may have been deleted or never initialized properly.",
-                    parse_mode="Markdown",
+                    parse_mode="MarkdownV2",
                 )
                 return  # ✅ stop cleanly, not break            
             
@@ -885,7 +885,7 @@ async def cmd_join(message: types.Message, state: FSMContext,
                 f"⏰ {round_time_str}\n\n"
                 f"📊 {fractal.status.title()}\n\n"
                 f"⚠️ The fractal has probably already started, so joining is not possible.",
-                parse_mode="Markdown",
+                parse_mode="MarkdownV2",
             )
             break
 
