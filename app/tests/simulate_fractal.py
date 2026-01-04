@@ -13,7 +13,7 @@ from services.fractal_service import (
     create_comment,
     vote_proposal,
     vote_comment,
-    vote_representative,
+    vote_representative_repo,
     close_round,
     create_fractal,
     get_group_members,
@@ -275,7 +275,7 @@ async def main():
             members = group_members_map[g.id]
             candidate_id = members[0]  # first user as representative candidate
             for voter_id in members:
-                await vote_representative(db, g.id, voter_id, candidate_id)
+                await vote_representative_repo(db, g.id, voter_id, candidate_id)
 
         # -------------------------
         # STEP 8: Print proposal vote totals

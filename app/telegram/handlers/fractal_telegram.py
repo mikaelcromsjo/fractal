@@ -59,27 +59,6 @@ from aiogram.filters import CommandStart
 logger = logging.getLogger(__name__)
 router = Router()
 
-def format_fractal_invite(fractal, title: str = "🎉 Click to Join Fractal Meeting") -> str:
-    """Komplett invite - du styr fetstil med * i title."""
-    
-    fractal_id = fractal.id
-    start_date = fractal.start_date.strftime("%A %H:%M, %B %d, %Y")
-    minutes = int(fractal.meta["round_time"])
-    round_time = f"{minutes} minutes"
-    international_times = format_international_times(fractal.start_date.isoformat(), minutes)
-    
-    text = (
-        f"{title}\n"  # Din formatering (med/utan *)
-        f"🚀 {sanitize_text(fractal.name)}\n\n"
-        f"📝 {sanitize_text(fractal.description)}\n\n"
-        f"📅 {start_date}\n\n"
-        f"{international_times}\n\n"
-        f"🔄 {round_time}\n\n"
-        f"⚡️ Share: https://t.me/{settings.bot_username}?start=fractal_{fractal_id}"
-    )
-    
-    return text
-
 def format_international_times(start_date, round_time):
     start_dt = datetime.fromisoformat(start_date).replace(tzinfo=timezone.utc)
     
@@ -155,6 +134,7 @@ async def handle_inline_share(query: InlineQuery):
             break
 
 
+
     bot_username = settings.bot_username
     join_url = f"https://t.me/{bot_username}?start=fractal_{fractal_id}"
 
@@ -164,7 +144,19 @@ async def handle_inline_share(query: InlineQuery):
         ]
     )
 
-    share_text = format_fractal_invite(fractal)
+    start_date = fractal.start_date.strftime("%A %H:%M, %B %d, %Y")
+    minutes = int(fractal.meta["round_time"])
+    round_time = f"{int(minutes)} minutes"
+
+    share_text = (
+        f"🎉 *Click to Join Fractal Meeting*"
+        f"🚀 {sanitize_text(fractal.name)}\n\n"
+        f"📝 {sanitize_text(fractal.description)}\n\n"
+        f"📅 {start_date}\n\n"
+        f"{format_international_times(fractal.start_date.isoformat(), round_time)}\n\n"
+        f"🔄 {round_time} rounds\n\n"
+        f"⚡️ Share this link https://t.me/{settings.bot_username}?start=fractal_{fractal_id}"
+    )
 
     await query.answer(
         results=[
@@ -208,7 +200,7 @@ async def handle_manual_offset(message: types.Message, state: FSMContext):
         offset = float(message.text.strip())
         await state.update_data(user_tz_offset=offset)
         await message.answer(
-            f"✅ *Offset UTC{offset:+.1f}h* set! Now enter start time:\n"
+            f"✅ *Offset {offset:+.1f}h* set! Now enter start time:\n"
             "• `30` = 30 min from now\n"
             "• `202601011700` = exact time",
             parse_mode="Markdown",
@@ -221,7 +213,7 @@ async def handle_manual_offset(message: types.Message, state: FSMContext):
 
 @router.callback_query(F.data.startswith("tz_"))
 async def handle_timezone(callback: types.CallbackQuery, state: FSMContext):
-    tz_map = {"tz_cet UTC+1": 1.0, "tz_eet UTC+2": 2.0, "tz_gmt UTC+0": 0.0, "tz_est UTC-5": -5.0, "tz_pst UTC-8": -8.0}
+    tz_map = {"tz_cet +1": 1.0, "tz_eet +2": 2.0, "tz_gmt +0": 0.0, "tz_est -5": -5.0, "tz_pst -8": -8.0}
     offset = tz_map.get(callback.data, 0.0)
     
     await state.update_data(user_tz_offset=offset)
@@ -229,7 +221,7 @@ async def handle_timezone(callback: types.CallbackQuery, state: FSMContext):
     print(f"🔍 STATE AFTER BUTTON: {data}")  # Check if saved
     
     await callback.message.edit_text(
-        f"✅ TZ set! *UTC {offset:+g}* Enter start time:\n"
+        f"✅ TZ set! *UTC +{offset:+g}* Enter start time:\n"
         "• `30` = 30 min from now\n"
         "• `202701011700` = Jan 1st 17:00 (*your local time*)",
         parse_mode="Markdown"
@@ -651,19 +643,30 @@ async def fsm_get_start_date(message: types.Message, state: FSMContext):
                 settings=meta_settings,
             )
 
-            share_text = format_fractal_invite(fractal, title=f"Fractal Created!")
-            print(f"🔍 share_text[:350]: {repr(share_text[:350])}")  # Visa tecken 0-350
-            print(f"🔍 fractal.name: {repr(fractal.name)}")
-            print(f"🔍 Len: {len(share_text)}")
+            fractal_id = getattr(fractal, "id", None)
+            fractal_name = getattr(fractal, "name", name)
+
+            # ✅ International share text
+            share_text = (
+                f"🎉 *Fractal Created*"
+                f"🚀 {sanitize_text(fractal_name)}\n\n"
+                f"📝 {sanitize_text(description)}\n\n"
+                f"📅 {start_date_formatted}\n\n"
+                f"{international_times}\n\n"
+                f"🔄 {round_time} minutes rounds\n\n"
+                f"⚡️ Share this link https://t.me/{settings.bot_username}?start=fractal_{fractal_id}"
+            )
 
             await message.answer(share_text, parse_mode="Markdown")
 
             if message.chat.type == ChatType.PRIVATE:
                 await message.answer(
                     text="📢 Join and Share your Fractal to a group:",
-                    reply_markup=share_to_group_button(fractal.id),
+                    reply_markup=share_to_group_button(fractal_id),
                 )
-            return
+            else:
+                await message.answer(share_text, parse_mode="Markdown")
+            break  # ✅ Exit loop
 
         except Exception as e:
             logger.exception("FSM create_fractal failed")
@@ -760,7 +763,12 @@ async def cmd_create_fractal(message: types.Message):
             fractal_name = getattr(fractal, "name", name)
 
             from telegram.keyboards import fractal_created_menu
-            share_text = format_fractal_invite(fractal, title=f"🚀 Fractal *{fractal_name}* created!")
+
+            share_text = (
+                f"🚀 Fractal *{fractal_name}* created!\n\n"
+                f"👥 You can invite others to join:\n"
+                f"`https://t.me/{settings.bot_username}?start=fractal_{fractal_id}`"
+            )
 
             await message.answer(share_text, parse_mode="Markdown")
 
@@ -769,6 +777,8 @@ async def cmd_create_fractal(message: types.Message):
                     text="📢 Join and Share your Fractal to a group:",
                     reply_markup=share_to_group_button(fractal_id),
                 )
+            else:
+                await message.answer(share_text, parse_mode="Markdown")
             return
 
         except Exception as e:
@@ -825,11 +835,22 @@ async def cmd_join(message: types.Message, state: FSMContext,
         except Exception as e:
             logger.exception("Join failed")
 
-
-            share_text = format_fractal_invite(fractal, title=f"❌ *Fractal Error* {e}")
+            round_time_minutes = int(fractal.meta.get("round_time", 0))
+            round_time_str = f"{round_time_minutes} min/round" if round_time_minutes else "N/A"
+            start_str = (
+                fractal.start_date.strftime("%A %H:%M, %B %d, %Y")
+                if fractal.start_date
+                else "Unknown"
+            )
 
             await message.answer(
-                share_text,
+                f"❌ *Cannot join fractal*\n\n"
+                f"🆔 {sanitize_text(fractal.name or 'Unknown')}\n\n"
+                f"📝 {sanitize_text(fractal.description or 'No description')}\n\n"
+                f"📅 {start_str}\n\n"
+                f"⏰ {round_time_str}\n\n"
+                f"📊 {fractal.status.title()}\n\n"
+                f"⚠️ The fractal has probably already started, so joining is not possible.",
                 parse_mode="Markdown",
             )
             break

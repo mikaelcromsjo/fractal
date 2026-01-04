@@ -71,6 +71,7 @@ async def lifespan(app: FastAPI):
     commands = [
         BotCommand(command="start", description="Show Menu"),
         BotCommand(command="help", description="Information"),
+        BotCommand(command="dashboard", description="Dashboard"),
     ]
     await bot.set_my_commands(commands)
     print("✅ Bot menu commands set!")
