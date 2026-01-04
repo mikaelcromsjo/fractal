@@ -391,7 +391,6 @@ from aiogram.types import BotCommand, MenuButtonCommands
 
 @router.message(Command("dashboard"))
 async def dashboard_command(message: types.Message):
-    if message.
     dashboard_url = f"{settings.public_base_url}/api/v1/fractals/dashboard"
 
     if message.chat.type == ChatType.PRIVATE:
