@@ -545,6 +545,8 @@ async def cmd_start(message: types.Message, state: FSMContext):
     await message.answer("👋 Hi, I am the Fractal Circle Bot!", reply_markup=default_menu())
 
 
+
+@router.message(Command("show_help_public"))
 @router.message(Command("help"))
 async def cmd_help(message: types.Message):
 

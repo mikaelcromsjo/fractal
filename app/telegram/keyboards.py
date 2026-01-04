@@ -153,27 +153,47 @@ def timezone_keyboard():
         [InlineKeyboardButton(text="Cancel", callback_data="cancel")]
     ])
 
-def default_menu():
-    builder = InlineKeyboardBuilder()
+def default_menu(type="private"):
 
-    # Button 1: Open Telegram Web App dashboard
-    builder.button(
-        text="🚀 Open Dashboard",
-        web_app=WebAppInfo(
-            url=f"{settings.public_base_url}/api/v1/fractals/dashboard"
+    if type=="private":
+        builder = InlineKeyboardBuilder()
+
+        # Button 1: Open Telegram Web App dashboard
+        builder.button(
+            text="🚀 Open Dashboard",
+            web_app=WebAppInfo(
+                url=f"{settings.public_base_url}/api/v1/fractals/dashboard"
+            )
         )
-    )
 
-    # Button 2: Show help menu via callback
-    builder.button(
-        text="ℹ️ Get more information",
-        callback_data="cmd:help"
-    )
+        # Button 2: Show help menu via callback
+        builder.button(
+            text="ℹ️ Get more information",
+            callback_data="cmd:help"
+        )
 
-    # 1 column (stacked) or set to (2,) for side-by-side
-    builder.adjust(1, 1)
+        # 1 column (stacked) or set to (2,) for side-by-side
+        builder.adjust(1, 1)
 
-    return builder.as_markup()
+        return builder.as_markup()
+    else:
+       # PUBLIC GROUP/CHANNEL: Inline med privat-chatt + help ✅
+        builder = InlineKeyboardBuilder()
+        
+        # Knapp: Öppna privat chatt med bot
+        builder.button(
+            text="💬 Fractal Circle Bot",
+            url=f"https://t.me/{settings.bot_username}"
+        )
+        
+        # Help via callback (fungerar i grupper!)
+        builder.button(
+            text="ℹ️ Information",
+            callback_data="show_help_public"
+        )
+        builder.adjust(1)
+        return builder.as_markup()
+
 
 def cancel_keyboard():
     builder = InlineKeyboardBuilder()
