@@ -208,7 +208,7 @@ async def handle_manual_offset(message: types.Message, state: FSMContext):
         offset = float(message.text.strip())
         await state.update_data(user_tz_offset=offset)
         await message.answer(
-            f"✅ *Offset {offset:+.1f}h* set! Now enter start time:\n"
+            f"✅ *Offset UTC{offset:+.1f}h* set! Now enter start time:\n"
             "• `30` = 30 min from now\n"
             "• `202601011700` = exact time",
             parse_mode="Markdown",
@@ -651,7 +651,7 @@ async def fsm_get_start_date(message: types.Message, state: FSMContext):
                 settings=meta_settings,
             )
 
-            share_text = format_fractal_invite(fractal)
+            share_text = format_fractal_invite(fractal, title=f"Fractal *{fractal_name}* created!")
             await message.answer(share_text, parse_mode="Markdown")
 
             if message.chat.type == ChatType.PRIVATE:
@@ -659,9 +659,8 @@ async def fsm_get_start_date(message: types.Message, state: FSMContext):
                     text="📢 Join and Share your Fractal to a group:",
                     reply_markup=share_to_group_button(fractal.id),
                 )
-            else:
-                await message.answer(share_text, parse_mode="Markdown")
-            break  # ✅ Exit loop
+            # Inget else!
+            return
 
         except Exception as e:
             logger.exception("FSM create_fractal failed")
