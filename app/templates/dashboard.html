@@ -729,11 +729,12 @@ fetch("/api/v1/fractals/auth", {
         if (!currentGroupId){
             addCardDiv('You are not in any active group at the moment. <p>'+fractalName+'<p>'+fractalDescription+'<p>Round Time: ' + fractalRoundTime +' minutes<p>Start Date: '+fractalStartDate+'');
             fractalStatus = "closed";
+            currentGroupId = -1;            
         } else {
             lastGroupId == currentGroupId
         }
-        console.log(currentLevel)
-        console.log(fractalStatus)
+        console.log(currentLevel);
+        console.log(fractalStatus);
         
         if (!(currentLevel == 0 && fractalStatus == "open")){
             addBtn.style.display = "none";
@@ -863,7 +864,7 @@ function getAllCards() {
 
 
     // Call with current context from auth
-    fetch(`/api/v1/fractals/get_all_cards?group_id=${currentGroupId}&user_id=${currentUserId}`)
+    fetch(`/api/v1/fractals/get_all_cards?group_id=${currentGroupId}&user_id=${currentUserId}&fractal_id=${currentFractalId}`)
         .then(res => {
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
             return res.text();

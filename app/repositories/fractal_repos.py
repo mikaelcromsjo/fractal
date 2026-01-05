@@ -1023,9 +1023,15 @@ from typing import Optional, List, Dict
 async def get_all_cards_repo(
     db: AsyncSession,
     group_id: int,
-    current_user_id: int
+    current_user_id: int,
+    fractal_id: int = -1
 ) -> Optional[List[Dict[str, any]]]:
     """Load all cards in group and return as list of dicts."""
+
+    if (group_id == -1):
+        group = get_last_group_repo(db, fractal_id)
+        group_id = group.id
+
     Proposal = models.Proposal
 
     prop_stmt = (
