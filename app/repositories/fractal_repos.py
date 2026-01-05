@@ -818,6 +818,17 @@ async def get_group_member_repo(db: AsyncSession, user_id: int, group_id: int) -
     )
     return result.scalars().one_or_none()
 
+
+async def get_last_group_repo(db: AsyncSession, fractal_id: int) -> Round | None:
+    result = await db.execute(
+        select(Group)
+        .where(Group.fractal_id == fractal_id)
+        .order_by(desc(Group.id))
+        .limit(1)
+    )
+    return result.scalars().one_or_none()
+
+
 async def get_last_round_repo(db: AsyncSession, fractal_id: int) -> Round | None:
     result = await db.execute(
         select(Round)

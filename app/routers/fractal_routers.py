@@ -24,6 +24,7 @@ from typing import Dict, List
 
 # Service imports - replace direct DB access
 from services.fractal_service import (
+    get_last_group_repo,
     get_proposals_for_group_repo,
     vote_representative_repo,
     rep_vote_card,
@@ -191,6 +192,11 @@ async def fractals_auth(request: AuthRequest, db: AsyncSession = Depends(get_db)
         round_obj = await get_last_round_repo(db, fractal_id) if fractal_id else None
 
         # check if user is active in curren round
+        status = "active"
+        if (not user_context.get("group_id")):
+            group = get_last_group_repo(db, fractal_id)
+            status = "observer"
+ 
 
 
         # 3️⃣ Construct the response (with null-safety)
@@ -215,6 +221,7 @@ async def fractals_auth(request: AuthRequest, db: AsyncSession = Depends(get_db)
             ,
             "level": getattr(round_obj, "level", None),
             "fractal_status": getattr(fractal, "status", None),
+            "status": group_status,
         }
 
         print(f"📤 Sending response: {response_data}")
@@ -268,8 +275,8 @@ async def get_next_card_router(
     template = templates.get_template("proposal_card.html")
     
     html_content = template.render(
-        request=request, 
-        user=current_user, 
+        request=request,
+        user=current_user,
         proposal=card  # ✅ Perfect match!
     )
     
