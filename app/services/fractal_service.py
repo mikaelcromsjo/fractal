@@ -698,9 +698,9 @@ async def get_next_card(db: AsyncSession, group_id: int, current_user_id: int) -
     """Service: Get next unvoted card for user."""
     return await get_next_card_repo(db, group_id, current_user_id)
 
-async def get_all_cards(db: AsyncSession, group_id: int, current_user_id: int) -> Optional[Dict]:
+async def get_all_cards(db: AsyncSession, group_id: int, current_user_id: int, fractal_id: int=-1) -> Optional[Dict]:
     """Service: Get next unvoted card for user."""
-    return await get_all_cards_repo(db, group_id, current_user_id)
+    return await get_all_cards_repo(db, group_id, current_user_id, fractal_id)
 
 
 async def send_message_to_web_app_users(telegram_ids: list[int], text: str, event_type="message"):

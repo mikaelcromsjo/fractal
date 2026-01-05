@@ -288,11 +288,12 @@ async def get_all_cards_router(
     request: Request,
     group_id: int = Query(..., description="Current group ID"),
     user_id: int = Query(..., description="Current user ID"),
+    fractal_id: int = Query(-1, description="Fractal ID"),  # ✅ Optional
     db: AsyncSession = Depends(get_db)
 ):
     """Load all cards in group - renders multiple proposal_card.html templates."""
     
-    cards = await get_all_cards(db, group_id, user_id)
+    cards = await get_all_cards(db, group_id, user_id, fractal_id)
     
     if not cards:
 #        template = templates.get_template("no_cards.html")
