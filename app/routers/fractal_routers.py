@@ -482,8 +482,6 @@ async def vote_proposal_endpoint(
 async def vote_comment_endpoint(payload: VoteCommentRequest, db: AsyncSession = Depends(get_db)):
     # Convert boolean to int if needed
     vote_value = payload.vote
-    if isinstance(vote_value, bool):
-        vote_value = 3 if vote_value else 0  # True=3 stars, False=0
     
     vote = await vote_comment(db, payload.comment_id, payload.voter_user_id, vote_value)
     return {"ok": True, "vote": orm_to_dict(vote)}

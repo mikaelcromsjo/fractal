@@ -46,7 +46,7 @@ async def _get_comment_subtree(
                 {
                     "voter_user_id": vote.voter_user_id,
                     "voter_username": voter.username,
-                    "vote": bool(vote.vote),
+                    "vote": vote.vote,
                     "created_at": vote.created_at.isoformat()
                     if getattr(vote, "created_at", None)
                     else None,
