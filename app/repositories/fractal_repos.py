@@ -1135,7 +1135,12 @@ async def _enrich_proposal_with_comments_repo(
         template_comments.append(comment_card)
         # Sort so vote -1 comments appear last
         #template_comments.sort(key=lambda c: (c["vote"] == -1, c["vote"]))
-        template_comments.sort(key=lambda c: (c["vote"] == -1, -c["total_score"], c["vote"]))
+
+        template_comments.sort(key=lambda c: (
+            c["vote"] == -1,
+            -(c.get("total_score") or 0),
+            c["vote"]
+        ))
     
     # ✅ EXACT TEMPLATE STRUCTURE
     card = {
