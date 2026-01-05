@@ -111,7 +111,7 @@
                                         </div>
                                     </span>
 
-                                    % if comment_vote != -1:
+                                    % if comment_vote != -1 && !comment_total_score:
                                     <div class="comment-rating-block">
                                         <div class="comment-star-rating"
                                              id="comment-star-rating-${comment.get('id',0)}">
