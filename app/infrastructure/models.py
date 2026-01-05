@@ -1,5 +1,5 @@
 # app/infrastructure/models.py
-from sqlalchemy import Column, Integer, String, Text, Boolean, DateTime, ForeignKey, JSON, UniqueConstraint, func, CheckConstraint
+from sqlalchemy import Column, Integer, String, Text, Boolean, DateTime, ForeignKey, JSON, UniqueConstraint, func, CheckConstraint, Float
 from sqlalchemy.orm import relationship, backref
 from datetime import datetime, timezone
 from infrastructure.db.session import Base
@@ -174,7 +174,7 @@ class Proposal(Base):
     meta = Column(JSONB, default=dict)
     created_at = Column(DateTime(timezone=True), default=func.now())
     score_per_level = Column(JSONB, default=list)
-    total_score = Column(Integer)
+    total_score = Column(Float)
 """
     _fractal = relationship("Fractal", back_populates="_proposals")
     _group = relationship("Group", back_populates="_proposals")
@@ -196,7 +196,7 @@ class Comment(Base):
     text = Column(Text, nullable=False)
     created_at = Column(DateTime(timezone=True), default=func.now())
     score_per_level = Column(JSONB, default=list)
-    total_score = Column(Integer)
+    total_score = Column(Float)
     group_id = Column(Integer, ForeignKey("groups.id"), nullable=False)
 
 """

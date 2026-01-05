@@ -597,27 +597,27 @@ async def save_comment_score_repo(
     level: int,
     score: float,
 ):
-    print("save_score", comment_id, level, score)
     """
-    Update comment.score_per_level for this round,
-    then compute and persist weighted total_score.
+    Save comment's score for a given round level and
+    update weighted total_score based on all previous levels.
     """
-    # Fetch existing list
+    # Fetch existing per-level scores
     result = await db.execute(select(Comment.score_per_level).where(Comment.id == comment_id))
     score_list = result.scalar() or []
 
-    # Expand list to current level
+    # Extend list to current level
     while len(score_list) <= level:
         score_list.append(None)
     score_list[level] = score
 
     # --- Compute weighted total_score ---
+    # Weight decay: 1.0, 0.8, 0.6, 0.4, ... until non-positive
     weights = [1 - 0.2 * i for i in range(len(score_list))]
     total_score = sum(
         (s or 0) * w for s, w in zip(reversed(score_list), weights) if w > 0
     )
 
-    # --- Persist both fields ---
+    # --- Persist both per-level scores and total ---
     await db.execute(
         update(Comment)
         .where(Comment.id == comment_id)
@@ -626,7 +626,6 @@ async def save_comment_score_repo(
     await db.commit()
 
     print("total_score", comment_id, total_score)
-
 
 #----------------------------
 # Proposal votes
@@ -1070,7 +1069,6 @@ async def _enrich_proposal_with_comments_repo(
         )
         vote_record = vote_result.scalars().first()
         proposal_vote = vote_record.score if vote_record else 0
-        print("proposal_vote ", proposal_vote)
 
     # ALL comments (matching template structure)
     group = await get_group_repo(db, proposal.group_id)
@@ -1097,7 +1095,7 @@ async def _enrich_proposal_with_comments_repo(
         # ADD THIS: Build and append comment structure
 
         print("total",comment.id, comment.total_score)
-        print("total",comment.id, comment.score_per_level)
+        print("total per level",comment.id, comment.score_per_level)
         
         comment_card = {
             "id": comment.id,
