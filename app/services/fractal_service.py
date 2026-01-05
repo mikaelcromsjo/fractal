@@ -418,7 +418,7 @@ async def calculate_comment_scores(db, group_id: int, round_obj):
             MIN_VOTES_FOR_BAYES / (n + MIN_VOTES_FOR_BAYES)
         ) * global_avg
         await save_comment_score_repo(db, comment_id, round_obj.level, adjusted)
-        print ("save comment score", adjusted)
+        print ("save comment score adjusted", comment_id, adjusted)
 
 
 

@@ -625,7 +625,7 @@ async def save_comment_score_repo(
     )
     await db.commit()
 
-    print("total_score", total_score)
+    print("total_score", comment_id, total_score)
 
 
 #----------------------------
@@ -1096,8 +1096,8 @@ async def _enrich_proposal_with_comments_repo(
             vote = vote_record.vote if vote_record else 0
         # ADD THIS: Build and append comment structure
 
-        print("total",comment.total_score)
-        print("total",comment.score_per_level)
+        print("total",comment.id, comment.total_score)
+        print("total",comment.id, comment.score_per_level)
         
         comment_card = {
             "id": comment.id,
@@ -1125,8 +1125,6 @@ async def _enrich_proposal_with_comments_repo(
         "title": proposal.title,
         "message": proposal.body or "",  # ✅ Template uses 'message'
         "date": proposal.created_at.strftime("%Y-%m-%d %H:%M") if proposal.created_at else "just now",
-        "rating_points": 0,  # ✅ Template slider default
-        "rating_percent": 0,  # 0-100%
         "tags": proposal.meta.get("tags", []),  # ✅ Template expects 'tags'
         "vote": proposal_vote,  # ✅ Template score pill
         "total_score": proposal.total_score,
