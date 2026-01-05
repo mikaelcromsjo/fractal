@@ -1029,7 +1029,7 @@ async def get_all_cards_repo(
     """Load all cards in group and return as list of dicts."""
 
     if (group_id == -1):
-        group = get_last_group_repo(db, fractal_id)
+        group = await get_last_group_repo(db, fractal_id)
         group_id = group.id
 
     Proposal = models.Proposal
