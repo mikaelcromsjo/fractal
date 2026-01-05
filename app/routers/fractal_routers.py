@@ -221,7 +221,7 @@ async def fractals_auth(request: AuthRequest, db: AsyncSession = Depends(get_db)
             ,
             "level": getattr(round_obj, "level", None),
             "fractal_status": getattr(fractal, "status", None),
-            "group_status": status,
+            "group_status": group_status,
         }
 
         print(f"📤 Sending response: {response_data}")
