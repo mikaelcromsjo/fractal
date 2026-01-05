@@ -800,7 +800,8 @@ function isAllVoted() {
         
         // Proposal voted? (any active star)
         const proposalStars = card.querySelector(`#star-rating-${proposalId} .star.active`);
-        if (!proposalStars && owner != currentUserId) return false;
+        if (!proposalStars && owner != currentUserId) 
+            return false;
         
         // All comments voted? (every comment has active star)
         const commentRatings = card.querySelectorAll('.comment-star-rating');
