@@ -795,10 +795,11 @@ function isAllVoted() {
     
     return Array.from(proposalCards).every(card => {
         const proposalId = card.dataset.proposalId;
+        const owner = card.dataset.owner;
         
         // Proposal voted? (any active star)
         const proposalStars = card.querySelector(`#star-rating-${proposalId} .star.active`);
-        if (!proposalStars) return false;
+        if (!proposalStars && owner != currentUserId) return false;
         
         // All comments voted? (every comment has active star)
         const commentRatings = card.querySelectorAll('.comment-star-rating');
@@ -1117,7 +1118,7 @@ submitBtn.addEventListener("click", function() {
             
             // Create proposal card HTML - exact match to your structure
             const proposalHtml = `
-                <div class="proposal-card" data-proposal-id="${proposal.id}">
+                <div class="proposal-card" data-proposal-id="${proposal.id}" data-owner="${currentUserId}">
                     <!-- Header: avatar + name + date -->
                     <div class="proposal-header-row">
                         <div class="proposal-userblock">
