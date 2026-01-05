@@ -81,7 +81,8 @@
                             comment_vote = int(comment.get('vote') or 0)
                             comment_user_id = comment.get('user_id', 0)
                             is_hidden = i >= visible_count and comment_vote != 0
-                            comment_total_score = int(comment.get('total_score') or 0)
+                            comment_total_score_raw = float(comment.get('total_score') or 0)
+                            comment_total_score = int((comment_total_score_raw * 10)) if comment_total_score_raw else 0  # ✅ Scale to 1-10
 
                         %>
 
@@ -121,13 +122,14 @@
                                             % endfor
                                         </div>
                                     </div>
-                                    % endif
+                                    % if comment_total_score:
                                     <div class="">
                                         <div class="comment_total_score"
                                              >
-                                             Total: ${comment_total_score}
+                                             Total: ${comment_total_score}/10
                                         </div>
                                     </div>
+                                    % endif
                                     
                                 </div>
                                 <div class="proposal-comment-text">
