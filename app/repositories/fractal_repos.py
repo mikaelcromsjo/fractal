@@ -1066,7 +1066,7 @@ async def _enrich_proposal_with_comments_repo(
     
     # Proposal creator info (for 'user' in template)
     creator_result = await db.execute(select(User).where(User.id == proposal.creator_user_id))
-    creator = creator_result.scalars().first()    
+    creator = creator_result.scalars().first()
 
     # take away users own vote
     if (proposal.creator_user_id == current_user_id):
@@ -1121,9 +1121,10 @@ async def _enrich_proposal_with_comments_repo(
             "group_id": comment.group_id,
             # Add other template fields
         }
-        template_comments.append(comment_card)        
+        template_comments.append(comment_card)
         # Sort so vote -1 comments appear last
-        template_comments.sort(key=lambda c: (c["vote"] == -1, c["vote"]))
+        #template_comments.sort(key=lambda c: (c["vote"] == -1, c["vote"]))
+        template_comments.sort(key=lambda c: (c["vote"] == -1, -c["total_score"], c["vote"]))
     
     # ✅ EXACT TEMPLATE STRUCTURE
     card = {
