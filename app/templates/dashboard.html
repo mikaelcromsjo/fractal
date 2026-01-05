@@ -720,7 +720,7 @@ fetch("/api/v1/fractals/auth", {
         fractalStatus = data.fractal_status; 
 
 
-        statusEl.innerText = "Name: " + data.username + " Fractal: " + fractalName + " Level:" + data.level + " Group:" + data.group_id + " Status: " + data.fractal_status;
+        statusEl.innerText = "Name: " + data.username + " Fractal: " + currentFractalId + " Level:" + data.level + " Group:" + data.group_id + " Status: " + data.fractal_status;
 //        statusEl.innerText = "Fractal: " + fractalName + " Level:" + data.level + " Status: " + data.fractal_status;      
         
         console.log("Auth context:", data);
