@@ -59,7 +59,19 @@ from aiogram.filters import CommandStart
 logger = logging.getLogger(__name__)
 router = Router()
 
-def format_international_times(start_date, round_time):
+def escape_markdown_v2(text: str) -> str:
+    """
+    Escape special characters for Telegram MarkdownV2 format.    
+    MarkdownV2 requires escaping: _ * [ ] ( ) ~ ` > # + - = | { } . !
+    """
+    special_chars = ['_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!']
+    
+    for char in special_chars:
+        text = text.replace(char, f'\\{char}')
+    
+    return text
+
+def format_international_times(start_date):
     start_dt = datetime.fromisoformat(start_date)
     
     times = {
@@ -152,7 +164,7 @@ async def handle_inline_share(query: InlineQuery):
         f"🎉 Click to Join Fractal Meeting: \"{sanitize_text(fractal.name)}\"\n\n"
         f"📝 {sanitize_text(fractal.description)}\n\n"
         f"📅 {start_date}\n\n"
-        f"{format_international_times(fractal.start_date.isoformat(), round_time)}\n\n"
+        f"{format_international_times(fractal.start_date.isoformat())}\n\n"
         f"🔄 {round_time} rounds\n\n"
         f"📢 Share this link `https://t.me/{settings.bot_username}?start=fractal_{fractal_id}`"
     )
@@ -496,7 +508,7 @@ async def cmd_start(message: types.Message, state: FSMContext):
                 # A fractal can only be joined if status is "waiting"
                 if fractal.status.lower() != "waiting":
                     international_times = format_international_times(
-                        fractal.start_date.isoformat(), minutes
+                        fractal.start_date.isoformat()
                     )
                     
                     await message.answer(
@@ -522,7 +534,7 @@ async def cmd_start(message: types.Message, state: FSMContext):
                 )
 
                 international_times = format_international_times(
-                    fractal.start_date.isoformat(), minutes
+                    fractal.start_date.isoformat()
                 )
 
                 await message.answer(
@@ -641,7 +653,7 @@ async def fsm_get_start_date(message: types.Message, state: FSMContext):
 
     # ✅ Format for display
     start_date_formatted = time.strftime("%A, %B %d, %Y")
-    international_times = format_international_times(time.isoformat(), round_time)
+    international_times = format_international_times(time.isoformat())
 
     # Build dict for create_fractal
     meta_settings = {"round_time": round_time}
@@ -845,23 +857,21 @@ async def cmd_join(message: types.Message, state: FSMContext,
         except Exception as e:
             logger.exception("Join failed")
 
-            round_time_minutes = int(fractal.meta.get("round_time", 0))
-            round_time_str = f"{round_time_minutes} min/round" if round_time_minutes else "N/A"
-            start_str = (
-                fractal.start_date.strftime("%A %H:%M, %B %d, %Y")
-                if fractal.start_date
-                else "Unknown"
-            )
-
+            # Build message text with proper escaping
+            escaped_name = escape_markdown_v2(fractal.name or "Fractal")
+            escaped_desc = escape_markdown_v2(fractal.description or "")
+            start_date = fractal.start_date.strftime("%A, %B %d, %Y") if fractal.start_date else "Unknown"            
+            minutes = int(fractal.meta.get("round_time", 0))
+            times_str = format_international_times(fractal.start_date.isoformat(), minutes)
+            escaped_times = escape_markdown_v2(times_str)
+                            
             await message.answer(
-                f"❌ *Cannot join fractal*\n\n"
-                f"🆔 {sanitize_text(fractal.name or 'Unknown')}\n\n"
-                f"📝 {sanitize_text(fractal.description or 'No description')}\n\n"
-                f"📅 {start_str}\n\n"
-                f"⏰ {round_time_str}\n\n"
-                f"📊 {fractal.status.title()}\n\n"
-                f"⚠️ The fractal has probably already started, so joining is not possible.",
-                parse_mode="Markdown",
+                f"⚠️ *Cannot join fractal* {escaped_name}\n\n"
+                f"📝 {escaped_desc}\n\n"
+                f"📅 {start_date}\n\n"
+                f"{escaped_times}\n\n"
+                f"📊 {fractal.status.title()}\n\n",
+                parse_mode="MarkdownV2",
             )
             break
 
