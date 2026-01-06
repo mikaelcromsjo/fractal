@@ -977,23 +977,38 @@ async def test_vote_proposals(fractal_id: int, score: int = 10, db: AsyncSession
 
 @router.post("/test/generate_representative_votes")
 async def test_rep_votes(fractal_id: int, db: AsyncSession = Depends(get_db)):
-    """Updated for NEW 3-2-1 points system"""
+    """Generate realistic rep votes: telegram_id <40000 can receive votes"""
     round_obj = await get_last_round_repo(db, fractal_id)
     groups = await get_groups_for_round(db, round_obj.id)
     
+    total_votes = 0
     for group in groups:
         members = await get_group_members(db, group.id)
-        if len(members) < 2: continue
+        if len(members) < 2: 
+            continue
+        
+        # Eligible candidates: telegram_id < 40000 (via user.telegram_id)
+        candidates = [
+            m for m in members 
+            if (await get_user(db, m.user_id)).telegram_id < 40000
+        ]
+        
+        if not candidates:
+            continue  # Skip group with no eligible
             
-        candidate = members[-1].user_id  # First as candidate
-        for member in members[1:]:  # Everyone else votes
+        # Voters: everyone except self-votes
+        voters = [m for m in members if m not in candidates]
+        
+        for voter in voters:
+            candidate = candidates[0].user_id  # Pick first eligible
             await vote_representative_repo(
                 db, group.id, round_obj.id, 
-                member.user_id, candidate, 3  # Gold vote (3 points)
+                voter.user_id, candidate, 3  # Gold vote
             )
+            total_votes += 1
     
     await db.commit()
-    return {"ok": True, "rep_votes": "generated"}
+    return {"ok": True, "votes_generated": total_votes}
 
 
 @router.post("/test/generate_comments")
