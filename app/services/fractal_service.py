@@ -931,6 +931,12 @@ async def rep_vote_card(db: AsyncSession, user_id: int, group_id: int, fractal_i
             if not members:
                 return "<div class='proposal-card rep-vote-card'><div class='instructions'>No members in group.</div></div>"
             
+
+            html = [
+                    "<div class='proposal-card rep-vote-card'>",
+                    "<div class='instructions'>Group Members</div>",
+                ]
+            
             for member in members:
                 user = await get_user(db, member.user_id)
                 avatar = f"/static/img/64_{(member.user_id % 16) + 1}.png"
@@ -942,6 +948,9 @@ async def rep_vote_card(db: AsyncSession, user_id: int, group_id: int, fractal_i
                         <span class="name">{name}</span>
                     </div>
                 """)
+            return "\n".join(html)        
+
+
         html = [
             "<div class='proposal-card rep-vote-card'>",
             "<div class='instructions'>Group Representatives 🥇 🥈 🥉</div>",
