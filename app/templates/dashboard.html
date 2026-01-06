@@ -742,7 +742,8 @@ fetch("/api/v1/fractals/auth", {
         if (!currentGroupId){
             addCardDiv('You are not in any active group at the moment. <p>'+fractalName+'<p>'+fractalDescription+'<p>Round Time: ' + fractalRoundTime +' minutes<p>Start Date: '+fractalStartDate+'');
             fractalStatus = "closed";
-            currentGroupId = -1;            
+            currentGroupId = -1;
+                        
         } else {
             lastGroupId == currentGroupId
         }
@@ -912,6 +913,14 @@ function addCard(html) {
             el.style.display = "none";
         });
     }
+
+    if (currentGroupId == -1) {
+        card.querySelectorAll(".proposal-rating-block").forEach(el => {
+            el.style.display = "none";
+        });
+    }
+
+    
     if (fractalStatus != "open") {
         
         // Disable proposal-rating-block (voting)
