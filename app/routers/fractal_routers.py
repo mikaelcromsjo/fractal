@@ -534,6 +534,53 @@ class VoteRepresentativePayload(BaseModel):
     candidate_user_id: int
     points: int
 
+
+def _iter_comment_nodes(comment_nodes):
+    """
+    Yield every comment node (including nested replies) 
+    from the given list of comment nodes.
+    """
+    for node in comment_nodes:
+        yield node
+        replies = node.get("replies", [])
+        if replies:
+            yield from _iter_comment_nodes(replies)
+
+
+@router.post("/test/vote_all_comments")
+async def test_vote_comments(
+    fractal_id: int,
+    score: int = 10,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Everyone votes `score` on all comments (and all nested replies)
+    for the current round in this fractal.
+    """
+
+    score  = random.randint(-10, 10) if score == -1 else score    
+
+    round_obj = await get_last_round_repo(db, fractal_id)
+    groups = await get_groups_for_round(db, round_obj.id)
+
+    votes = 0
+
+    for group in groups:
+        members = await get_group_members(db, group.id)
+        tree = await get_proposals_comments_tree(db, group.id)
+
+        # tree: list of proposal nodes
+        for pnode in tree:
+            comment_nodes = pnode.get("comments", [])
+            for cnode in _iter_comment_nodes(comment_nodes):
+                comment = cnode["comment"]
+                for member in members:
+                    await vote_comment(db, comment.id, member.user_id, score)
+                    votes += 1
+
+    await db.commit()
+    return {"ok": True, "total_comment_votes": votes}    
+
 @router.post("/test/generate_representative_votes")
 async def test_generate_representative_votes(fractal_id: int, db: AsyncSession = Depends(get_db)):
     """
@@ -910,6 +957,9 @@ async def test_generate_proposals(fractal_id: int, db: AsyncSession = Depends(ge
 @router.post("/test/vote_all_proposals")
 async def test_vote_proposals(fractal_id: int, score: int = 10, db: AsyncSession = Depends(get_db)):
     """Everyone votes max score on all proposals"""
+
+    score  = random.randint(-10, 10) if score == -1 else score    
+
     round_obj = await get_last_round_repo(db, fractal_id)
     groups = await get_groups_for_round(db, round_obj.id)
     
@@ -1027,8 +1077,11 @@ async def test_full_simulation(fractal_id: int, db: AsyncSession = Depends(get_d
     await test_generate_comments(fractal_id, db)
 
     print("🧪 5/9 Vote proposals")
-    await test_vote_proposals(fractal_id, score=10, db=db)
-    
+    await test_vote_proposals(fractal_id, score=-1, db=db)
+
+    print("🧪 5/9 Vote comment")
+    await test_vote_comments(fractal_id, score=-1, db=db)
+
     print("🧪 6/9 Representative votes")
     await test_rep_votes(fractal_id, db)
     

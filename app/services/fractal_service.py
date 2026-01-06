@@ -912,7 +912,7 @@ async def round_half_way_service(db, fractal_id: int):
 
     await set_round_status_repo(db, round.id, "vote")
 
-async def rep_vote_card(db: AsyncSession, user_id: int, group_id: int, fractal_id: int) -> str:
+async def rep_vote_card(db: AsyncSession, user_id: int, group_id: int, fractal_id: int = -1) -> str:
     
     if (group_id == -1):
         group = await get_last_group_repo(db, fractal_id)
