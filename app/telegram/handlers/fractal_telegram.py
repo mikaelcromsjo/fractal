@@ -524,6 +524,11 @@ async def cmd_start(message: types.Message, state: FSMContext):
                 # ✅ SHOW JOIN MENU
                 builder = InlineKeyboardBuilder()
                 builder.button(text="🙋 Join Fractal", callback_data=f"join:{fractal.id}")
+                builder.button(
+                    text="ℹ️ Get more information",
+                    callback_data="cmd:help"
+                )
+                builder.adjust(1, 1)
                 button = builder.as_markup()
 
                 # Remove time from start_date - show only date
@@ -588,7 +593,7 @@ async def cmd_help(message: types.Message):
             "🏆 **Final results:** When the fractal ends, you'll see the top-ranked proposals from the center Circle and the most trusted representatives who carried ideas forward. "
             "This is collective wisdom in action—the best ideas rise to the top through collaboration.\n\n"
             "Collaborate, connect, and grow your circle! 🌱\n\n"
-            "Read more at https://FractalCircles.org and contribute to the development on https://UniteAwake.com"
+            "Read more at https://FractalCircles.org\nContribute to the development on https://UniteAwake.com"
         )
         await message.answer(help_text, parse_mode="Markdown")
     else:
@@ -598,7 +603,7 @@ async def cmd_help(message: types.Message):
             "You'll receive an invite link when that happens.\n\n"
             "🧩 If you’re a group organizer, you can also create your own fractal and invite others to join. \n\n"
             "🎯 A Fractal meeting is divided into separate rounds in which breakout groups create proposals, discuss them, and vote on them. Most participants attend only one round; only the selected representatives continue to the next round. Go to the #FractalCircleBot and try it out!\n\n"
-            "Collaborate, connect, and grow your circle!\n\nRead more on https://FractalCircles.org and contribute on http://UniteAwake.com"
+            "Collaborate, connect, and grow your circle!\n\nRead more on https://FractalCircles.org\nContribute on http://UniteAwake.com"
         )
         await message.answer(help_text, parse_mode="Markdown")
 
