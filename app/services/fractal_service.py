@@ -171,8 +171,8 @@ async def start_fractal(db: AsyncSession, fractal_id: int):
     # Add member/group stats to message
     text = f"""🚀 Fractal '{fractal.name}' has started!
     👥 The fractal has {total_members} members in {len(groups)} groups
-    💬 Now you can chat with your group members in this private telegram chat. Try writing 'Hi!'
-    📝 And you can write and vote on proposals in the Fractal Dashboard!"""
+💬 Now you can chat with your group members in this private telegram chat. Try writing 'Hi!'
+📝 And you can write and vote on proposals in the Fractal Dashboard!"""
 
     await send_button_to_fractal_members(db, text, "Dashboard", fractal_id)
     text = f"🚀 Fractal '{fractal.name}' has started!<p>💬 Now you can chat with your group members in this private chat. Try writing 'Hi!'<p>📝 And you can write and vote on proposals in the Fractal Dashboard!"
@@ -913,7 +913,12 @@ async def round_half_way_service(db, fractal_id: int):
     await set_round_status_repo(db, round.id, "vote")
 
 async def rep_vote_card(db: AsyncSession, user_id: int, group_id: int) -> str:
-
+    
+#    if (group_id == -1):
+#        group = await get_last_group_repo(db, fractal_id)
+#        group_id = group.id
+#    else:
+#        group = await get_group_repo(db, group_id)
 
     group = await get_group_repo(db, group_id)
     round = await get_round_repo(db, group.round_id)
