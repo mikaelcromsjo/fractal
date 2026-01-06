@@ -550,7 +550,7 @@ def _iter_comment_nodes(comment_nodes):
 @router.post("/test/vote_all_comments")
 async def test_vote_comments(
     fractal_id: int,
-    score: int = 10,
+    score: int = 2,
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -558,7 +558,7 @@ async def test_vote_comments(
     for the current round in this fractal.
     """
 
-    score  = random.randint(-10, 10) if score == -1 else score    
+    score  = random.randint(1, 3)
 
     round_obj = await get_last_round_repo(db, fractal_id)
     groups = await get_groups_for_round(db, round_obj.id)
@@ -958,7 +958,7 @@ async def test_generate_proposals(fractal_id: int, db: AsyncSession = Depends(ge
 async def test_vote_proposals(fractal_id: int, score: int = 10, db: AsyncSession = Depends(get_db)):
     """Everyone votes max score on all proposals"""
 
-    score  = random.randint(-10, 10) if score == -1 else score    
+    score  = random.randint(1, 10) 
 
     round_obj = await get_last_round_repo(db, fractal_id)
     groups = await get_groups_for_round(db, round_obj.id)
@@ -985,7 +985,7 @@ async def test_rep_votes(fractal_id: int, db: AsyncSession = Depends(get_db)):
         members = await get_group_members(db, group.id)
         if len(members) < 2: continue
             
-        candidate = members[0].user_id  # First as candidate
+        candidate = members[-1].user_id  # First as candidate
         for member in members[1:]:  # Everyone else votes
             await vote_representative_repo(
                 db, group.id, round_obj.id, 
