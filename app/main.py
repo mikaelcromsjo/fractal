@@ -54,7 +54,7 @@ async def create_tables():
     await engine.dispose()
     print("Tables created successfully.")
 
-async def clear_pending_updates(bot: Bot):
+async def clear_pending_updates(bot):
     offset = None
     while True:
         updates = await bot.get_updates(offset=offset, limit=100)
