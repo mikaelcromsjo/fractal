@@ -111,11 +111,6 @@
                                         </div>
                                     </span>
 
-                                    % if comment_total_score:
-                                    <div class="comment-score-badge">
-                                        ⭐ ${comment_total_score}
-                                    </div>
-                                    % endif
 
                                     % if comment_vote != -1:
                                     <div class="comment-rating-block">
@@ -127,6 +122,11 @@
                                                       onclick="onStarRatingCommentClick(${comment.get('id',0)}, ${j + 1})">⭐</span>
                                             % endfor
                                         </div>
+                                    </div>
+                                    % endif
+                                    % if comment_total_score:
+                                    <div class="comment-score-badge">
+                                        ⭐ ${comment_total_score}
                                     </div>
                                     % endif
                                     
