@@ -754,24 +754,103 @@ async def test_quick_start(num_users: int = 25, db: AsyncSession = Depends(get_d
 
 @router.post("/test/generate_proposals")
 async def test_generate_proposals(fractal_id: int, db: AsyncSession = Depends(get_db)):
-    """Exact Step 6 from your simulation"""
+    """Generate realistic community proposals"""
     round_obj = await get_last_round_repo(db, fractal_id)
     groups = await get_groups_for_round(db, round_obj.id)
     
+    # Real community proposal templates
+    proposal_templates = [
+        {
+            "title": "Weekly Community Standup Meetings",
+            "body": "Let's establish a weekly 30-minute video call every Tuesday at 7pm UTC to discuss progress, blockers, and upcoming initiatives. This will help us stay aligned and build stronger relationships."
+        },
+        {
+            "title": "Community Discord Server",
+            "body": "Create a dedicated Discord server for members to collaborate in real-time, share ideas, and build our community culture. We can set up channels for announcements, general chat, project discussion, and off-topic."
+        },
+        {
+            "title": "Monthly Newsletter",
+            "body": "Start a monthly newsletter highlighting community wins, member spotlights, upcoming events, and resources. This keeps everyone informed and celebrates our collective progress."
+        },
+        {
+            "title": "Mentorship Program",
+            "body": "Pair experienced members with newcomers for structured mentorship. This accelerates onboarding, builds relationships, and creates a culture of knowledge-sharing within our community."
+        },
+        {
+            "title": "Community Contribution Guidelines",
+            "body": "Document clear guidelines for how members can contribute to community projects. Include code of conduct, contribution process, and recognition for contributors."
+        },
+        {
+            "title": "Quarterly Hackathon Events",
+            "body": "Organize quarterly 48-hour hackathons where members can collaborate on projects, learn from each other, and build something cool together. This drives innovation and engagement."
+        },
+        {
+            "title": "Community Resource Library",
+            "body": "Build a centralized wiki/documentation site with tutorials, best practices, case studies, and tools curated by community members. Make knowledge easily discoverable."
+        },
+        {
+            "title": "Local Meetup Groups",
+            "body": "Establish regional meetup groups for members in the same geographic areas. Monthly in-person gatherings strengthen bonds and create local networks within our global community."
+        },
+        {
+            "title": "Community Swag Store",
+            "body": "Create a branded merchandise store (t-shirts, mugs, stickers) where members can purchase items. This builds pride and helps promote the community externally."
+        },
+        {
+            "title": "Ambassador Program",
+            "body": "Recruit passionate community members as ambassadors to represent us at conferences, run workshops, and recruit new members. Provide training, resources, and recognition."
+        },
+        {
+            "title": "Open Source Project Initiative",
+            "body": "Start an open-source project led by the community. This gives members something tangible to build together, improves their skills, and creates lasting value."
+        },
+        {
+            "title": "Community Podcast Series",
+            "body": "Launch a monthly podcast featuring community members sharing their stories, insights, and learnings. A great way to celebrate members and attract new talent."
+        },
+        {
+            "title": "Sponsorship & Grants Program",
+            "body": "Establish a fund to sponsor community projects, events, and member development. Help fund hackathons, conferences, tools, and learning resources."
+        },
+        {
+            "title": "Code Review & Feedback Culture",
+            "body": "Formalize a peer code review process where members help each other improve. Build standards and best practices together through collaborative feedback."
+        },
+        {
+            "title": "Community Standards & Values Document",
+            "body": "Collaboratively draft a living document that outlines our community's core values, mission, and principles. This guides decisions and onboarding of new members."
+        }
+    ]
+    
     proposals = []
+    proposal_idx = 0
+    
     for group in groups:
         members = await get_group_members(db, group.id)
-        for uid in [m.user_id for m in members]:
+        member_ids = [m.user_id for m in members]
+        
+        # Distribute proposals across group members
+        for i, uid in enumerate(member_ids):
+            template = proposal_templates[proposal_idx % len(proposal_templates)]
             proposal = await create_proposal(
-                db, fractal_id, group.id, round_obj.id,
-                f"Proposal by user{uid}",
-                "Manual test proposal body",
-                uid  # creator_user_id ✅
+                db, 
+                fractal_id, 
+                group.id, 
+                round_obj.id,
+                template["title"],
+                template["body"],
+                uid  # creator_user_id
             )
             proposals.append(proposal)
+            proposal_idx += 1
     
     await db.commit()
-    return {"ok": True, "proposals": len(proposals)}
+    return {
+        "ok": True, 
+        "proposals_created": len(proposals),
+        "groups": len(groups),
+        "proposals_per_group": len(proposals) // len(groups) if groups else 0
+    }
 
 @router.post("/test/vote_all_proposals")
 async def test_vote_proposals(fractal_id: int, score: int = 10, db: AsyncSession = Depends(get_db)):
@@ -815,12 +894,37 @@ async def test_rep_votes(fractal_id: int, db: AsyncSession = Depends(get_db)):
 @router.post("/test/generate_comments")
 async def test_generate_comments(fractal_id: int, db: AsyncSession = Depends(get_db)):
     """
-    Generate one comment per member per proposal in each group of the latest round.
+    Generate realistic feedback comments on proposals from all group members.
     """
     round_obj = await get_last_round_repo(db, fractal_id)
     groups = await get_groups_for_round(db, round_obj.id)
     
+    # Realistic feedback templates for community proposals
+    comment_templates = [
+        "Love this idea! It would really help us stay connected and aligned as a community.",
+        "Great initiative. I'd suggest we start with a pilot group to test the concept before full rollout.",
+        "This is important. We need clear structure and guidelines to make this sustainable long-term.",
+        "I'm interested in helping lead this effort. Let me know if you need volunteers!",
+        "Good proposal, but we should consider budget/resources needed. How would we fund this?",
+        "This aligns perfectly with our community values. I'm excited to see this happen.",
+        "Have you thought about how this would scale as we grow? We should plan ahead.",
+        "I've seen similar initiatives work well in other communities. Happy to share best practices.",
+        "This solves a real problem I've been experiencing. Count me in!",
+        "The timing is perfect for this. We've been discussing this need for a while now.",
+        "I'd like to see more details on implementation. What would the first steps be?",
+        "Fantastic idea. This will definitely increase engagement and retention in our community.",
+        "I have some concerns about [aspect], but the overall direction is solid.",
+        "Let's make sure we include perspectives from newer members in the planning phase.",
+        "This could be a great way to attract talent from outside our immediate network.",
+        "I propose we create a working group to flesh out the details and timeline.",
+        "Strong proposal. I'd recommend we gather more feedback from the broader community first.",
+        "This is exactly what we need right now. Let's prioritize it!",
+        "I'm curious about the expected ROI and how we'd measure success for this.",
+        "Great thinking. I'd suggest we start small and iterate based on feedback."
+    ]
+    
     comments = []
+    comment_idx = 0
     
     for g in groups:
         members = await get_group_members(db, g.id)
@@ -829,56 +933,56 @@ async def test_generate_comments(fractal_id: int, db: AsyncSession = Depends(get
         proposals = await get_proposals_for_group_repo(db, g.id)
         
         for p in proposals:
+            # Each member comments on each proposal (excluding the creator)
             for commenter_id in member_ids:
+                # Skip if commenter is the proposal creator
+                if commenter_id == p.creator_user_id:
+                    continue
+                
+                template = comment_templates[comment_idx % len(comment_templates)]
                 c = await create_comment(
                     db=db,
                     proposal_id=p.id,
                     user_id=commenter_id,
-                    text=f"Comment on proposal {p.id} by user {commenter_id}",
+                    text=template,
                     parent_comment_id=None,
                     group_id=g.id,
                 )
                 comments.append(c)
+                comment_idx += 1
     
     await db.commit()
-    return {"ok": True, "comments": len(comments)}
+    return {
+        "ok": True,
+        "comments_created": len(comments),
+        "groups": len(groups),
+        "proposals_total": sum(len(await get_proposals_for_group_repo(db, g.id)) for g in groups),
+    }
 
 @router.post("/test/full_simulation")
-async def test_full_simulation(num_users: int = 25, db: AsyncSession = Depends(get_db)):
+async def test_full_simulation(fractal_id: int, db: AsyncSession = Depends(get_db)):
     """Exact replica of your entire simulation"""
-    
-    print("🧪 1/9 Create fractal")
-    fractal = await create_fractal(db, "Full Sim", "Complete test", 
-                                 datetime.now(timezone.utc), "waiting", {})
-    
-    print("🧪 2/9 Join users")
-    users = []
-    for i in range(num_users):
-        u = await join_fractal(db, 
-            {"username": f"user{i+1}", "telegram_id": str(20000+i)}, 
-            fractal.id)
-        users.append(u)
-    
+        
     print("🧪 3/9 Start fractal")
-    round0 = await start_fractal(db, fractal.id)
+    round0 = await start_fractal(db, fractal_id)
     
     print("🧪 4/9 Generate proposals")
-    await test_generate_proposals(fractal.id, db)
-    
+    await test_generate_proposals(fractal_id, db)
+
+    print("🧪 4/9 Generate comments")
+    await test_generate_comments(fractal_id, db)
+
     print("🧪 5/9 Vote proposals")
-    await test_vote_proposals(fractal.id, score=10, db=db)
+    await test_vote_proposals(fractal_id, score=10, db=db)
     
     print("🧪 6/9 Representative votes")
-    await test_rep_votes(fractal.id, db)
-    
-    print("🧪 7/9 Close round")
-    next_round = await close_round(db, fractal.id)
+    await test_rep_votes(fractal_id, db)
     
     print("🧪 8/9 Commit")
     await db.commit()
     
-    print("🧪 9/9 Done!")
-    return {"fractal_id": fractal.id, "round_id": round0.id}
+#    print("🧪 9/9 Done!")
+    return {"fractal_id": fractal_id, "round_id": round0.id}
 
 @router.get("/test/status/{fractal_id}")
 async def test_status(fractal_id: int, db: AsyncSession = Depends(get_db)):

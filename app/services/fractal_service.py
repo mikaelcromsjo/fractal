@@ -154,13 +154,31 @@ async def start_fractal(db: AsyncSession, fractal_id: int):
     fractal = await get_fractal_repo(db, fractal_id)
     # 1️⃣ Notify all members that the fractal/round has started
     print ("🚀 Your fractal has started!")
-    text = f"🚀 Fractal '{fractal.name}' has started!\n\n💬 Now you can chat with your group members in this private chat. Try writing 'Hi!'\n\n📝 And you can write and vote on proposlas in the Fractal Dashboard!"
+
+
+    groups = await get_groups_for_round(db, round_obj.id)
+    print(f"Found {len(groups)} groups")
+    group_members_map = {}
+    total_members = 0
+
+    for g in groups:
+        members = await get_group_members(db, g.id)
+        member_ids = [m.user_id for m in members]
+        group_members_map[g.id] = member_ids
+        total_members += len(member_ids)
+        print(f"Group {g.id} members: {member_ids}")
+
+    # Add member/group stats to message
+    text = f"""🚀 Fractal '{fractal.name}' has started!
+    👥 The fractal has {total_members} members in {len(groups)} groups
+    💬 Now you can chat with your group members in this private telegram chat. Try writing 'Hi!'
+    📝 And you can write and vote on proposals in the Fractal Dashboard!"""
+
     await send_button_to_fractal_members(db, text, "Dashboard", fractal_id)
-    text = f"🚀 Fractal '{fractal.name}' has started!<p>💬 Now you can chat with your group members in this private chat. Try writing 'Hi!'<p>📝 And you can write and vote on proposlas in the Fractal Dashboard!"
+    text = f"🚀 Fractal '{fractal.name}' has started!<p>💬 Now you can chat with your group members in this private chat. Try writing 'Hi!'<p>📝 And you can write and vote on proposals in the Fractal Dashboard!"
     await send_message_to_fractal_web_app_members(db, fractal_id, text, "start")
     await open_fractal_repo(db, fractal_id)
     return round_0
-
 
 async def send_message_to_members(
     db: AsyncSession,
