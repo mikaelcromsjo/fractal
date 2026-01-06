@@ -866,7 +866,7 @@ async def cmd_join(message: types.Message, state: FSMContext,
             escaped_times = escape_markdown_v2(times_str)
                             
             await message.answer(
-                f"⚠️ *Cannot join fractal* {escaped_name}\n\n"
+                f"⚠️ *Cannot join fractal* {escaped_name} {e}\n\n"
                 f"📝 {escaped_desc}\n\n"
                 f"📅 {start_date}\n\n"
                 f"{escaped_times}\n\n"
