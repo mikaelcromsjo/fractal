@@ -1441,7 +1441,7 @@ async function getRepVoteCard(groupId) {
     currentRepPoints = 3;
     votedCandidates = {};
 
-    const res = await fetch(`/api/v1/fractals/rep_vote_card/${groupId}?user_id=${currentUserId}?fractal_id=${currentFractalId}`);
+    const res = await fetch(`/api/v1/fractals/rep_vote_card/${groupId}?user_id=${currentUserId}&fractal_id=${currentFractalId}`);
     const data = await res.json();
 
     if (!data.ok) {
