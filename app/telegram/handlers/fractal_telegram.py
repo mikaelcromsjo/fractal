@@ -862,7 +862,7 @@ async def cmd_join(message: types.Message, state: FSMContext,
             escaped_desc = escape_markdown_v2(fractal.description or "")
             start_date = fractal.start_date.strftime("%A, %B %d, %Y") if fractal.start_date else "Unknown"            
             minutes = int(fractal.meta.get("round_time", 0))
-            times_str = format_international_times(fractal.start_date.isoformat(), minutes)
+            times_str = format_international_times(fractal.start_date.isoformat())
             escaped_times = escape_markdown_v2(times_str)
                             
             await message.answer(
