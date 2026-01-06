@@ -65,6 +65,8 @@ async def lifespan(app: FastAPI):
     print("🚀 Starting")
     bot, _ = init_bot()
 
+    await bot.delete_webhook(drop_pending_updates=True)  # Clears queue safely
+
 #    await bot.delete_webhook(drop_pending_updates=True)
 #    await bot.set_webhook("https://fractal.ia-ai.se/api/v1/fractals/webhook/8568824507:AAHGONnctVOq0L7IC9O_ZewzYNpqj4CSWkU")
 
