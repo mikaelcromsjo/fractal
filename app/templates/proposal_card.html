@@ -111,7 +111,15 @@
                                         </div>
                                     </span>
 
-                                    % if comment_vote != -1 and not comment_total_score:
+                                    % if comment_total_score:
+                                    <div class="comment-rating-block">
+                                    <div class="proposal-score-badge">
+                                        ⭐ ${total_comment_score}
+                                    </div>
+                                    </div>
+                                    % endif
+
+                                    % if comment_vote != -1:
                                     <div class="comment-rating-block">
                                         <div class="comment-star-rating"
                                              id="comment-star-rating-${comment.get('id',0)}">
@@ -119,17 +127,6 @@
                                                 <span class="star comment-star ${'active' if j < comment_vote else 'faded'}"
                                                       data-rating="${j + 1}"
                                                       onclick="onStarRatingCommentClick(${comment.get('id',0)}, ${j + 1})">⭐</span>
-                                            % endfor
-                                        </div>
-                                    </div>
-                                    % endif
-                                    % if comment_total_score:
-                                    <div class="comment-rating-block">
-                                        <div class="comment-star-rating">
-                                            % for j in range(3):
-                                                <span class="star comment-star star-total ${'active' if j < comment_total_score else 'faded'}"
-                                                      data-rating="${j + 1}"
-                                                      ">⭐</span>
                                             % endfor
                                         </div>
                                     </div>
