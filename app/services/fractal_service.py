@@ -169,10 +169,10 @@ async def start_fractal(db: AsyncSession, fractal_id: int):
         print(f"Group {g.id} members: {member_ids}")
 
     # Add member/group stats to message
-    text = f"""🚀 Fractal '{fractal.name}' has started!
-    👥 The fractal has {total_members} members in {len(groups)} groups
-💬 Now you can chat with your group members in this private telegram chat. Try writing 'Hi!'
-📝 And you can write and vote on proposals in the Fractal Dashboard!"""
+    text = f"🚀 Fractal '{fractal.name}' has started!\n\n"
+    "👥 The fractal has {total_members} members in {len(groups)} groups\n\n"
+    "💬 Now you can chat with your group members in this private telegram chat. Try writing 'Hi!'\n\n"
+    "📝 And you can write and vote on proposals in the Fractal Dashboard!"
 
     await send_button_to_fractal_members(db, text, "Dashboard", fractal_id)
     text = f"🚀 Fractal '{fractal.name}' has started!<p>💬 Now you can chat with your group members in this private chat. Try writing 'Hi!'<p>📝 And you can write and vote on proposals in the Fractal Dashboard!"
