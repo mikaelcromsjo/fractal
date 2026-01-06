@@ -156,7 +156,7 @@ async def start_fractal(db: AsyncSession, fractal_id: int):
     print ("🚀 Your fractal has started!")
 
 
-    groups = await get_groups_for_round(db, round_obj.id)
+    groups = await get_groups_for_round(db, round_0.id)
     print(f"Found {len(groups)} groups")
     group_members_map = {}
     total_members = 0
