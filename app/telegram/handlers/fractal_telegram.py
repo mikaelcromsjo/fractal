@@ -704,7 +704,7 @@ async def fsm_get_start_date(message: types.Message, state: FSMContext):
                 f"📢 Share this link `https://t.me/{settings.bot_username}?start=fractal_{fractal_id}`"
             )
 
-            await message.answer(share_text, parse_mode="Markdown")
+            await message.answer(share_text, parse_mode="MarkdownV2")
 
             if message.chat.type == ChatType.PRIVATE:
                 await message.answer(
