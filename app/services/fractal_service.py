@@ -133,7 +133,7 @@ async def join_fractal(db: AsyncSession, user_info: Dict, fractal_id: int):
     existing_member = await get_fractal_member_repo(db, fractal_id, user.id)
     if existing_member:
         await set_active_fractal_repo(db, user.id, fractal_id)
-        raise ValueError("⚠️ User is already a member of this fractal")
+        raise ValueError("User is already a member of this fractal")
     
     # 4. Execute operations
     print ("added user:", telegram_id)
