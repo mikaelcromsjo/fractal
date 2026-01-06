@@ -862,7 +862,7 @@ async def cmd_join(message: types.Message, state: FSMContext,
             escaped_desc = escape_markdown_v2(fractal.description or "")
             start_date = fractal.start_date.strftime("%A, %B %d, %Y") if fractal.start_date else "Unknown"            
             minutes = int(fractal.meta.get("round_time", 0))
-            times_str = format_international_times(fractal.start_date.isoformat())
+            times_str = format_international_times(fractal.start_date.isoformat(), minutes)
             escaped_times = escape_markdown_v2(times_str)
                             
             await message.answer(
@@ -1298,10 +1298,12 @@ async def echo_all(message: types.Message):
 
     user_info = await get_user_info(str(message.from_user.id))  # Or your source
     if not user_info:
+        await message.answer("User not found or no group assigned.")  # Or log/return
         return
 
     group_id = int(user_info.get("group_id", 0))
     if group_id == 0:
+        await message.answer("No group assigned to user.")
         return
 
     message_text = f"👋 {user_info.get('username', 'User')} wrote:\n💬 {message.text}"
