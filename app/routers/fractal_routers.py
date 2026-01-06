@@ -732,23 +732,78 @@ async def test_create_fractal(db: AsyncSession = Depends(get_db)):
     await db.commit()
     return {"ok": True, "fractal_id": fractal.id}
 
+COMMUNITY_TITLES = [
+    "Neighborhood Commons Hub",
+    "Regenerative Cities Network",
+    "Open Source Democracy Lab",
+    "Local Climate Action Circle",
+    "Cooperative Housing Council",
+    "Digital Rights & Privacy Forum",
+    "Community Resilience Coalition",
+    "Urban Gardeners Alliance",
+    "Conscious Entrepreneurs Guild",
+    "Citizen Assembly Sandbox",
+    "Grassroots Innovation Studio",
+    "Participatory Budgeting Circle",
+    "Community Health & Wellness Hub",
+    "Circular Economy Builders",
+    "Youth Civic Engagement Lab",
+    "Decentralized Governance Studio",
+    "Social Impact Makers Network",
+    "Neighborhood Repair Café Circle",
+    "Community Learning Commons",
+    "Digital Commons Stewardship Circle",
+]
+
+USERNAMES = [
+    "community_weaver",
+    "urban_gardener",
+    "policy_hacker",
+    "regen_builder",
+    "consensus_crafter",
+    "civic_coder",
+    "grassroots_maria",
+    "local_linker",
+    "climate_jonas",
+    "openprocess_eli",
+    "circle_host_anna",
+    "commoner_lina",
+    "facilitation_fred",
+    "systems_sara",
+    "impact_mika",
+    "democratic_dan",
+    "cohost_kim",
+    "fractal_farid",
+    "neighbor_nora",
+    "commons_kalle",
+]
+
 @router.post("/test/quick_start")
 async def test_quick_start(num_users: int = 25, db: AsyncSession = Depends(get_db)):
     """Exact replica of your simulation Steps 1-3"""
     
-    # 1. Create fractal
+    # 1. Create fractal with random title
+    fractal_name = random.choice(COMMUNITY_TITLES)  # [web:17][web:23]
     fractal = await create_fractal(
-        db, "Quick Test", "Quick simulation", 
-         datetime.now(timezone.utc) + timedelta(minutes=1), "waiting", {}
+        db,
+        fractal_name,
+        "Quick simulation",
+        datetime.now(timezone.utc) + timedelta(minutes=1),
+        "waiting",
+        {},
     )
-    
-    # 2. Join users (exact match)
+
+    # 2. Join users with randomized usernames (cycled if num_users > len list)
     users = []
     for i in range(num_users):
-        user_dict = {"username": f"user{i+1}", "telegram_id": str(20000 + i)}
+        username = USERNAMES[i % len(USERNAMES)]
+        user_dict = {
+            "username": username,
+            "telegram_id": str(20000 + i),
+        }
         user = await join_fractal(db, user_dict, fractal.id)
         users.append(user)
-    
+            
     await db.commit()
     return {"ok": True, "fractal_id": fractal.id, "users_joined": len(users)}
 
