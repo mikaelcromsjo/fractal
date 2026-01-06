@@ -14,7 +14,7 @@ from mako.lookup import TemplateLookup
 from infrastructure.db.session import get_async_session as get_db
 from infrastructure.models import RoundTree
 from datetime import datetime, timezone
-
+import random
 from services.fractal_service_tree import build_fractal_tree
 
 from fastapi import WebSocket, WebSocketDisconnect
@@ -803,7 +803,7 @@ async def test_quick_start(num_users: int = 25, db: AsyncSession = Depends(get_d
         }
         user = await join_fractal(db, user_dict, fractal.id)
         users.append(user)
-            
+
     await db.commit()
     return {"ok": True, "fractal_id": fractal.id, "users_joined": len(users)}
 
