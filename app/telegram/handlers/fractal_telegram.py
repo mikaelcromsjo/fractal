@@ -152,7 +152,7 @@ async def handle_inline_share(query: InlineQuery):
 
     join_button = InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text="🚀 Join Fractal", url=join_url)]
+            [InlineKeyboardButton(text="🚀 Go to Fractal", url=join_url)]
         ]
     )
     start_date = fractal.start_date.strftime("%A %H:%M, %B %d, %Y")
@@ -1298,12 +1298,12 @@ async def echo_all(message: types.Message):
 
     user_info = await get_user_info(str(message.from_user.id))  # Or your source
     if not user_info:
-        await message.answer("User not found or no group assigned.")  # Or log/return
+#        await message.answer("User not found or no group assigned.")  # Or log/return
         return
 
     group_id = int(user_info.get("group_id", 0))
     if group_id == 0:
-        await message.answer("No group assigned to user.")
+#        await message.answer("No group assigned to user.")
         return
 
     message_text = f"👋 {user_info.get('username', 'User')} wrote:\n💬 {message.text}"
