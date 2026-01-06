@@ -152,7 +152,7 @@ async def handle_inline_share(query: InlineQuery):
 
     join_button = InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text="🚀 Join Fractal", url=join_url)]
+            [InlineKeyboardButton(text="🚀 Goto Fractal", url=join_url)]
         ]
     )
     start_date = fractal.start_date.strftime("%A %H:%M, %B %d, %Y")
