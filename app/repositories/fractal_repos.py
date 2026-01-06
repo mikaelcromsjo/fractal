@@ -759,7 +759,7 @@ async def close_fractal_repo(db, fractal_id: int):
         return None
 
     fractal.status = "closed"
-    fractal.closed_at = datetime.utcnow()
+    fractal.closed_at = datetime.now(timezone.utc)
     await db.commit()
     await db.refresh(fractal)
     return fractal

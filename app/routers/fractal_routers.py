@@ -1014,6 +1014,15 @@ async def test_status(fractal_id: int, db: AsyncSession = Depends(get_db)):
     }
 
 
+@router.post("/debug/comment-votes")
+async def debug_votes(group_id: int, db: AsyncSession = Depends(get_db)):
+    votes = await get_votes_for_group_comments_repo(db, group_id)
+    return {
+        "total_votes": len(votes),
+        "comment_ids_with_votes": [v.comment_id for v in votes],
+        "unique_comments": len(set(v.comment_id for v in votes))
+    }
+
 import subprocess
 from fastapi import APIRouter, HTTPException
 
