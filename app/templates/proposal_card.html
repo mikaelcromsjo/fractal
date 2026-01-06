@@ -89,16 +89,14 @@
                         <!-- Comment Row -->
                         <div class="proposal-comment-row ${'hidden_' + str(proposal_id) if is_hidden else ''}">
                         <!-- Comment Avatar + Hover Target -->
-                            % if comment_user_id != user_id:
-                            <img src="${comment.get('avatar','')}"
-                                 alt="${comment.get('username','')}"
-                                 class="proposal-comment-avatar vote-hover-target"
-                                 data-user-id="${comment_user_id}">
-                            % else:
                             <img src="${comment.get('avatar','')}"
                                  alt="${comment.get('username','')}"
                                  class="proposal-comment-avatar">
-                            % endif
+                                    % if comment_total_score:
+                                    <div class="comment-score-badge">
+                                        ${comment_total_score}
+                                    </div>
+                                    % endif
 
                             <div class="proposal-comment-content">
                                 <div class="proposal-comment-top">
@@ -122,11 +120,6 @@
                                                       onclick="onStarRatingCommentClick(${comment.get('id',0)}, ${j + 1})">⭐</span>
                                             % endfor
                                         </div>
-                                    </div>
-                                    % endif
-                                    % if comment_total_score:
-                                    <div class="comment-score-badge">
-                                        ⭐ ${comment_total_score}
                                     </div>
                                     % endif
                                     
