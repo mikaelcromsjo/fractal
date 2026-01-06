@@ -82,7 +82,7 @@
                             comment_user_id = comment.get('user_id', 0)
                             is_hidden = i >= visible_count and comment_vote != 0
                             comment_total_score_raw = float(comment.get('total_score') or 0)
-                            comment_total_score = int((comment_total_score_raw * 3)) if comment_total_score_raw else 0  # ✅ Scale to 1-10
+                            comment_total_score = int((comment_total_score_raw * 10)) if comment_total_score_raw else 0  # ✅ Scale to 1-10
 
                         %>
 
