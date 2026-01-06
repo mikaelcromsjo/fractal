@@ -927,7 +927,7 @@ async def rep_vote_card(db: AsyncSession, user_id: int, group_id: int, fractal_i
         # if round is closed return the representatives total score
         reps = await get_representatives_for_group_repo(db, group_id, round.id)
         if not reps:
-            members = await get_group_members(db, group_id, group_id)
+            members = await get_group_members(db, group_id)
             if not members:
                 return "<div class='proposal-card rep-vote-card'><div class='instructions'>No members in group.</div></div>"
             
