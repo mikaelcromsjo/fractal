@@ -1296,14 +1296,12 @@ async def echo_all(message: types.Message):
 #        )
         return
 
-    user_info = await get_user_info(str(message.from_user.id))
+    user_info = await get_user_info(str(message.from_user.id))  # Or your source
     if not user_info:
-#        await message.answer("User not found in database.")
         return
 
     group_id = int(user_info.get("group_id", 0))
     if group_id == 0:
- #       await message.answer("No group assigned to user.")
         return
 
     message_text = f"👋 {user_info.get('username', 'User')} wrote:\n💬 {message.text}"
