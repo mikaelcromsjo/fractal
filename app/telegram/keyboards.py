@@ -171,7 +171,10 @@ def default_menu(private=None):
             callback_data="cmd:help"
         )
 
-        builder.adjust(1, 1)
+        builder.button(text="✨ Create Fractal", callback_data="cmd:create_fractal")
+
+
+        builder.adjust(1, 2)
 
         return builder.as_markup()
     else:
