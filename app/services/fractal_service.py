@@ -912,13 +912,13 @@ async def round_half_way_service(db, fractal_id: int):
 
     await set_round_status_repo(db, round.id, "vote")
 
-async def rep_vote_card(db: AsyncSession, user_id: int, group_id: int) -> str:
+async def rep_vote_card(db: AsyncSession, user_id: int, group_id: int, fractal_id: int) -> str:
     
-#    if (group_id == -1):
-#        group = await get_last_group_repo(db, fractal_id)
-#        group_id = group.id
-#    else:
-#        group = await get_group_repo(db, group_id)
+    if (group_id == -1):
+        group = await get_last_group_repo(db, fractal_id)
+        group_id = group.id
+    else:
+        group = await get_group_repo(db, group_id)
 
     group = await get_group_repo(db, group_id)
     round = await get_round_repo(db, group.round_id)

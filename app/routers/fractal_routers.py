@@ -1022,10 +1022,11 @@ from fastapi import APIRouter, HTTPException
 async def get_rep_vote_card(
     group_id: int,
     user_id: int,
+    fractal_id: int,
     db: AsyncSession = Depends(get_db)
 ):
     """
     Builds and returns the representative vote card HTML for a given group and user.
     """
-    html = await rep_vote_card(db, user_id=user_id, group_id=group_id)
+    html = await rep_vote_card(db, user_id=user_id, group_id=group_id, fractal_id=fractal_id)
     return {"ok": True, "html": html}
