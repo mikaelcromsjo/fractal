@@ -152,7 +152,7 @@ async def handle_inline_share(query: InlineQuery):
 
     join_button = InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text="🚀 Go to Fractal", url=join_url)]
+            [InlineKeyboardButton(text="🚀 Join Fractal", url=join_url)]
         ]
     )
     start_date = fractal.start_date.strftime("%A %H:%M, %B %d, %Y")
@@ -416,7 +416,7 @@ async def dashboard_command(message: types.Message):
         ])
         
         await message.answer(
-            text="Here’s your Fractal Dashboard:",
+            text="Open The Fractal Circles App:",
             reply_markup=keyboard
         )
     else:
