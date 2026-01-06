@@ -955,8 +955,7 @@ async def test_generate_comments(fractal_id: int, db: AsyncSession = Depends(get
     return {
         "ok": True,
         "comments_created": len(comments),
-        "groups": len(groups),
-        "proposals_total": sum(len(await get_proposals_for_group_repo(db, g.id)) for g in groups),
+        "groups": len(groups)
     }
 
 @router.post("/test/full_simulation")
