@@ -568,19 +568,35 @@ async def cmd_help(message: types.Message):
             "🤖 **Fractal Circle Bot** helps you organize fractal meetings in large groups.\n\n"
             "💌 In most cases, you'll be invited to join a fractal meeting that someone else created. "
             "You'll receive an invite link when that happens.\n\n"
-            "🧩 If you’re a group organizer, you can also create your own fractal and invite others to join. \n\n"
-            "🎯 A Fractal meeting is divided into separate rounds in which breakout groups create proposals, discuss them, and vote on them. Most participants attend only one round; only the selected representatives continue to the next round. "
-            "Collaborate, connect, and grow your circle!\n\nRead more on https://FractalCircles.org"
+            "🧩 If you're a group organizer, you can also create your own fractal and invite others to join.\n\n"
+            "🎯 A Fractal meeting is divided into separate rounds in which breakout groups create proposals, discuss them, and vote on them. "
+            "Most participants attend only one round; only the selected representatives continue to the next round.\n\n"
+            "👥 When the fractal starts, you're placed in a small **Circle** (4-8 people). "
+            "You'll chat with your Circle members in a private Telegram group and use the Dashboard web app to make proposals and vote.\n\n"
+            "📝 **First half of the round:** Create proposals on the topic, add comments to discuss ideas, and rate comments with 1-3 stars (⭐ interesting, ⭐⭐ good, ⭐⭐⭐ excellent). "
+            "This is your time to brainstorm and refine ideas together.\n\n"
+            "⏰ **Halfway through:** The bot reminds you to focus on voting. You can still comment, but no new proposals can be created. "
+            "Now it's time to evaluate what your Circle has created.\n\n"
+            "🗳️ **Vote on proposals:** Give each proposal a score from 1-10 based on its merit. "
+            "The **top 2 proposals** from your Circle will advance to the next round.\n\n"
+            "🥇 **Select your representative:** Allocate Gold (3 pts), Silver (2 pts), and Bronze (1 pt) medals to three Circle members. "
+            "The person with the most points becomes your Circle's representative in the next round. You cannot vote for yourself.\n\n"
+            "🔄 **Next rounds:** Only representatives from each Circle continue. They discuss the top proposals that advanced, vote again, and select a new representative. "
+            "This continues until one final Circle remains.\n\n"
+            "🏆 **Final results:** When the fractal ends, everyone can see the top-ranked proposals from the center Circle and the representatives who carried ideas forward. "
+            "This shows the wisdom of the whole group distilled into the best ideas.\n\n"
+            "Collaborate, connect, and grow your circle! 🌱\n\n"
+            "Read more at https://FractalCircles.org"
         )
-        await message.answer(help_text, reply_markup=help_menu(), parse_mode="Markdown")
+        await message.answer(help_text, parse_mode="Markdown")
     else:
         help_text = (
             "🤖 **Fractal Circle Bot** helps you organize fractal meetings in large groups.\n\n"
             "💌 In most cases, you'll be invited to join a fractal meeting that someone else created. "
             "You'll receive an invite link when that happens.\n\n"
             "🧩 If you’re a group organizer, you can also create your own fractal and invite others to join. \n\n"
-            "🎯 A Fractal meeting is divided into separate rounds in which breakout groups create proposals, discuss them, and vote on them. Most participants attend only one round; only the selected representatives continue to the next round. "
-            "Collaborate, connect, and grow your circle!\n\nRead more on https://FractalCircles.org"
+            "🎯 A Fractal meeting is divided into separate rounds in which breakout groups create proposals, discuss them, and vote on them. Most participants attend only one round; only the selected representatives continue to the next round.\n\n"
+            "Collaborate, connect, and grow your circle!\n\nRead more on https://FractalCircles.org and contribute on http://UniteAwake.com"
         )
         await message.answer(help_text, parse_mode="Markdown")
 
