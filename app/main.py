@@ -54,14 +54,6 @@ async def create_tables():
     await engine.dispose()
     print("Tables created successfully.")
 
-async def clear_pending_updates(bot):
-    offset = None
-    while True:
-        updates = await bot.get_updates(offset=offset, limit=100)
-        if not updates:
-            break
-        offset = updates[-1].update_id + 1  # Ack all fetched
-    print("Cleared pending updates queue")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -73,9 +65,8 @@ async def lifespan(app: FastAPI):
     print("🚀 Starting")
     bot, _ = init_bot()
 
-    await clear_pending_updates(bot)
 
-#    await bot.delete_webhook(drop_pending_updates=True)
+    await bot.delete_webhook(drop_pending_updates=True)
     await bot.set_webhook("https://fractal.ia-ai.se/api/v1/fractals/webhook/8568824507:AAHGONnctVOq0L7IC9O_ZewzYNpqj4CSWkU")
 
     # Private chat commands
