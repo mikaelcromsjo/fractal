@@ -927,8 +927,21 @@ async def rep_vote_card(db: AsyncSession, user_id: int, group_id: int, fractal_i
         # if round is closed return the representatives total score
         reps = await get_representatives_for_group_repo(db, group_id, round.id)
         if not reps:
-            return "<div class='proposal-card rep-vote-card'><div class='instructions'>No representatives chosen.</div></div>"
-
+            members = await get_group_members(db, group_id, group_id)
+            if not members:
+                return "<div class='proposal-card rep-vote-card'><div class='instructions'>No members in group.</div></div>"
+            
+            for member in members:
+                user = await get_user(db, member.user_id)
+                avatar = f"/static/img/64_{(member.user_id % 16) + 1}.png"
+                name = user.username or f"User {member.user_id}"  # Safe: username or fallback
+                
+                html.append(f"""
+                    <div class="rep-member">
+                        <img src="{avatar}" alt="" class="proposal-comment-avatar">
+                        <span class="name">{name}</span>
+                    </div>
+                """)
         html = [
             "<div class='proposal-card rep-vote-card'>",
             "<div class='instructions'>Group Representatives 🥇 🥈 🥉</div>",
