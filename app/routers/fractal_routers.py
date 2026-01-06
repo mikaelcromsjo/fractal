@@ -550,7 +550,7 @@ def _iter_comment_nodes(comment_nodes):
 @router.post("/test/vote_all_comments")
 async def test_vote_comments(
     fractal_id: int,
-    score: int = 2,
+    score: int,
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -955,7 +955,7 @@ async def test_generate_proposals(fractal_id: int, db: AsyncSession = Depends(ge
     }
 
 @router.post("/test/vote_all_proposals")
-async def test_vote_proposals(fractal_id: int, score: int = 10, db: AsyncSession = Depends(get_db)):
+async def test_vote_proposals(fractal_id: int, score: int, db: AsyncSession = Depends(get_db)):
     """Everyone votes max score on all proposals"""
 
     score  = random.randint(1, 10) 
