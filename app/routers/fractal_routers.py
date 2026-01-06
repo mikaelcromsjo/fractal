@@ -937,7 +937,7 @@ async def test_rep_votes(fractal_id: int, db: AsyncSession = Depends(get_db)):
             
         candidate = members[0].user_id  # First as candidate
         for member in members[1:]:  # Everyone else votes
-            await vote_representative(
+            await vote_representative_repo(
                 db, group.id, round_obj.id, 
                 member.user_id, candidate, 3  # Gold vote (3 points)
             )
