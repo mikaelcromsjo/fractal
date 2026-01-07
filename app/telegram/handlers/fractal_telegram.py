@@ -694,17 +694,16 @@ async def fsm_get_start_date(message: types.Message, state: FSMContext):
             fractal_id = getattr(fractal, "id", None)
             fractal_name = getattr(fractal, "name", name)
 
-            # ✅ International share text
             share_text = (
-                f"🎉 Fractal Created: \"{sanitize_text(fractal_name)}\"\n\n"
-                f"📝 {sanitize_text(description)}\n\n"
-                f"📅 {start_date_formatted}\n\n"
-                f"{international_times}\n\n"
-                f"🔄 {round_time} minutes rounds\n\n"
-                f"👉 Go to Fractal to sign up for the meeting:\n"
-                f"https://t.me/{settings.bot_username}?start=fractal_{fractal_id}"
+                f'<b>🎉 Fractal Created:</b> "{sanitize_text(fractal_name)}"<br><br>'
+                f'<i>📝 {sanitize_text(description)}</i><br><br>'
+                f'<b>📅 {start_date_formatted}</b><br><br>'
+                f'{international_times}<br><br>'
+                f'<b>🔄 {round_time} minute rounds</b><br><br>'
+                f"👉 <a href=\"https://t.me/{settings.bot_username}?start=fractal_{fractal_id}\">Go to Fractal to sign up for the meeting</a>"
             )
-            await message.answer(share_text, parse_mode="MarkdownV2")
+
+            await message.answer(share_text, parse_mode="HTML")
 
             if message.chat.type == ChatType.PRIVATE:
                 await message.answer(
