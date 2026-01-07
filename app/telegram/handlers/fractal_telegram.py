@@ -117,7 +117,7 @@ from aiogram.utils import markdown
 
 @router.inline_query()
 async def handle_inline_share(query: InlineQuery):
-    """Creates a 'Join Fractal' button to share to groups."""
+    """Creates a 'Sign up for Fractal Meeting' button to share to groups."""
     print("INLINE QUERY RECEIVED:", query.query)
 
     q = query.query.strip()
@@ -161,7 +161,7 @@ async def handle_inline_share(query: InlineQuery):
 
 
     share_text = (
-        f"🎉 Click to Join Fractal Meeting: \"{sanitize_text(fractal.name)}\"\n\n"
+        f"🎉 Click to Sign up for Fractal Meeting: \"{sanitize_text(fractal.name)}\"\n\n"
         f"📝 {sanitize_text(fractal.description)}\n\n"
         f"📅 {start_date}\n\n"
         f"{format_international_times(fractal.start_date.isoformat())}\n\n"
@@ -435,7 +435,7 @@ async def cmd_invite_group(message: types.Message):
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text=f"🎯 Join Fractal {fractal_id}",
+                    text=f"🎯 Sign up for Fractal Meeting {fractal_id}",
                     url=f"https://t.me/{settings.bot_username}?start=fractal_{fractal_id}",
                 )
             ],
@@ -523,7 +523,7 @@ async def cmd_start(message: types.Message, state: FSMContext):
                     
                 # ✅ SHOW JOIN MENU
                 builder = InlineKeyboardBuilder()
-                builder.button(text="🙋 Join Fractal", callback_data=f"join:{fractal.id}")
+                builder.button(text="🙋 Sign up for Fractal Meeting", callback_data=f"join:{fractal.id}")
                 builder.button(
                     text="ℹ️ Get more information",
                     callback_data="cmd:help"
@@ -543,7 +543,7 @@ async def cmd_start(message: types.Message, state: FSMContext):
                 )
 
                 await message.answer(
-                    f"🎉 Click to Join Fractal Meeting: \"{sanitize_text(fractal.name)}\"\n\n"
+                    f"🎉 Click to Sign up for Fractal Meeting: \"{sanitize_text(fractal.name)}\"\n\n"
                     f"📝 {sanitize_text(fractal.description)}\n\n"
                     f"📅 {start_date_formatted}\n\n"  # Date only
                     f"{international_times}\n\n"    # Times only
