@@ -695,11 +695,11 @@ async def fsm_get_start_date(message: types.Message, state: FSMContext):
             fractal_name = getattr(fractal, "name", name)
 
             share_text = (
-                f'<b>🎉 Fractal Created:</b> "{sanitize_text(fractal_name)}"<br><br>'
-                f'<i>📝 {sanitize_text(description)}</i><br><br>'
-                f'<b>📅 {start_date_formatted}</b><br><br>'
-                f'{international_times}<br><br>'
-                f'<b>🔄 {round_time} minute rounds</b><br><br>'
+                f'<b>🎉 Fractal Created:</b> "{sanitize_text(fractal_name)}"\n\n'
+                f'<i>📝 {sanitize_text(description)}</i>\n\n'
+                f'<b>📅 {start_date_formatted}</b>\n\n'
+                f'{international_times}\n\n'
+                f'<b>🔄 {round_time} minute rounds</b>\n\n'
                 f"👉 <a href=\"https://t.me/{settings.bot_username}?start=fractal_{fractal_id}\">Go to Fractal to sign up for the meeting</a>"
             )
 
