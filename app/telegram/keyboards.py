@@ -88,7 +88,7 @@ def fractal_created_menu(fractal_id: int):
     builder = InlineKeyboardBuilder()
 
     builder.button(
-        text="🙋 Join Fractal",
+        text="🙋 Sign up for Fractal Meeting",
         callback_data=f"join:{fractal_id}"
     )
     builder.button(
@@ -126,11 +126,11 @@ def fractal_actions_menu(fractal_id: int):
             [
                 InlineKeyboardButton(
                     text="👥 Share Join Link",
-                    switch_inline_query=f"Join fractal {fractal_id}: t.me/{settings.bot_username}?start=fractal_{fractal_id}"
+                    switch_inline_query=f"📋 Sign up for Fractal Meeting {fractal_id}: t.me/{settings.bot_username}?start=fractal_{fractal_id}"
                 )
             ],
             [
-                InlineKeyboardButton(text="📋 Join fractal", url=f"https://t.me/{settings.bot_username}?start=fractal_{fractal_id}")
+                InlineKeyboardButton(text="📋 Sign up for Fractal Meeting", url=f"https://t.me/{settings.bot_username}?start=fractal_{fractal_id}")
             ]
         ]
     )
