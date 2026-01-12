@@ -466,7 +466,7 @@ async def cmd_start(message: types.Message, state: FSMContext):
         BotCommand(command="help", description="Information"),
         BotCommand(command="dashboard", description="Dashboard"),
     ]
-    await bot.set_my_commands(commands)
+    #await bot.set_my_commands(commands)
     
     if message.chat.type == ChatType.PRIVATE:
         await bot.set_chat_menu_button(chat_id=message.chat.id, menu_button=MenuButtonCommands())

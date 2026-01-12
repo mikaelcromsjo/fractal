@@ -28,10 +28,7 @@ async def send_button_to_telegram_users(
 ) -> None:
     
     if (button=="Dashboard"):
-        import random
-        random_nr = random.randint(0, 999999)
-
-        url = f"{settings.public_base_url}/api/v1/fractals/dashboard?fractal_id={fractal_id}&{random_nr}"
+        url = f"{settings.public_base_url}/api/v1/fractals/dashboard?fractal_id={fractal_id}"
         keyboard = InlineKeyboardMarkup(
             inline_keyboard=[[
                 InlineKeyboardButton(
@@ -40,19 +37,32 @@ async def send_button_to_telegram_users(
                 )
             ]]
         )
-    else:  
-        return
 
-    for user_id in telegram_ids:
-        if(int(user_id)>=20000 and int(user_id)<300000): # test users
-            continue
+        for user_id in telegram_ids:
+            if(int(user_id)>=20000 and int(user_id)<300000): # test users
+                continue
 
-        try:
-            await bot.send_message(
-                chat_id=user_id,
-                text=text,
-                reply_markup=keyboard,
-            )
+            try:
+                await bot.send_message(
+                    chat_id=user_id,
+                    text=text,
+                    reply_markup=keyboard,
+                )
+                print("message sent to ", user_id)
 
-        except Exception as e:
-            print(f"Failed to send to {user_id}: {e}")
+            except Exception as e:
+                print(f"Failed to send to {user_id}: {e}")
+    else:
+
+        for user_id in telegram_ids:
+            if(int(user_id)>=20000 and int(user_id)<300000): # test users
+                continue
+
+            try:
+                await bot.send_message(
+                    chat_id=user_id,
+                    text=text,
+                )
+
+            except Exception as e:
+                print(f"Failed to send to {user_id}: {e}")

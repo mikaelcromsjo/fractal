@@ -292,6 +292,7 @@ async def send_button_to_fractal_members(db, text, button, fractal_id, data=0):
         except ValueError:
             continue
 
+    print("Sending message to telegram Users")
     if telegram_ids:
         await send_button_to_telegram_users(telegram_ids, text, button, fractal_id, data)
 
