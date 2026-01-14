@@ -217,9 +217,10 @@ async def close_round_repo(db: AsyncSession, fractal_id: int):
     existing = await db.get(RoundTree, closed_round.id)
     if existing:
         existing.tree = tree
+        db.add(existing)  # Ensure it's queued for update
     else:
         db.add(RoundTree(round_id=closed_round.id, fractal_id=closed_round.fractal_id, tree=tree))
-    await db.flush()
+    await db.commit()  # Commit after flush to persist tree changes
 
     return closed_round
 
@@ -754,6 +755,7 @@ async def close_fractal_repo(db, fractal_id: int):
     """
     Set a fractal from 'open' to 'closed'.
     """
+    print("Closing fractal")
     fractal = await db.get(Fractal, fractal_id)
     if not fractal:
         return None

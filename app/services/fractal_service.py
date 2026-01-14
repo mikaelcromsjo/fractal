@@ -457,7 +457,7 @@ async def close_round(db: AsyncSession, fractal_id: int):
         await send_message_to_group(db, g.id, text)
         await send_message_to_web_app_group(db, g.id, text, "end")
 
-    # Step 1: Mark round as closed
+    # Step 1: Mark round as closed hard
     round_obj = await close_round_repo(db, fractal_id)
 
     # Step 2: Process each group
@@ -850,7 +850,7 @@ async def check_fractals(db: AsyncSession):
                 # 1. Overdue first (always)
                 if now > close_time + timedelta(minutes=10):
                     print(f"         🛑 OVERDUE - AUTO CLOSING!")
-                    await close_round(db, fractal.id)
+                    await close_round_repo(db, fractal.id)
                     continue
 
                 # 2. Halfway: starts AT half_way_time → +2min

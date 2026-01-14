@@ -13,7 +13,8 @@ async def send_message_to_telegram_users(telegram_ids: list[int], text: str):
         if(int(user_id)>=20000 and int(user_id)<300000):
             continue
         try:
-            print("Sending message to telegram")
+            print("Sending message to telegram", user_id)
+            print(f"[PID {os.getpid()}]")
             await bot.send_message(chat_id=user_id, text=text)
         except Exception as e:
             print(f"Failed to send to {user_id}: {e}")
@@ -49,6 +50,8 @@ async def send_button_to_telegram_users(
                     reply_markup=keyboard,
                 )
                 print("message sent to ", user_id)
+                print(f"[PID {os.getpid()}]")
+
 
             except Exception as e:
                 print(f"Failed to send to {user_id}: {e}")
