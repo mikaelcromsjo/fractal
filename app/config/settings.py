@@ -6,9 +6,9 @@ class Settings(BaseSettings):
     ENV: str = "development"
     DATABASE_URL: str  # will be read from .env or environment variable
     TEST_DATABASE_URL: str
-    GROUP_SIZE_DEFAULT: int = 3
+    GROUP_SIZE_DEFAULT: int = 5
     PROPOSALS_PER_USER_DEFAULT: int = 3
-    ROUND_TIME_DEFAULT: int = 30
+    ROUND_TIME_DEFAULT: int = 5
 #    public_base_url: str = "https://temptingly-breechless-venessa.ngrok-free.dev"
 #    public_base_wss_url: str = "wss://temptingly-breechless-venessa.ngrok-free.dev"
     public_base_url: str = "https://fractal.ia-ai.se"
