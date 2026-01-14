@@ -1008,7 +1008,7 @@ async def test_generate_representative_votes(
             if not user or user.telegram_id is None:
                 continue
 
-            if user.telegram_id < 40000:
+            if int(user.telegram_id) < 40000:
                 ai_members.append(m)       # voters
             else:
                 non_ai_members.append(m)   # candidates
