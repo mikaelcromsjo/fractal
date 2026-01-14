@@ -1152,7 +1152,7 @@ async def test_full_simulation(fractal_id: int, db: AsyncSession = Depends(get_d
     await test_vote_comments(fractal_id, score=-1, db=db)
 
     print("🧪 6/9 Representative votes")
-    await test_rep_votes(fractal_id, db)
+    await test_generate_representative_votes(fractal_id, db)
     
     print("🧪 8/9 Commit")
     await db.commit()
