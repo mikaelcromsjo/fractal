@@ -575,8 +575,9 @@ async def test_vote_comments(
             for cnode in _iter_comment_nodes(comment_nodes):
                 comment = cnode["comment"]
                 for member in members:
-                    await vote_comment(db, comment.id, member.user_id, score)
-                    votes += 1
+                    if (await get_user(db, member.user_id)).telegram_id < 40000:
+                        await vote_comment(db, comment.id, member.user_id, score)
+                        votes += 1
 
     await db.commit()
     return {"ok": True, "total_comment_votes": votes}    
@@ -970,8 +971,9 @@ async def test_vote_proposals(fractal_id: int, score: int, db: AsyncSession = De
         for node in tree:  # each node is a dict wrapping the proposal and metadata
             proposal = node["proposal"]
             for member in members:
-                await vote_proposal(db, proposal.id, member.user_id, score)
-                votes += 1    
+                if (await get_user(db, member.user_id)).telegram_id < 40000:
+                    await vote_proposal(db, proposal.id, member.user_id, score)
+                    votes += 1    
     await db.commit()
     return {"ok": True, "total_votes": votes}
 
