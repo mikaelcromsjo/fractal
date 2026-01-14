@@ -988,10 +988,10 @@ async def test_generate_representative_votes(
 ):
     """
     For every group in the latest round:
-    - AI users (telegram_id < 40000) vote
+    - AI users (telegram_id < 40000) vote  
     - NON-AI users (telegram_id >= 40000) receive votes only
-    - Lowest non-AI user_id gets 3 points from every AI voter
-    - Two other non-AI members get 2 and 1 point each
+    - Distribute 3/2/1 points to available non-AI (lowest IDs first)
+    - Works with 1+ non-AI candidates (no 3 minimum)
     """
     round_obj = await get_last_round_repo(db, fractal_id)
     groups = await get_groups_for_round(db, round_obj.id)
@@ -1004,67 +1004,50 @@ async def test_generate_representative_votes(
         ai_members = []
         non_ai_members = []
 
-        # Split members into AI voters and NON-AI candidates
+        # Split members
         for m in members:
             user = await get_user(db, m.user_id)
             if not user or user.telegram_id is None:
                 continue
 
             if int(user.telegram_id) < 40000:
-                ai_members.append(m)       # voters
+                ai_members.append(m)  # Voters
             else:
-                non_ai_members.append(m)   # candidates
+                non_ai_members.append(m)  # Candidates
 
-        ai_ids = sorted([m.user_id for m in ai_members])
-        non_ai_ids = sorted([m.user_id for m in non_ai_members])
+        ai_ids = [m.user_id for m in ai_members]
+        non_ai_ids = sorted([m.user_id for m in non_ai_members])  # Lowest first
 
-        # Need at least 1 AI voter and 3 non-AI candidates to follow your 3/2/1 logic cleanly
-        if len(ai_ids) == 0 or len(non_ai_ids) < 3:
+        # Skip if no AI voters or no non-AI candidates
+        if len(ai_ids) == 0 or len(non_ai_ids) == 0:
+            print(f"Group {g.id}: Skipping - {len(ai_ids)} AI, {len(non_ai_ids)} non-AI")
             continue
 
-        # lowest non-AI user_id gets 3 from every AI voter
-        top_candidate_id = non_ai_ids[0]
+        print(f"Group {g.id}: {len(ai_ids)} AI voters → {len(non_ai_ids)} non-AI candidates")
+
+        # Assign 3/2/1 points to available non-AI (pad with repeats if <3)
+        candidates_needed = [3, 2, 1]
+        assigned_candidates = non_ai_ids[:3]  # Take up to 3 lowest
+        
+        # Pad if fewer than 3 (repeat top candidates)
+        while len(assigned_candidates) < 3:
+            assigned_candidates.append(non_ai_ids[0])  # Repeat lowest
 
         for voter_id in ai_ids:
-            # 3 points to top non-AI candidate
-            vote = await vote_representative_repo(
-                db=db,
-                group_id=g.id,
-                round_id=round_obj.id,
-                voter_user_id=voter_id,
-                candidate_user_id=top_candidate_id,
-                points=3,
-            )
-            votes.append(vote)
-
-            # pick two other non-AI candidates (cannot be the same as top_candidate_id)
-            other_candidates = [uid for uid in non_ai_ids if uid != top_candidate_id]
-
-            if len(other_candidates) >= 2:
-                c1, c2 = other_candidates[:2]  # or random.sample(other_candidates, 2)
-
-                vote2 = await vote_representative_repo(
+            for points, candidate_id in zip(candidates_needed, assigned_candidates):
+                vote = await vote_representative_repo(
                     db=db,
                     group_id=g.id,
                     round_id=round_obj.id,
                     voter_user_id=voter_id,
-                    candidate_user_id=c1,
-                    points=2,
+                    candidate_user_id=candidate_id,
+                    points=points,
                 )
-                votes.append(vote2)
-
-                vote3 = await vote_representative_repo(
-                    db=db,
-                    group_id=g.id,
-                    round_id=round_obj.id,
-                    voter_user_id=voter_id,
-                    candidate_user_id=c2,
-                    points=1,
-                )
-                votes.append(vote3)
+                votes.append(vote)
 
     await db.commit()
-    return {"ok": True, "votes": len(votes)}
+    print(f"Generated {len(votes)} total rep votes")
+    return {"ok": True, "votes": len(votes), "groups_processed": len(groups)}
 
 
 @router.post("/test/generate_comments")

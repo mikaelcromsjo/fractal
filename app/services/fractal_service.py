@@ -318,7 +318,7 @@ async def start_round(db: AsyncSession, fractal_id: int, level: int, members: Li
     """
     Create a round and divide users into groups.
     """
-    print("starting round")
+#    print("starting round")
     round_obj = await create_round_repo(db, fractal_id, level)
 
     user_ids = [m.user_id for m in members]
@@ -416,7 +416,7 @@ async def calculate_comment_scores(db, group_id: int, round_obj):
     """
     Normalize user votes, then apply Bayesian weighted average.
     """
-    print ("get all votes")
+#    print ("get all votes")
     all_votes = await get_votes_for_group_comments_repo(db, group_id)
     if not all_votes:
         return
@@ -450,7 +450,7 @@ async def calculate_comment_scores(db, group_id: int, round_obj):
             MIN_VOTES_FOR_BAYES / (n + MIN_VOTES_FOR_BAYES)
         ) * global_avg
         await save_comment_score_repo(db, comment_id, round_obj.level, adjusted)
-        print ("save comment score adjusted", comment_id, adjusted)
+ #       print ("save comment score adjusted", comment_id, adjusted)
 
 
 
@@ -1028,7 +1028,7 @@ async def round_half_way_service(db, fractal_id: int):
 
 async def rep_vote_card(db: AsyncSession, user_id: int, group_id: int, fractal_id: int = -1) -> str:
 
-    print("rep vote card")
+ #   print("rep vote card")
 
     if (group_id == -1):
         group = await get_last_group_repo(db, fractal_id)
@@ -1102,7 +1102,7 @@ async def rep_vote_card(db: AsyncSession, user_id: int, group_id: int, fractal_i
 
         for m in members:
             user = await get_user(db, m.user_id)
-            print("rep ", user.id, user_id)
+   #         print("rep ", user.id, user_id)
             if user.id == user_id:
                 continue
             points = vote_map.get(m.user_id, 0)
