@@ -33,7 +33,6 @@ async def create_user_repo(db: AsyncSession, user_info: Dict) -> User:
         username=user_info.get("username"),    
         telegram_id=user_info.get("telegram_id")
     )
-    print("Creating User from Telegram", user_info.get("telegram_id"))
 
     db.add(user)
     await db.commit()
@@ -515,11 +514,6 @@ async def vote_proposal_repo(db: AsyncSession, proposal_id: int, voter_user_id: 
         db.add(pv)
     await db.commit()
 
-    # temporary debug in vote endpoint, after insert
-    print("VOTE INSERTED", {
-        "proposal_id": pv.proposal_id,
-        "voter_user_id": pv.voter_user_id,
-    })
 
     return pv
 
@@ -683,7 +677,6 @@ async def save_comment_score_repo(
     )
     await db.commit()
 
-    print("total_score", comment_id, total_score)
 
 #----------------------------
 # Proposal votes
@@ -812,7 +805,7 @@ async def close_fractal_repo(db, fractal_id: int):
     """
     Set a fractal from 'open' to 'closed'.
     """
-    print("Closing fractal")
+    print("Closing Fractal")
     fractal = await db.get(Fractal, fractal_id)
     if not fractal:
         return None
@@ -916,7 +909,6 @@ async def get_user_info_by_telegram_id_repo(
     )
     user: User | None = result.scalars().one_or_none()
     if not user:
-        print("No user")
         return None
 
     user_id = int(user.id)
@@ -1042,7 +1034,6 @@ async def get_next_card_repo(
     proposal = await get_next_proposal_to_vote_repo(db, group_id, current_user_id)
 
     if proposal:
-        print("got a proposal")
         return await _enrich_proposal_with_comments_repo(db, proposal, current_user_id)
 
     # --- 2) Comments WITHOUT votes from current_user, not created by current_user
@@ -1070,7 +1061,6 @@ async def get_next_card_repo(
     comment = comment_result.scalars().first()
 
     if comment:
-        print("got a comment", comment.text)
         return await _enrich_comment_with_proposal_repo(db, comment, current_user_id)
 
     return None
@@ -1169,9 +1159,6 @@ async def _enrich_proposal_with_comments_repo(
             vote_record = vote_result.scalars().first()
             vote = vote_record.vote if vote_record else 0
         # ADD THIS: Build and append comment structure
-
-        print("total",comment.id, comment.total_score)
-        print("total per level",comment.id, comment.score_per_level)
         
         comment_card = {
             "id": comment.id,

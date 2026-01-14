@@ -202,8 +202,8 @@ async def send_message_to_members(
         except ValueError:
             continue
 
-    import os
-    text += f" [PID {os.getpid()}]"
+#    import os
+#    text += f" [PID {os.getpid()}]"
 
     if telegram_ids:
         await send_message_to_telegram_users(telegram_ids, text)
@@ -231,8 +231,8 @@ async def send_button_to_members(
         except ValueError:
             continue
 
-    import os
-    text += f" [PID {os.getpid()}]"
+ #   import os
+ #   text += f" [PID {os.getpid()}]"
 
 
     if telegram_ids:
@@ -262,8 +262,8 @@ async def send_message_to_web_app_members(
         except ValueError:
             continue
 
-    import os
-    text += f" [PID {os.getpid()}]"
+ #   import os
+ #   text += f" [PID {os.getpid()}]"
 
     if telegram_ids:
         await send_message_to_web_app_users(telegram_ids, text, type)
@@ -465,7 +465,7 @@ async def close_last_round(db: AsyncSession, fractal_id: int):
     groups = await get_groups_for_round_repo(db, round.id)
     text = f"ℹ️ Round {round.level} has ended!"
     for g in groups:
-        await send_message_to_group(db, g.id, text)
+         await send_message_to_group(db, g.id, text)
         await send_message_to_web_app_group(db, g.id, text, "end")
 
     # Step 1: Mark round as closed hard
