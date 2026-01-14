@@ -915,7 +915,9 @@ async def round_half_way_service(db, fractal_id: int):
     await set_round_status_repo(db, round.id, "vote")
 
 async def rep_vote_card(db: AsyncSession, user_id: int, group_id: int, fractal_id: int = -1) -> str:
-    
+
+    print("rep vote card")
+
     if (group_id == -1):
         group = await get_last_group_repo(db, fractal_id)
         group_id = group.id
@@ -974,7 +976,7 @@ async def rep_vote_card(db: AsyncSession, user_id: int, group_id: int, fractal_i
         return "\n".join(html)        
 
     else:
-        # if round open return vore card
+        # if round open return vote card
         
         members = await get_group_members_repo(db, group_id)
         votes = await get_user_rep_points_repo(db, group_id, user_id)
@@ -987,6 +989,7 @@ async def rep_vote_card(db: AsyncSession, user_id: int, group_id: int, fractal_i
 
         for m in members:
             user = await get_user(db, m.user_id)
+            print("rep ", user.id, user_id)
             if user.id == user_id:
                 continue
             points = vote_map.get(m.user_id, 0)
