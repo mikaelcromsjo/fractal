@@ -890,8 +890,8 @@ async def poll_worker(async_session_maker, poll_interval: int = 60):
 async def check_fractals(db: AsyncSession):
     """
     1. Starts waiting fractals whose start_date <= now.
-    2. Checks OPEN ROUNDS for half/close times + closes overdue rounds.
-    Wide windows guarantee hits even with sparse polling.
+    2. Checks OPEN/VOTE ROUNDS for half/close times + force-closes overdue.
+    Respects status changes (e.g., "vote" after half-way).
     """
     now = datetime.now(timezone.utc)
     print(f"\n{'='*60}")
@@ -916,26 +916,20 @@ async def check_fractals(db: AsyncSession):
                     import traceback
                     traceback.print_exc()
 
-        # 2. Check OPEN ROUNDS (+ close overdue)
-        print(f"\n   [STEP 2] Fetching open rounds...")
-        open_rounds = await get_open_rounds_repo(db)
-        print(f"   ✓ Found {len(open_rounds)} open rounds")
+        # 2. Check rounds
+        print(f"\n   [STEP 2] Fetching open/vote rounds...")
+        open_rounds = await get_open_rounds_repo(db)  # Assumes includes "vote"
+        print(f"   ✓ Found {len(open_rounds)} rounds")
         
         for round_obj in open_rounds:
-            print(f"\n     🔍 Processing round {round_obj.id}...")
+            print(f"\n     🔍 Processing round {round_obj.id} (status={round_obj.status})...")
             
             try:
-                # Get fractal metadata
                 fractal = await get_fractal_repo(db, round_obj.fractal_id)
-                if not fractal:
-                    print(f"        ⏭️ Fractal {round_obj.fractal_id} not found, skipping")
-                    continue
-                    
-                if not fractal.meta or "round_time" not in fractal.meta:
-                    print(f"        ⏭️ No round_time in meta, skipping")
+                if not fractal or not fractal.meta or "round_time" not in fractal.meta:
+                    print(f"        ⏭️ Invalid fractal/meta, skipping")
                     continue
                 
-                # Round timing
                 round_time_minutes = int(fractal.meta["round_time"])
                 round_duration = timedelta(minutes=round_time_minutes)
                 half_duration = round_duration / 2
@@ -950,29 +944,35 @@ async def check_fractals(db: AsyncSession):
                 print(f"        Close at: {close_time}")
                 print(f"        Now: {now}")
                 
-                # PRIORITY 1: Overdue force-close (2min grace)
+                # Already closed
+                if round_obj.status == "closed":
+#                    print(f"        ✅ Already closed")
+                    continue
+                
+                # PRIORITY 1: Force overdue (any status, 2min grace)
                 overdue_grace = timedelta(minutes=2)
                 if now > close_time + overdue_grace:
                     overdue_mins = (now - close_time).total_seconds() / 60
-                    print(f"        🛑 OVERDUE +{overdue_mins:.1f}min - FORCE CLOSING {round_obj.id}")
+                    print(f"        🛑 OVERDUE +{overdue_mins:.1f}min - FORCE CLOSING")
                     await close_round_repo(db, round_obj.id)
-                    continue  # Skip other actions
+                    continue
 
-                # PRIORITY 2: Half-way window (5min wide)
+                # PRIORITY 2: Half-way (5min window, ONLY "open")
                 half_window_start = half_way_time
                 half_window_end = half_way_time + timedelta(minutes=5)
-                if half_window_start <= now <= half_window_end:
+                if (round_obj.status == "open" and 
+                    half_window_start <= now <= half_window_end):
                     mins_in = (now - half_window_start).total_seconds() / 60
                     print(f"        🟡 HALFWAY ({mins_in:.1f}min in) - round_half_way_service")
-                    await round_half_way_service(db, fractal.id)
-                    await db.refresh(round_obj)  # Re-fetch status
-                    if round_obj.status != "open":
-                        continue
+                    await round_half_way_service(db, fractal.id)  # → sets "vote"
+                    await db.refresh(round_obj)
+                    continue
 
-                # PRIORITY 3: Close window (10min wide)  
+                # PRIORITY 3: Close (10min window, "open" or "vote")
                 close_window_start = close_time
                 close_window_end = close_time + timedelta(minutes=10)
-                if close_window_start <= now <= close_window_end:
+                if (round_obj.status in ("open", "vote") and
+                    close_window_start <= now <= close_window_end):
                     mins_in = (now - close_window_start).total_seconds() / 60
                     print(f"        🔴 CLOSING ({mins_in:.1f}min in) - close_last_round")
                     await close_last_round(db, fractal.id)
@@ -980,7 +980,7 @@ async def check_fractals(db: AsyncSession):
 
                 # Active logging
                 elapsed_mins = (now - round_start).total_seconds() / 60
-                print(f"        ⏳ Active: {elapsed_mins:.1f}min / {round_time_minutes}min")
+                print(f"        ⏳ {round_obj.status}: {elapsed_mins:.1f}min / {round_time_minutes}min")
                 
             except Exception as e:
                 print(f"        💥 Error processing round {round_obj.id}: {e}")
