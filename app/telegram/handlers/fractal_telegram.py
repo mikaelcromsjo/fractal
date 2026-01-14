@@ -76,7 +76,6 @@ def format_international_times(start_date):
     
     times = {
         '🇪🇺 CET': start_dt.astimezone(ZoneInfo('Europe/Berlin')).strftime('%H:%M'),
-        '🇫🇮 EET': start_dt.strftime('%H:%M'),
         '🇬🇧 GMT': start_dt.astimezone(ZoneInfo('Europe/London')).strftime('%H:%M'),
         '🇺🇸 EST': start_dt.astimezone(ZoneInfo('America/New_York')).strftime('%H:%M'),
         '🇺🇸 PST': start_dt.astimezone(ZoneInfo('America/Los_Angeles')).strftime('%H:%M'),
@@ -87,7 +86,7 @@ def format_international_times(start_date):
     }
     
     time_lines = [f"{flag}: {time}" for flag, time in times.items()]
-    return ' ' + ' '.join(time_lines[:7])  # Show first 7 for Telegram width
+    return ' ' + ' '.join(time_lines[:8])  # Show first 7 for Telegram width
 
 
 # Central command list (help)
@@ -224,7 +223,17 @@ async def handle_manual_offset(message: types.Message, state: FSMContext):
 
 @router.callback_query(F.data.startswith("tz_"))
 async def handle_timezone(callback: types.CallbackQuery, state: FSMContext):
-    tz_map = {"tz_cet": 1.0, "tz_eet": 2.0, "tz_gmt": 0.0, "tz_est": -5.0, "tz_pst": -8.0}
+    tz_map = {
+        "tz_cet": 1.0,           # 🇪🇺 CET → Europe/Berlin
+        "tz_gmt": 0.0,           # 🇬🇧 GMT → Europe/London  
+        "tz_est": -5.0,          # 🇺🇸 EST → America/New_York
+        "tz_pst": -8.0,          # 🇺🇸 PST → America/Los_Angeles
+        "tz_brt": -3.0,          # 🇧🇷 BRT → America/Sao_Paulo
+        "tz_ist": 5.5,           # 🇮🇳 IST → Asia/Kolkata
+        "tz_jst": 9.0,           # 🇯🇵 JST → Asia/Tokyo
+        "tz_aest": 10.0,         # 🇦🇺 AEST → Australia/Sydney
+        "tz_eet": 2.0,           # Existing
+    }
     offset = tz_map.get(callback.data, 0.0)
     
     await state.update_data(user_tz_offset=offset)
@@ -1220,7 +1229,7 @@ async def cmd_tree(message: types.Message, fractal_id: str | None = None):
                 return
             if arg.startswith("p_"):
                 pid = int(arg[2:])
-                print("get tree")
+#                print("get tree")
                 tree = await get_proposal_comments_tree(db=db, proposal_id=pid)
                 # tree formatting placeholder
                 print(tree)
