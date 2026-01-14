@@ -560,22 +560,27 @@ async def promote_to_next_round(db: AsyncSession, prev_round_id: int, fractal_id
         new_groups.append(grp)
 
     # Step 5: Promote top proposals from previous round
-    top_count = settings.PROPOSALS_PER_USER_DEFAULT
-    print(f"\n   📈 [STEP 5] Promoting top {top_count} proposals per group...")
+    top_count = settings.PROPOSALS_PER_USER_DEFAULT  # 3
+    print(f"\n   📈 [STEP 5] Promoting top {top_count} proposals per PREV group...")
     
     promoted_count = 0
-    for i, (g_prev, grp_new) in enumerate(zip(prev_groups, new_groups), 1):
+    for i, g_prev in enumerate(prev_groups, 1):
         top_props = await get_top_proposals_repo(db, g_prev.id, top_count)
-        print(f"      Prev Group {i} → New Group {i}: {len(top_props)} proposals promoted")
+        print(f"     Prev Group {i} (id={g_prev.id}): {len(top_props)} proposals")
         
-        for p in top_props:
+        # Distribute evenly across new_groups or to first
+        target_groups = new_groups if new_groups else [None]  # Fallback
+        for j, p in enumerate(top_props):
+            target_grp = target_groups[j % len(target_groups)]
             p.round_id = new_round.id
-            p.group_id = grp_new.id
+            p.group_id = target_grp.id if target_grp else None
             promoted_count += 1
         
-        await db.commit()
+        await db.flush()  # Batch commit
 
-    print(f"   ✅ [COMPLETE] Promoted {promoted_count} total proposals")
+    await db.commit()
+    print(f"   ✅ [COMPLETE] Promoted {promoted_count} total proposals across {len(prev_groups)} prev groups")
+
     print(f"   🎉 New round {new_round.id} ready!")
     print(f"{'='*60}\n")
     
