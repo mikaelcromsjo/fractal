@@ -5,6 +5,7 @@ from typing import Iterable
 from sqlalchemy import select
 from config.settings import settings
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
+import os
 
 bot = Bot(token=settings.bot_token)
 
