@@ -978,39 +978,89 @@ async def test_vote_proposals(fractal_id: int, score: int, db: AsyncSession = De
     return {"ok": True, "total_votes": votes}
 
 @router.post("/test/generate_representative_votes")
-async def test_rep_votes(fractal_id: int, db: AsyncSession = Depends(get_db)):
-    """Generate realistic rep votes: telegram_id <40000 can receive votes"""
+async def test_generate_representative_votes(
+    fractal_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    For every group in the latest round:
+    - AI users (telegram_id < 40000) vote
+    - NON-AI users (telegram_id >= 40000) receive votes only
+    - Lowest non-AI user_id gets 3 points from every AI voter
+    - Two other non-AI members get 2 and 1 point each
+    """
     round_obj = await get_last_round_repo(db, fractal_id)
     groups = await get_groups_for_round(db, round_obj.id)
-    
-    total_votes = 0
-    for group in groups:
-        members = await get_group_members(db, group.id)
-        if len(members) < 2: 
+
+    votes = []
+
+    for g in groups:
+        members = await get_group_members(db, g.id)
+
+        ai_members = []
+        non_ai_members = []
+
+        # Split members into AI voters and NON-AI candidates
+        for m in members:
+            user = await get_user(db, m.user_id)
+            if not user or user.telegram_id is None:
+                continue
+
+            if user.telegram_id < 40000:
+                ai_members.append(m)       # voters
+            else:
+                non_ai_members.append(m)   # candidates
+
+        ai_ids = sorted([m.user_id for m in ai_members])
+        non_ai_ids = sorted([m.user_id for m in non_ai_members])
+
+        # Need at least 1 AI voter and 3 non-AI candidates to follow your 3/2/1 logic cleanly
+        if len(ai_ids) == 0 or len(non_ai_ids) < 3:
             continue
-        
-        # Eligible candidates: telegram_id < 40000 (via user.telegram_id)
-        candidates = [
-            m for m in members 
-            if (await get_user(db, m.user_id)).telegram_id < 40000
-        ]
-        
-        if not candidates:
-            continue  # Skip group with no eligible
-            
-        # Voters: everyone except self-votes
-        voters = [m for m in members if m not in candidates]
-        
-        for voter in voters:
-            candidate = candidates[0].user_id  # Pick first eligible
-            await vote_representative_repo(
-                db, group.id, round_obj.id, 
-                voter.user_id, candidate, 3  # Gold vote
+
+        # lowest non-AI user_id gets 3 from every AI voter
+        top_candidate_id = non_ai_ids[0]
+
+        for voter_id in ai_ids:
+            # 3 points to top non-AI candidate
+            vote = await vote_representative_repo(
+                db=db,
+                group_id=g.id,
+                round_id=round_obj.id,
+                voter_user_id=voter_id,
+                candidate_user_id=top_candidate_id,
+                points=3,
             )
-            total_votes += 1
-    
+            votes.append(vote)
+
+            # pick two other non-AI candidates (cannot be the same as top_candidate_id)
+            other_candidates = [uid for uid in non_ai_ids if uid != top_candidate_id]
+
+            if len(other_candidates) >= 2:
+                c1, c2 = other_candidates[:2]  # or random.sample(other_candidates, 2)
+
+                vote2 = await vote_representative_repo(
+                    db=db,
+                    group_id=g.id,
+                    round_id=round_obj.id,
+                    voter_user_id=voter_id,
+                    candidate_user_id=c1,
+                    points=2,
+                )
+                votes.append(vote2)
+
+                vote3 = await vote_representative_repo(
+                    db=db,
+                    group_id=g.id,
+                    round_id=round_obj.id,
+                    voter_user_id=voter_id,
+                    candidate_user_id=c2,
+                    points=1,
+                )
+                votes.append(vote3)
+
     await db.commit()
-    return {"ok": True, "votes_generated": total_votes}
+    return {"ok": True, "votes": len(votes)}
 
 
 @router.post("/test/generate_comments")
