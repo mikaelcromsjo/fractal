@@ -202,6 +202,9 @@ async def send_message_to_members(
         except ValueError:
             continue
 
+    import os
+    text += f" [PID {os.getpid()}]"
+
     if telegram_ids:
         await send_message_to_telegram_users(telegram_ids, text)
 
@@ -227,6 +230,10 @@ async def send_button_to_members(
             telegram_ids.append(int(user.telegram_id))
         except ValueError:
             continue
+
+    import os
+    text += f" [PID {os.getpid()}]"
+
 
     if telegram_ids:
         await send_button_to_telegram_users(telegram_ids, text, button, fractal_id, data)
@@ -254,6 +261,9 @@ async def send_message_to_web_app_members(
             telegram_ids.append(int(user.telegram_id))
         except ValueError:
             continue
+
+    import os
+    text += f" [PID {os.getpid()}]"
 
     if telegram_ids:
         await send_message_to_web_app_users(telegram_ids, text, type)
