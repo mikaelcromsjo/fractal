@@ -328,15 +328,11 @@ async def cb_cancel(call: types.CallbackQuery, state: FSMContext):
 
 
 async def get_user_info(telegram_id) -> Dict:
-    print("get_user_info")
     async for db in get_async_session():
             try:
                 user_info = await get_user_info_by_telegram_id(db, str(telegram_id))
-                print ("got user_info", user_info)
                 return user_info
             except Exception:
-                print("failed in get_user_info")
-
                 logger.exception("Failed getting user data")
                 return {}
 
