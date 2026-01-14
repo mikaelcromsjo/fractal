@@ -11,6 +11,7 @@ import asyncio
 
 
 from repositories.fractal_repos import (
+    close_round_repo,
     get_last_group_repo,
     get_rep_votes_for_round_repo,
     save_rep_vote_repo,
@@ -36,7 +37,7 @@ from repositories.fractal_repos import (
     get_proposals_for_group_repo,
     get_comments_for_proposal_repo,
     get_top_proposals_repo,
-    close_round_repo,
+    close_last_round_repo,
     save_proposal_score_repo,
     save_comment_score_repo,
     get_groups_for_round_repo,
@@ -445,7 +446,7 @@ async def calculate_comment_scores(db, group_id: int, round_obj):
 
 # ===================== ROUND CLOSURE ===========================
 
-async def close_round(db: AsyncSession, fractal_id: int):
+async def close_last_round(db: AsyncSession, fractal_id: int):
     """
     Close a round: mark it closed and calculate totals for proposals and comments.
     Saves scores per level as lists in JSONB.
@@ -458,7 +459,7 @@ async def close_round(db: AsyncSession, fractal_id: int):
         await send_message_to_web_app_group(db, g.id, text, "end")
 
     # Step 1: Mark round as closed hard
-    round_obj = await close_round_repo(db, fractal_id)
+    round_obj = await close_last_round_repo(db, fractal_id)
 
     # Step 2: Process each group
     for group in groups:
@@ -850,7 +851,7 @@ async def check_fractals(db: AsyncSession):
                 # 1. Overdue first (always)
                 if now > close_time + timedelta(minutes=10):
                     print(f"         🛑 OVERDUE - AUTO CLOSING!")
-                    await close_round_repo(db, fractal.id)
+                    await close_round_repo(db, round_obj.id)
                     continue
 
                 # 2. Halfway: starts AT half_way_time → +2min
@@ -867,7 +868,7 @@ async def check_fractals(db: AsyncSession):
 
                 if close_window_start <= now <= close_window_end:
                     print(f"         🔴 CLOSE WINDOW ({(now - close_window_start).total_seconds()/60:.1f}min in)")
-                    await close_round(db, fractal.id)
+                    await close_last_round(db, fractal.id)
                     
                 
             except Exception as e:
@@ -927,6 +928,7 @@ async def rep_vote_card(db: AsyncSession, user_id: int, group_id: int, fractal_i
     group = await get_group_repo(db, group_id)
     round = await get_round_repo(db, group.round_id)
     print("Round Status", round.status)
+
     if (round.status == "closed"):
         # if round is closed return the representatives total score
         reps = await get_representatives_for_group_repo(db, group_id, round.id)

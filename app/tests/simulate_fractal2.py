@@ -24,7 +24,7 @@ from services.fractal_service import (
     vote_proposal,
     vote_comment,
     vote_representative,
-    close_round,
+    close_last_round,
 )
 
 # -------------------------------------------------------------------
@@ -299,7 +299,7 @@ async def simulate_round(
     await pause(f"Before closing round {round_obj.level}")
 
     # STEP E: Close round and create next, if any
-    next_round = await close_round(db, fractal.id)
+    next_round = await close_last_round(db, fractal.id)
 
     if not next_round:
         print(f"Round {round_obj.id} closed. No next round created.")

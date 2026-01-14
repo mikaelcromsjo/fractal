@@ -12,7 +12,7 @@ from services.fractal_service import (
     create_comment,
     vote_proposal,
     vote_comment,
-    close_round,
+    close_last_round,
 )
 
 from infrastructure.models import ProposalVote, CommentVote
@@ -134,7 +134,7 @@ async def test_fractal_simulation(db_session: AsyncSession):
             print(f"Proposal {p.id} total votes: {total_votes}")
 
     # Close current round (and automatically create next round if applicable)
-    next_round = await close_round(db, round0.id)
+    next_round = await close_last_round(db, round0.id)
 
     if next_round is None:
         print(f"\nRound {round0.id} closed. No next round created (not enough groups).")

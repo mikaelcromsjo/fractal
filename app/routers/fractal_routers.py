@@ -34,7 +34,7 @@ from services.fractal_service import (
     start_fractal,
     start_round,
     get_groups_for_round,
-    close_round,
+    close_last_round,
     promote_to_next_round,
     create_proposal,
     create_comment,
@@ -412,7 +412,7 @@ async def close_round_endpoint(
     fractal_id: int, 
     db: AsyncSession = Depends(get_db)
 ):
-    result = await close_round(db, fractal_id)
+    result = await close_last_round(db, fractal_id)
     return JSONResponse(content={"ok": True, "result": orm_to_dict(result)})
 
 @router.post("/promote_to_next_round")

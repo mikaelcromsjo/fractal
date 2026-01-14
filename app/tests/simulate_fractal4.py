@@ -13,7 +13,7 @@ from services.fractal_service import (
     vote_proposal,
     vote_comment,
     vote_representative_repo,
-    close_round,
+    close_last_round,
     create_fractal,
     get_group_members,
     get_proposals_comments_tree,

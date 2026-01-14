@@ -14,7 +14,7 @@ from services.fractal_service import (
     vote_proposal,
     vote_comment,
     vote_representative_repo,
-    close_round,
+    close_last_round,
     create_fractal,
     get_group_members,
     get_proposals_comments_tree,
@@ -311,7 +311,7 @@ async def main():
         # -------------------------
         # STEP 9: Close current round and promote to next round
         # -------------------------
-        next_round = await close_round(db, fractal.id)
+        next_round = await close_last_round(db, fractal.id)
 
         if next_round is None:
             print(f"\nRound {round0.id} closed. No next round created (not enough groups).")

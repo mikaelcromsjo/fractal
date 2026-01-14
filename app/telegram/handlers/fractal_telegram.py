@@ -31,7 +31,7 @@ from services.fractal_service import (
     create_fractal,
     join_fractal,
     start_fractal,
-    close_round,
+    close_last_round,
     get_fractal_from_name_or_id_repo,
     send_message_to_group,
     get_group_members_repo,
@@ -938,7 +938,7 @@ async def cmd_close_round(message: types.Message):
 
     async for db in get_async_session():
         try:
-            res = await close_round(db=db, fractal_id=fractal_id)
+            res = await close_last_round(db=db, fractal_id=fractal_id)
             next_round_id = getattr(res, "id", None)
             # Optionally broadcast: need to find fractal id for this round, if available
             fractal_id = getattr(res, "fractal_id", None)

@@ -194,7 +194,7 @@ async def set_round_status_repo(db, round_id: int, status: str):
     await db.refresh(round_obj)
     return round_obj
 
-async def close_round_repo(db: AsyncSession, fractal_id: int):
+async def close_last_round_repo(db: AsyncSession, fractal_id: int):
     """Mark a round as closed and set the end timestamp, then return the round."""
     round_obj = await get_last_round_repo(db, fractal_id)
     RoundTree = models.RoundTree
@@ -223,6 +223,24 @@ async def close_round_repo(db: AsyncSession, fractal_id: int):
     await db.commit()  # Commit after flush to persist tree changes
 
     return closed_round
+
+
+async def close_round_repo(db: AsyncSession, round_id: int):
+    """Mark a round as closed and set the end timestamp, then return the round."""
+    stmt = (
+        update(Round)
+        .where(Round.id == round_id)
+        .values(
+            ended_at=datetime.now(timezone.utc),
+            status="closed"
+        )
+        .returning(Round)  # RETURNING clause returns the updated row
+    )
+    result = await db.execute(stmt)
+    await db.commit()
+    closed_round = result.scalar_one()  # get the single updated Round object
+    return closed_round
+
 
 async def get_representatives_for_group_repo(db: AsyncSession, group_id: int, round_id: int = None):
     """Auto-detects round, returns {1: gold_user_id, 2: silver_user_id, 3: bronze_user_id}"""
