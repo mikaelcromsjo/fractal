@@ -106,13 +106,13 @@ def share_to_group_button(fractal_id: int) -> InlineKeyboardMarkup:
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text="🙋 Join Fractal",
+                    text="🙋 Sign up for Fractal Meeting",
                     callback_data=f"join:{fractal_id}"
                 )
             ],
             [
                 InlineKeyboardButton(
-                    text="📢 Share to Group",
+                    text="📢 Share Meeting Invitation",
                     switch_inline_query=f"share fractal_{fractal_id}"
                 )
             ]
