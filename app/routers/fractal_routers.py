@@ -934,7 +934,7 @@ async def test_generate_proposals(fractal_id: int, db: AsyncSession = Depends(ge
         # Distribute proposals across group members
         for i, uid in enumerate(member_ids):
             user = await get_user(db, uid)
-            if int(user.telegram_id) < 40000:
+            if int(user.telegram_id) > 40000:
                 continue
             
             template = proposal_templates[proposal_idx % len(proposal_templates)]
