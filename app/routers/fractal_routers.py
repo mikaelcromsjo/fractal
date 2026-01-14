@@ -1135,8 +1135,8 @@ async def test_generate_comments(fractal_id: int, db: AsyncSession = Depends(get
 async def test_full_simulation(fractal_id: int, db: AsyncSession = Depends(get_db)):
     """Exact replica of your entire simulation"""
         
-    print("🧪 3/9 Start fractal")
-    round0 = await start_fractal(db, fractal_id)
+#    print("🧪 3/9 Start fractal")
+#    round0 = await start_fractal(db, fractal_id)
     
     print("🧪 4/9 Generate proposals")
     await test_generate_proposals(fractal_id, db)
