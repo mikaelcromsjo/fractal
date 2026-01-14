@@ -137,8 +137,8 @@ async def join_fractal(db: AsyncSession, user_info: Dict, fractal_id: int):
         raise ValueError("User is already a member of this fractal")
     
     # 4. Execute operations
-    print ("added user:", telegram_id)
-    print ("active fractal:", fractal_id)
+#    print ("added user:", telegram_id)
+#    print ("active fractal:", fractal_id)
 
     await add_fractal_member_repo(db, fractal_id, user.id)
     await set_active_fractal_repo(db, user.id, fractal_id)
@@ -303,7 +303,7 @@ async def send_button_to_fractal_members(db, text, button, fractal_id, data=0):
         except ValueError:
             continue
 
-    print("Sending message to telegram Users")
+#    print("Sending message to telegram Users")
     if telegram_ids:
         await send_button_to_telegram_users(telegram_ids, text, button, fractal_id, data)
 
@@ -463,7 +463,7 @@ async def close_last_round(db: AsyncSession, fractal_id: int):
     """
     round = await get_last_round_repo(db, fractal_id)
     groups = await get_groups_for_round_repo(db, round.id)
-    text = "ℹ️ The round has ended!"
+    text = f"ℹ️ Round {round.level} has ended!"
     for g in groups:
         await send_message_to_group(db, g.id, text)
         await send_message_to_web_app_group(db, g.id, text, "end")
@@ -832,13 +832,13 @@ async def send_message_to_web_app_users(telegram_ids: list[int], text: str, even
         try:
             """Call this from your bot/game logic"""
             user_id = str(user_id)
-            print(f"DEBUG: user_id type: {type(user_id)}, value: {repr(user_id)}")
-            print(f"DEBUG: connected_clients type: {type(connected_clients)}")
-            print(f"DEBUG: connected_clients keys: {list(connected_clients.keys())}")
-            print(f"DEBUG: connected_clients keys types: {[type(k) for k in connected_clients.keys()]}")
-            print(f"DEBUG: user_id in connected_clients: {user_id in connected_clients}")
+#            print(f"DEBUG: user_id type: {type(user_id)}, value: {repr(user_id)}")
+#            print(f"DEBUG: connected_clients type: {type(connected_clients)}")
+#            print(f"DEBUG: connected_clients keys: {list(connected_clients.keys())}")
+#            print(f"DEBUG: connected_clients keys types: {[type(k) for k in connected_clients.keys()]}")
+#            print(f"DEBUG: user_id in connected_clients: {user_id in connected_clients}")
             if user_id in connected_clients:
-                print ("Sent")
+#                print ("Sent")
                 event = {"type": event_type, "message": text, "timestamp": datetime.now(timezone.utc).isoformat()}
                 disconnected = []
                 

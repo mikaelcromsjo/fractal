@@ -184,7 +184,7 @@ async def fractals_auth(request: AuthRequest, db: AsyncSession = Depends(get_db)
 
         # 2️⃣ Fetch user context
         user_context = await get_user_info_by_telegram_id(db, str(user["id"]))
-        print(f"🔍 Service response: {user_context}")
+#        print(f"🔍 Service response: {user_context}")
 
         # Extract fractal details if user is linked to one
         fractal_id = user_context.get("fractal_id")
@@ -224,7 +224,7 @@ async def fractals_auth(request: AuthRequest, db: AsyncSession = Depends(get_db)
             "group_status": group_status,
         }
 
-        print(f"📤 Sending response: {response_data}")
+#        print(f"📤 Sending response: {response_data}")
         return JSONResponse(content=response_data)
 
     except Exception as e:
@@ -468,7 +468,6 @@ async def vote_proposal_endpoint(
 ):
     
     import os
-    print(f"[PID {os.getpid()}]")
 
     vote = await vote_proposal(
         db,
@@ -739,8 +738,7 @@ async def websocket_endpoint(websocket: WebSocket):
         connected_clients[user_id] = []
     connected_clients[user_id].append(websocket)
     
-    print("=== CLIENT CONNECTED ===")
-    print(f"User {user_id} added: {len(connected_clients[user_id])} connections")
+#    print(f"User {user_id} added: {len(connected_clients[user_id])} connections")
     
     # Send welcome message
     event = {"type": "info", "message": "Hello from server! Connection established."}
@@ -750,7 +748,7 @@ async def websocket_endpoint(websocket: WebSocket):
     try:
         while True:
             data = await websocket.receive_text()  # This is correct
-            print("📨 Message received:", repr(data))
+#            print("📨 Message received:", repr(data))
             
     except WebSocketDisconnect:
         print(f"👋 User {user_id} DISCONNECTED")
@@ -935,6 +933,10 @@ async def test_generate_proposals(fractal_id: int, db: AsyncSession = Depends(ge
         
         # Distribute proposals across group members
         for i, uid in enumerate(member_ids):
+            user = await get_user(db, member.user_id)
+            if int(user.telegram_id) < 40000:
+                continue
+            
             template = proposal_templates[proposal_idx % len(proposal_templates)]
             proposal = await create_proposal(
                 db, 
@@ -1109,6 +1111,11 @@ async def test_generate_comments(fractal_id: int, db: AsyncSession = Depends(get
         for p in proposals:
             # Each member comments on each proposal (excluding the creator)
             for commenter_id in member_ids:
+                # skipp if real user
+                user = await get_user(db, commenter_id)
+                if int(user.telegram_id) > 40000:
+                    continue
+
                 # Skip if commenter is the proposal creator
                 if commenter_id == p.creator_user_id:
                     continue
@@ -1158,7 +1165,7 @@ async def test_full_simulation(fractal_id: int, db: AsyncSession = Depends(get_d
     await db.commit()
     
 #    print("🧪 9/9 Done!")
-    return {"fractal_id": fractal_id, "round_id": round0.id}
+    return {"fractal_id": fractal_id }
 
 @router.get("/test/status/{fractal_id}")
 async def test_status(fractal_id: int, db: AsyncSession = Depends(get_db)):
