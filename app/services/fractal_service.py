@@ -861,7 +861,7 @@ async def check_fractals(db: AsyncSession):
                 
                 # 1. Overdue first (always)
                 if now > close_time + timedelta(minutes=10):
-                    print(f"         🛑 OVERDUE - AUTO CLOSING!")
+                    print(f"         🛑 OVERDUE - FORCE AUTO CLOSING!")
                     await close_round_repo(db, round_obj.id)
                     continue
 

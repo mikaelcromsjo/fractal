@@ -242,8 +242,18 @@ async def close_round_repo(db: AsyncSession, round_id: int):
     return closed_round
 
 
-async def get_representatives_for_group_repo(db: AsyncSession, group_id: int, round_id: int = None):
-    """Auto-detects round, returns {1: gold_user_id, 2: silver_user_id, 3: bronze_user_id}"""
+from sqlalchemy import select, func
+from sqlalchemy.sql import label
+
+async def get_representatives_for_group_repo(
+    db: AsyncSession,
+    group_id: int,
+    round_id: int = None,
+):
+    """Auto-detects round, returns {1: gold_user_id, 2: silver_user_id, 3: bronze_user_id},
+    including members with 0 votes if necessary.
+    """
+    # Auto-detect round if not provided
     if round_id is None:
         round_result = await db.execute(
             select(Round.id)
@@ -254,30 +264,60 @@ async def get_representatives_for_group_repo(db: AsyncSession, group_id: int, ro
         )
         round_row = round_result.fetchone()
         round_id = round_row[0] if round_row else None
-    
+
     if not round_id:
         return {}
-    
-    result = await db.execute(
+
+    # Assume you have a GroupMember model linking group_id <-> user_id
+    # and RepresentativeVote stores votes per (group_id, round_id, candidate_user_id)
+    total_points = func.coalesce(func.sum(RepresentativeVote.points), 0).label("total_points")
+    vote_count = func.count(RepresentativeVote.id).label("vote_count")
+
+    # LEFT JOIN: include all group members even if they have 0 votes
+    subq = (
         select(
-            RepresentativeVote.candidate_user_id,
-            func.row_number().over(
-                order_by=(
-                    func.sum(RepresentativeVote.points).desc(),
-                    func.count(RepresentativeVote.id).desc(),
-                    RepresentativeVote.candidate_user_id.desc()
-                )
-            ).label("rank")
+            GroupMember.user_id.label("candidate_user_id"),
+            total_points,
+            vote_count,
         )
-        .where(RepresentativeVote.group_id == group_id)
-        .where(RepresentativeVote.round_id == round_id)
-        .group_by(RepresentativeVote.candidate_user_id)
+        .select_from(GroupMember)
+        .join(
+            RepresentativeVote,
+            (RepresentativeVote.candidate_user_id == GroupMember.user_id)
+            & (RepresentativeVote.group_id == GroupMember.group_id)
+            & (RepresentativeVote.round_id == round_id),
+            isouter=True,  # LEFT JOIN
+        )
+        .where(GroupMember.group_id == group_id)
+        .group_by(GroupMember.user_id)
+        .subquery()
+    )
+
+    # Rank candidates by total_points desc, vote_count desc, user_id desc
+    ranked = await db.execute(
+        select(
+            subq.c.candidate_user_id,
+            func.row_number()
+            .over(
+                order_by=(
+                    subq.c.total_points.desc(),
+                    subq.c.vote_count.desc(),
+                    subq.c.candidate_user_id.desc(),
+                )
+            )
+            .label("rank"),
+        )
+        .order_by("rank")
         .limit(3)
     )
-    
-    reps = {row.rank: row.candidate_user_id for row in result}
-    return reps
 
+    rows = ranked.fetchall()
+    reps = {}
+    for candidate_user_id, rank in rows:
+        if rank in (1, 2, 3):
+            reps[rank] = candidate_user_id
+
+    return reps
 
 
 # ----------------------------
