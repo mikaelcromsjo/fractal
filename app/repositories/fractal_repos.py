@@ -1089,8 +1089,6 @@ async def get_all_cards_repo(
 
     print(f"Total proposals in fractal {fractal_id}: {total_count}")
 
-    group_id = -2
-
     if (group_id == -1):
         group = await get_last_group_repo(db, fractal_id)
         group_id = group.id
