@@ -171,14 +171,14 @@ async def start_fractal(db: AsyncSession, fractal_id: int):
         print(f"Group {g.id} members: {member_ids}")
 
     # Add member/group stats to message
-    text = f"🚀 Fractal '{fractal.name}' has started!\n\n"
-    "👥 The fractal has {total_members} members in {len(groups)} groups\n\n"
-    "💬 You can chat with your group members in this private telegram chat.'\n\n"
-    "📝 You you can write and vote on proposals in the Fractal Dashboard!\n\n"
-    "⭐ Please note that you HAVE to vote on EVERY proposal and comment to continue!"
+        text = f"🚀 Fractal '{fractal.name}' has started!\n\n"
+        f"👥 The fractal has {total_members} members in {len(groups)} groups\n\n"
+        f"💬 You can chat with your group members in this private telegram chat.'\n\n"
+        f"📝 You you can write and vote on proposals in the Fractal Dashboard!\n\n"
+        f"⭐ Please note that you HAVE to vote on EVERY proposal and comment to continue!"
 
     await send_button_to_fractal_members(db, text, "Dashboard", fractal_id)
-    text = f"🚀 Fractal '{fractal.name}' has started!<p>💬 You can chat with your group members in the Fractal Circle Bot private chat. Try writing 'Hi!'<p>📝 You can write and vote on proposals here in the Fractal Dashboard!"
+    text = f"🚀 Fractal '{fractal.name}' has started!<p>👥 The fractal has {total_members} members in {len(groups)} groups<p>💬 You can chat with your group members in the Fractal Circle Bot private chat. Try writing 'Hi!'<p>📝 You can write and vote on proposals here in the Fractal Dashboard!<p>⭐ Please note that you HAVE to vote on EVERY proposal and comment to continue!"
     await send_message_to_fractal_web_app_members(db, fractal_id, text, "start")
     await open_fractal_repo(db, fractal_id)
     return round_0
