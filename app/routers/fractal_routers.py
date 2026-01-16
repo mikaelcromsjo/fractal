@@ -191,11 +191,13 @@ async def fractals_auth(request: AuthRequest, db: AsyncSession = Depends(get_db)
         fractal = await get_fractal(db, fractal_id) if fractal_id else None
         round_obj = await get_last_round_repo(db, fractal_id) if fractal_id else None
 
+        round_status = round_obj.status
+
         # check if user is active in curren round
         group_status = "active"
         if (not user_context.get("group_id")):
             group = get_last_group_repo(db, fractal_id)
-            group_status = "observer"
+            user_status = "observer"
  
 
 
@@ -221,7 +223,8 @@ async def fractals_auth(request: AuthRequest, db: AsyncSession = Depends(get_db)
             ,
             "level": getattr(round_obj, "level", None),
             "fractal_status": getattr(fractal, "status", None),
-            "group_status": group_status,
+            "round_status": round_status,
+            "user_status": user_status,
         }
 
 #        print(f"📤 Sending response: {response_data}")
