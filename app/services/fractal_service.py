@@ -539,7 +539,7 @@ async def promote_to_next_round(db: AsyncSession, prev_round_id: int, fractal_id
     # Step 3: Create new round
     prev_round_obj = await get_round_repo(db, prev_round_id)
     next_level = prev_round_obj.level + 1
-    new_round = await create_round_repo(db, fractal_id, next_level)
+    new_round = await create_round_repo(db, fractal_id, next_level, started_at=datetime.now(timezone.utc))
     print(f"   🆕 [STEP 3] Created new round #{new_round.id} (level {next_level})")
 
     # Step 4: Divide representatives into new groups

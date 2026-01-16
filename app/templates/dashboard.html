@@ -890,7 +890,8 @@ function getAllCards() {
 
             }
             else{
-                addCardDiv("Welcome to the Fractal Meeting<p>"+fractalName+"<p>"+fractalDescription+"<p>Round Time: " + fractalRoundTime +" minutes<p>")
+                if (roundStatus != "closed")
+                    addCardDiv("Welcome to the Fractal Meeting<p>"+fractalName+"<p>"+fractalDescription+"<p>Round Time: " + fractalRoundTime +" minutes<p>")
             }
         })
         .catch(err => {
