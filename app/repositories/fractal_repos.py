@@ -1077,6 +1077,7 @@ async def get_all_cards_repo(
 
 
     from sqlalchemy import func
+    Proposal = models.Proposal
 
     # Count total proposals in fractal
     count_stmt = (
@@ -1092,7 +1093,6 @@ async def get_all_cards_repo(
         group = await get_last_group_repo(db, fractal_id)
         group_id = group.id
 
-    Proposal = models.Proposal
 
     if(group_id == -2):
         prop_stmt = (
