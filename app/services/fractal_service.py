@@ -1032,7 +1032,7 @@ async def rep_vote_card(db: AsyncSession, user_id: int, group_id: int, fractal_i
 
  #   print("rep vote card")
 
-    if (group_id == -1):
+    if (group_id < 0):
         group = await get_last_group_repo(db, fractal_id)
         group_id = group.id
     else:
