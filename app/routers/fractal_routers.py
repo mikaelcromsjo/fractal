@@ -949,7 +949,7 @@ async def test_generate_proposals(fractal_id: int, db: AsyncSession = Depends(ge
                 fractal_id, 
                 group.id, 
                 round_obj.id,
-                template["title"],
+                template["title"] + " #" + str(proposal_idx),
                 template["body"],
                 uid  # creator_user_id
             )
