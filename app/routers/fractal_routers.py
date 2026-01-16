@@ -186,25 +186,25 @@ async def fractals_auth(
         user = data["user"]
         print(f"✅ Telegram user: {user['id']} - {user.get('first_name', '')}")
 
-        # 2️⃣ Fetch user context or fractal_id
-        if (not fractal_id or fractal_id == 0):
+        # 2️⃣ Fetch user context only if fractal_id is not provided
+        user_context = {}
+        if not fractal_id or fractal_id == 0:
             user_context = await get_user_info_by_telegram_id(db, str(user["id"]))
-            # Extract fractal details if user is linked to one
             fractal_id = user_context.get("fractal_id")
+        
+        # 3️⃣ Fetch fractal and round data
         fractal = await get_fractal(db, fractal_id) if fractal_id else None
         round_obj = await get_last_round_repo(db, fractal_id) if fractal_id else None
 
-        round_status = None
-        if (round_obj):
-            round_status = round_obj.status
+        round_status = round_obj.status if round_obj else None
 
-        # check if user is active in curren round
+        # 4️⃣ Determine user status
         user_status = "active"
-        if (not user_context.get("group_id")):
-            group = get_last_group_repo(db, fractal_id)
-            user_status = "observer" 
+        if not user_context.get("group_id"):
+            group = await get_last_group_repo(db, fractal_id)  # ✅ Added await
+            user_status = "observer"
 
-        # 3️⃣ Construct the response (with null-safety)
+        # 5️⃣ Construct the response
         response_data = {
             "status": "ok",
             "user_id": user_context.get("user_id"),
@@ -220,23 +220,23 @@ async def fractals_auth(
                 if fractal and fractal.start_date
                 else None
             ),
-            "fractal_round_time": (fractal.meta.get("round_time") 
+            "fractal_round_time": (
+                fractal.meta.get("round_time") 
                 if fractal and fractal.meta and "round_time" in fractal.meta 
-                else None)
-            ,
+                else None
+            ),
             "level": getattr(round_obj, "level", None),
             "fractal_status": getattr(fractal, "status", None),
             "round_status": round_status,
             "user_status": user_status,
         }
 
-#        print(f"📤 Sending response: {response_data}")
         return JSONResponse(content=response_data)
 
     except Exception as e:
         print(f"❌ Auth failed: {e}")
         raise HTTPException(status_code=400, detail=str(e))
-    
+        
 # ---------- HTML Endpoints ----------
 templates = TemplateLookup(
     directories=["templates"],
