@@ -246,9 +246,11 @@ templates = TemplateLookup(
 )
 
 @router.get("/dashboard", response_class=HTMLResponse)
-async def dashboard(request: Request):
+async def dashboard(request: Request,
+    fractal_id: int = Query(..., description="Current fractal ID"),
+):
     template = templates.get_template("dashboard.html")
-    html = template.render(request=request, default_name="Guest", settings=settings)
+    html = template.render(request=request, fractal_id=fractal_id, default_name="Guest", settings=settings)
     return HTMLResponse(html)
 
 @router.get("/get_next_card")
