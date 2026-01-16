@@ -725,21 +725,19 @@ fetch("/api/v1/fractals/auth", {
         if (currentFractalId != openFractalId) {
             currentFractalId == openFractalId
             }
-        else    
-        {
-            currentRoundId = data.round_id;
-            currentLevel = data.level;
-            currentGroupId = data.group_id;
-            currentUserName = data.username;
-            fractalName = data.fractal_name;
-            fractalDescription = data.fractal_description; 
-            fractalStartDate = data.fractal_start_date; 
-            fractalRoundTime = data.fractal_round_time; 
-            fractalStatus = data.fractal_status;
-            roundStatus = data.round_status; 
-            userStatus = data.user_status;
 
-        }
+        currentRoundId = data.round_id;
+        currentLevel = data.level;
+        currentGroupId = data.group_id;
+        currentUserName = data.username;
+        fractalName = data.fractal_name;
+        fractalDescription = data.fractal_description; 
+        fractalStartDate = data.fractal_start_date; 
+        fractalRoundTime = data.fractal_round_time; 
+        fractalStatus = data.fractal_status;
+        roundStatus = data.round_status; 
+        userStatus = data.user_status;
+
 
         statusEl.innerText = "Name: " + data.username + " Fractal: " + currentFractalId + " Level:" + data.level + " Group:" + data.group_id + " Fractal Status: " + data.fractal_status + " User Status: " + data.user_status + " Round Status: " + data.round_status;
         
