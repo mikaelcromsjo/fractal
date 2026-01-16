@@ -1075,13 +1075,26 @@ async def get_all_cards_repo(
 ) -> Optional[List[Dict[str, any]]]:
     """Load all cards in group and return as list of dicts."""
 
-    if (group_id == -2):
+
+    from sqlalchemy import func
+
+    # Count total proposals in fractal
+    count_stmt = (
+        select(func.count(Proposal.id))
+        .where(Proposal.fractal_id == fractal_id)
+    )
+    count_result = await db.execute(count_stmt)
+    total_count = count_result.scalar()
+
+    print(f"Total proposals in fractal {fractal_id}: {total_count}")
+
+    if (group_id == -1):
         group = await get_last_group_repo(db, fractal_id)
         group_id = group.id
 
     Proposal = models.Proposal
 
-    if(group_id == -3):
+    if(group_id == -2):
         prop_stmt = (
             select(Proposal)
             .where(Proposal.fractal_id == fractal_id)
