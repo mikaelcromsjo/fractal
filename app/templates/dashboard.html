@@ -742,7 +742,7 @@ fetch("/api/v1/fractals/auth", {
 
         if (userStatus != "active" || roundStatus == "closed"){
             addCardDiv('<p>'+fractalName+'<p>'+fractalDescription+'<p>Round Time: ' + fractalRoundTime +' minutes<p>Start Date: UTC '+fractalStartDate+'<p>You are not in any active group at the moment. ');
-            currentGroupId = -1;
+            currentGroupId = -2;
                         
         } else {
             lastGroupId == currentGroupId
