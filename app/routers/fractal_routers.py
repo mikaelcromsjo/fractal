@@ -190,7 +190,7 @@ async def fractals_auth(
         user_context = {}
         user_context = await get_user_info_by_telegram_id(db, str(user["id"]))
         user_id = user_context.get("user_id")
-        if not fractal_id or fractal_id == 0:
+        if not fractal_id or fractal_id == 0 or fractal_id == user_context.get("fractal_id"):
             fractal_id = user_context.get("fractal_id")
             group_id = user_context.get("group_id")
             round_id = user_context.get("round_id")
