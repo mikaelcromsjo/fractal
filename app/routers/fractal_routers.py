@@ -189,7 +189,15 @@ async def fractals_auth(
         # 2️⃣ Fetch user context only if fractal_id is not provided
         user_context = {}
         user_context = await get_user_info_by_telegram_id(db, str(user["id"]))
-        fractal_id = user_context.get("fractal_id")
+        user_id = user_context.get("user_id")
+        if not fractal_id or fractal_id == 0:
+            fractal_id = user_context.get("fractal_id")
+            group_id = user_context.get("group_id")
+            round_id = user_context.get("round_id")
+        else:
+            group_id = -1
+            round_id = -1
+            
         
         # 3️⃣ Fetch fractal and round data
         fractal = await get_fractal(db, fractal_id) if fractal_id else None
@@ -199,17 +207,17 @@ async def fractals_auth(
 
         # 4️⃣ Determine user status
         user_status = "active"
-        if not user_context.get("group_id"):
+        if not group_id:
             group = await get_last_group_repo(db, fractal_id)  # ✅ Added await
             user_status = "observer"
 
         # 5️⃣ Construct the response
         response_data = {
             "status": "ok",
-            "user_id": user_context.get("user_id"),
+            "user_id": user_id,
             "fractal_id": fractal_id,
-            "round_id": user_context.get("round_id"),
-            "group_id": user_context.get("group_id"),
+            "round_id": round_id,
+            "group_id": group_id,
             "first_name": user.get("first_name", ""),
             "username": user.get("username", ""),
             "fractal_name": fractal.name if fractal else None,
