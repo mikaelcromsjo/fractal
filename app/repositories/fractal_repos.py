@@ -163,8 +163,6 @@ async def create_round_repo(
         fractal_id (int): ID of the parent fractal.
         level (int, optional): Level of the round. Defaults to 0.
         status (str, optional): Status of the round. Defaults to "open".
-        started_at (datetime, optional): Optional start datetime.
-        ended_at (datetime, optional): Optional end datetime.
 
     Returns:
         Round: The newly created Round object.
@@ -177,7 +175,6 @@ async def create_round_repo(
         level=level,
         status=status,
         started_at=started_at,
-        ended_at=ended_at
     )
     db.add(round_obj)
     await db.commit()
