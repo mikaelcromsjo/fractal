@@ -187,7 +187,7 @@ async def fractals_auth(
         print(f"✅ Telegram user: {user['id']} - {user.get('first_name', '')}")
 
         # 2️⃣ Fetch user context or fractal_id
-        if (not fractal_id):
+        if (not fractal_id or fractal_id == 0):
             user_context = await get_user_info_by_telegram_id(db, str(user["id"]))
             # Extract fractal details if user is linked to one
             fractal_id = user_context.get("fractal_id")
@@ -247,7 +247,7 @@ templates = TemplateLookup(
 
 @router.get("/dashboard", response_class=HTMLResponse)
 async def dashboard(request: Request,
-    fractal_id: int = Query(..., description="Current fractal ID"),
+    fractal_id: Optional[int] = Query(None, description="Current fractal ID"),
 ):
     template = templates.get_template("dashboard.html")
     html = template.render(request=request, fractal_id=fractal_id, default_name="Guest", settings=settings)
