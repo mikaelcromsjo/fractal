@@ -894,6 +894,7 @@ async def cmd_join(message: types.Message, state: FSMContext,
                             
             await message.answer(
                 f"⚠️ {e}\n\n"
+                f"❌ Error in fractal: "{sanitize_text(fractal.name)}"\n\n"
                 f"📝 {escaped_desc}\n\n"
                 f"📅 {start_date}\n\n"
                 f"{escaped_times}\n\n"
