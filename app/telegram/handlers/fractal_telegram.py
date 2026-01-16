@@ -497,7 +497,7 @@ async def cmd_start(message: types.Message, state: FSMContext):
                     )
                     break
 
-                print(f"🔍 FRACTAL STATUS: '{fractal.status}'")
+#                print(f"🔍 FRACTAL STATUS: '{fractal.status}'")
                 now = datetime.now(timezone.utc)
 
                 # ✅ FIX 1: Define start_date consistently

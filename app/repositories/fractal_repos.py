@@ -154,8 +154,6 @@ async def create_round_repo(
     fractal_id: int,
     level: int = 0,
     status: str = "open",
-    started_at: Optional[datetime] = datetime.now(timezone.utc),
-    ended_at: Optional[datetime] = None
 ) -> Round:
     """
     Create a new Round for a given Fractal.
@@ -171,6 +169,9 @@ async def create_round_repo(
     Returns:
         Round: The newly created Round object.
     """
+
+    started_at = datetime.now(timezone.utc)
+
     round_obj = Round(
         fractal_id=fractal_id,
         level=level,
