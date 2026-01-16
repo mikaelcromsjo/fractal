@@ -191,7 +191,10 @@ async def fractals_auth(request: AuthRequest, db: AsyncSession = Depends(get_db)
         fractal = await get_fractal(db, fractal_id) if fractal_id else None
         round_obj = await get_last_round_repo(db, fractal_id) if fractal_id else None
 
-        round_status = round_obj.status
+
+        round_status = None
+        if (round_obj):
+            round_status = round_obj.status
 
         # check if user is active in curren round
         user_status = "active"
