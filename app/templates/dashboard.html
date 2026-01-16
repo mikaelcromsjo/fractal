@@ -675,6 +675,11 @@ p{
 
 <script>
     const public_base_wss_url = "${settings.public_base_wss_url}"
+
+
+    const defaultName = "${default_name}";
+    const openFractalId = "${fractal_id}";
+
 <%text>
 
     const tg = window.Telegram.WebApp;
@@ -684,14 +689,12 @@ p{
     let noMoreCards = false;
 
     const initDataUnsafe = tg.initDataUnsafe || {};
-    const defaultName = "${default_name}";
     const userName = (initDataUnsafe.user && initDataUnsafe.user.first_name)
         ? initDataUnsafe.user.first_name
         : defaultName;
 
     let currentTelegramUserId = initDataUnsafe.user ? initDataUnsafe.user.id : null;
 
-    let openFractalId = "${fractal_id}";
     if (!openFractalId)
         openFractalId = 0;
     let currentUserId =  "";
