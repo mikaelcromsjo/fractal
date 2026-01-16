@@ -1075,20 +1075,30 @@ async def get_all_cards_repo(
 ) -> Optional[List[Dict[str, any]]]:
     """Load all cards in group and return as list of dicts."""
 
-    if (group_id == -1):
+    if (group_id == -2):
         group = await get_last_group_repo(db, fractal_id)
         group_id = group.id
 
     Proposal = models.Proposal
 
-    prop_stmt = (
-        select(Proposal)
-        .where(Proposal.group_id == group_id)
-        .order_by(
-            desc(Proposal.total_score).nullslast(),  # highest total_score first
-            desc(Proposal.created_at),                # then newest proposals
+    if(group_id == -3):
+        prop_stmt = (
+            select(Proposal)
+            .where(Proposal.fractal_id == fractal_id)
+            .order_by(
+                desc(Proposal.total_score).nullslast(),  # highest total_score first
+                desc(Proposal.created_at),                # then newest proposals
+            )
         )
-    )
+    else:
+        prop_stmt = (
+            select(Proposal)
+            .where(Proposal.group_id == group_id)
+            .order_by(
+                desc(Proposal.total_score).nullslast(),  # highest total_score first
+                desc(Proposal.created_at),                # then newest proposals
+            )
+        )
     prop_result = await db.execute(prop_stmt)
     proposals = prop_result.scalars().all()
 

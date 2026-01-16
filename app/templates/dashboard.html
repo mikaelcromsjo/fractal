@@ -1327,6 +1327,7 @@ async function connectWS() {
                 if (data.type === 'half_time' && data.message) {
                     console.log(data.message);
                     addCardDiv(data.message)
+                    addBtn.style.display = "none";
                 }
 
                 if (data.type === 'end' && data.message) {
