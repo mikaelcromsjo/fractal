@@ -870,7 +870,6 @@ function getNextCard() {
 
 function getAllCards() {
 
-        console.log("getallcards");
         // ✅ Remove .card.show divs that contain .no-proposals-message
         const cardShowDivs = document.querySelectorAll('.card.show');
         cardShowDivs.forEach(div => {
@@ -886,7 +885,6 @@ function getAllCards() {
         })
         .then(html => {
             if (html.length > 0) {
-                console.log("getallcards add");
                 addCard(html);
                 getRepVoteCard(currentGroupId);
 
@@ -907,30 +905,15 @@ function addCard(html) {
     card.innerHTML = html;
     cardsContainer.appendChild(card);
 
-    // ✅ Hide/disable voting blocks if not in level 0 or fractal not open
-    if (currentLevel != "0" || roundStatus == "closed") {
+    // ✅ Hide/disable voting blocks if round is closed
+    console.log("set vote", roundStatus)
+    if (roundStatus == "closed") {
+        console.log("disable ")
         card.querySelectorAll(".proposal-comment-input-row").forEach(el => {
             el.style.display = "none";
         });
-    }
-
-    if (currentGroupId == -1) {
         card.querySelectorAll(".proposal-rating-block").forEach(el => {
             el.style.display = "none";
-        });
-    }
-
-    
-    if (fractalStatus != "open") {
-        
-        // Disable proposal-rating-block (voting)
-        card.querySelectorAll(".proposal-rating-block").forEach(el => {
-            el.style.pointerEvents = "none";
-        });
-        
-        // Disable proposal-comments-block (commenting)
-        card.querySelectorAll(".comment-rating-block").forEach(el => {
-            el.style.pointerEvents = "none";
         });
 
         // Disable rep voting
@@ -938,8 +921,9 @@ function addCard(html) {
             el.style.pointerEvents = "none";
         });
 
-
     }
+     
+ 
 
     // Trigger animation
     requestAnimationFrame(function() {
