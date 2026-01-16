@@ -915,7 +915,9 @@ function addCard(html) {
         card.querySelectorAll(".proposal-rating-block").forEach(el => {
             el.style.display = "none";
         });
-
+        card.querySelectorAll(".comment-rating-block").forEach(el => {
+            el.style.display = "none";
+        });
         // Disable rep voting
         card.querySelectorAll(".rep-vote-card").forEach(el => {
             el.style.pointerEvents = "none";
