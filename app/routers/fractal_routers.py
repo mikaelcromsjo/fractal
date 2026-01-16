@@ -188,9 +188,8 @@ async def fractals_auth(
 
         # 2️⃣ Fetch user context only if fractal_id is not provided
         user_context = {}
-        if not fractal_id or fractal_id == 0:
-            user_context = await get_user_info_by_telegram_id(db, str(user["id"]))
-            fractal_id = user_context.get("fractal_id")
+        user_context = await get_user_info_by_telegram_id(db, str(user["id"]))
+        fractal_id = user_context.get("fractal_id")
         
         # 3️⃣ Fetch fractal and round data
         fractal = await get_fractal(db, fractal_id) if fractal_id else None
