@@ -794,7 +794,7 @@ async def open_fractal_repo(db, fractal_id: int):
 
     fractal.status = "open"
     if not fractal.start_date:
-        fractal.start_date = datetime.utcnow()
+        fractal.start_date = datetime.now(timezone.utc)
 
     await db.commit()
     await db.refresh(fractal)
