@@ -692,6 +692,8 @@ p{
     let currentTelegramUserId = initDataUnsafe.user ? initDataUnsafe.user.id : null;
 
     let openFractalId = "${fractal_id}";
+    if (!openFractalId)
+        openFractalId = 0;
     let currentUserId =  "";
     let currentFractalId = "";
     let currentRoundId = "";
@@ -708,7 +710,7 @@ p{
     const statusEl = document.getElementById("status");
     statusEl.innerText = "Hello, " + userName + "! Sending auth to server...";
 
-fetch("/api/v1/fractals/auth?fractal_id={$fractal_id}", {
+fetch("/api/v1/fractals/auth?fractal_id="+openFractalId, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ init_data: tg.initData })
