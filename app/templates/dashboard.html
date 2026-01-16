@@ -708,7 +708,7 @@ p{
     const statusEl = document.getElementById("status");
     statusEl.innerText = "Hello, " + userName + "! Sending auth to server...";
 
-fetch("/api/v1/fractals/auth", {
+fetch("/api/v1/fractals/auth?fractal_id={$fractal_id}", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ init_data: tg.initData })
@@ -721,11 +721,6 @@ fetch("/api/v1/fractals/auth", {
         // ✅ Set all current context variables
         currentUserId = data.user_id;
         currentFractalId = data.fractal_id;
-
-        if (currentFractalId != openFractalId) {
-            currentFractalId == openFractalId
-            }
-
         currentRoundId = data.round_id;
         currentLevel = data.level;
         currentGroupId = data.group_id;

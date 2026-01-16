@@ -173,8 +173,12 @@ async def telegram_webhook(token: str, request: Request):
     # Telegram expects EMPTY 200 response
     return Response(status_code=200)  # or PlainTextResponse("OK")
 
-@router.post("/auth")
-async def fractals_auth(request: AuthRequest, db: AsyncSession = Depends(get_db)):
+@router.post("/auth")    
+async def fractals_auth(
+    request: AuthRequest, 
+    db: AsyncSession = Depends(get_db), 
+    fractal_id: Optional[int] = Query(None, description="Current fractal ID"),
+):
     try:
         # 1️⃣ Validate Telegram WebApp data
         validate(request.init_data, settings.bot_token)
@@ -182,15 +186,13 @@ async def fractals_auth(request: AuthRequest, db: AsyncSession = Depends(get_db)
         user = data["user"]
         print(f"✅ Telegram user: {user['id']} - {user.get('first_name', '')}")
 
-        # 2️⃣ Fetch user context
-        user_context = await get_user_info_by_telegram_id(db, str(user["id"]))
-#        print(f"🔍 Service response: {user_context}")
-
-        # Extract fractal details if user is linked to one
-        fractal_id = user_context.get("fractal_id")
+        # 2️⃣ Fetch user context or fractal_id
+        if (not fractal_id):
+            user_context = await get_user_info_by_telegram_id(db, str(user["id"]))
+            # Extract fractal details if user is linked to one
+            fractal_id = user_context.get("fractal_id")
         fractal = await get_fractal(db, fractal_id) if fractal_id else None
         round_obj = await get_last_round_repo(db, fractal_id) if fractal_id else None
-
 
         round_status = None
         if (round_obj):
@@ -200,9 +202,7 @@ async def fractals_auth(request: AuthRequest, db: AsyncSession = Depends(get_db)
         user_status = "active"
         if (not user_context.get("group_id")):
             group = get_last_group_repo(db, fractal_id)
-            user_status = "observer"
- 
-
+            user_status = "observer" 
 
         # 3️⃣ Construct the response (with null-safety)
         response_data = {
