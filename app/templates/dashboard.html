@@ -731,6 +731,8 @@ fetch("/api/v1/fractals/auth", {
         fractalStartDate = data.fractal_start_date; 
         fractalRoundTime = data.fractal_round_time; 
         fractalStatus = data.fractal_status; 
+        roundStatus = data.round_status; 
+        userStatus = data.user_status; 
 
 
         statusEl.innerText = "Name: " + data.username + " Fractal: " + currentFractalId + " Level:" + data.level + " Group:" + data.group_id + " Fractal Status: " + data.fractal_status + " User Status: " + data.user_status + " Round Status: " + data.round_status;
@@ -738,9 +740,8 @@ fetch("/api/v1/fractals/auth", {
         console.log("Auth context:", data);
 
 
-        if (!currentGroupId){
+        if (userStatus != "active" || roundStatus == "closed"){
             addCardDiv('You are not in any active group at the moment. <p>'+fractalName+'<p>'+fractalDescription+'<p>Round Time: ' + fractalRoundTime +' minutes<p>Start Date: UTC '+fractalStartDate+'');
-            fractalStatus = "closed";
             currentGroupId = -1;
                         
         } else {
@@ -749,7 +750,7 @@ fetch("/api/v1/fractals/auth", {
         console.log(currentLevel);
         console.log(fractalStatus);
         
-        if (!(currentLevel == 0 && fractalStatus == "open")){
+        if (!(currentLevel == 0 && roundStatus == "open")){
             addBtn.style.display = "none";
         }else{
             addBtn.style.display = "block";
@@ -828,7 +829,7 @@ function isAllVoted() {
 function getNextCard() {
 
 
-    if(fractalStatus != "open"){
+    if(roundStatus == "closed"){
         getAllCards();
         return;
     }
@@ -907,7 +908,7 @@ function addCard(html) {
     cardsContainer.appendChild(card);
 
     // ✅ Hide/disable voting blocks if not in level 0 or fractal not open
-    if (currentLevel != "0" || fractalStatus != "open") {
+    if (currentLevel != "0" || roundStatus == "closed") {
         card.querySelectorAll(".proposal-comment-input-row").forEach(el => {
             el.style.display = "none";
         });
