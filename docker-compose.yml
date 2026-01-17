@@ -31,7 +31,7 @@ services:
       POSTGRES_USER: fractal_user
       POSTGRES_PASSWORD: fractal_pass
       POSTGRES_DB: test_fractal_db
-    ports:
+#    ports:
 #      - "5432:5432"
     volumes:
       - db_data:/var/lib/postgresql/data
