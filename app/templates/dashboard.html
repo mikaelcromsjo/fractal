@@ -630,6 +630,9 @@ p{
             width: calc(100% - 32px);
             flex-shrink: 0;
         }
+        #all-btn{
+            display:none;
+        }
         #add-proposal-btn {
             display:none;
         }
@@ -759,6 +762,9 @@ fetch("/api/v1/fractals/auth?fractal_id="+openFractalId, {
             addBtn.style.display = "none";
         }else{
             addBtn.style.display = "block";
+        }
+        if (fractalStatus == "closed"){
+            moreBtn.style.display = "block";
         }
         
         getNextCard(); // Start loading cards after auth
