@@ -619,7 +619,7 @@ p{
             border: none;
             cursor: pointer;
         }
-        #add-proposal-btn, #more-btn, #allBtn{
+        #add-proposal-btn, #more-btn, #all-btn{
             margin: 2px 9px;
             padding: 10px;
             border-radius: 12px;
@@ -775,6 +775,7 @@ fetch("/api/v1/fractals/auth?fractal_id="+openFractalId, {
     // Proposal form logic
     const addBtn = document.getElementById("add-proposal-btn");
     const moreBtn = document.getElementById("more-btn");
+    const allBtn = document.getElementById("all-btn");
     const form = document.getElementById("proposal-form");
     const cancelBtn = document.getElementById("cancel-proposal");
     const submitBtn = document.getElementById("submit-proposal");
