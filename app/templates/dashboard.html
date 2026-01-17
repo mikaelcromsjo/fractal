@@ -619,7 +619,7 @@ p{
             border: none;
             cursor: pointer;
         }
-        #add-proposal-btn, #more-btn{
+        #add-proposal-btn, #more-btn, #allBtn{
             margin: 2px 9px;
             padding: 10px;
             border-radius: 12px;
@@ -794,7 +794,7 @@ fetch("/api/v1/fractals/auth?fractal_id="+openFractalId, {
         location.reload(true);
     });
 
-        allBtn.addEventListener("click", function() {
+    allBtn.addEventListener("click", function() {
         currentGroupId = -2
         location.reload(true);
     });
