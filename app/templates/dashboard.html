@@ -663,6 +663,7 @@ p{
 </div>
 
 <button id="more-btn">Update View</button>
+<button id="all-btn">Show All Contributions</button>
 <button id="add-proposal-btn">Create Proposal</button>
 
 <div id="proposal-form">
@@ -790,6 +791,11 @@ fetch("/api/v1/fractals/auth?fractal_id="+openFractalId, {
 
     moreBtn.addEventListener("click", function() {
         console.log("morebtn")
+        location.reload(true);
+    });
+
+        allBtn.addEventListener("click", function() {
+        currentGroupId = -2
         location.reload(true);
     });
 
