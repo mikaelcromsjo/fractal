@@ -791,13 +791,13 @@ fetch("/api/v1/fractals/auth?fractal_id="+openFractalId, {
 
 
     moreBtn.addEventListener("click", function() {
-        console.log("morebtn");
-        getAllCards();
+        console.log("morebtn")
+        location.reload(true);
     });
 
     allBtn.addEventListener("click", function() {
-        currentGroupId = -2
-        location.reload(true);
+        currentGroupId = -2;
+        getAllCards();
     });
 
 
