@@ -519,7 +519,7 @@ async def cmd_start(message: types.Message, state: FSMContext):
                     
                     if winning_text:
                         await message.answer(
-                            f"🏆 <b>Fractal avslutad!</b>\n\n{winning_text}",
+                            f"🏆 Results: <b>{sanitize_text(fractal.name)}\n\n{winning_text}",
                             parse_mode="HTML"
                         )
                     else:
