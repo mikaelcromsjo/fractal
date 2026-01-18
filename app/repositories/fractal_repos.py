@@ -1192,6 +1192,7 @@ async def get_winning_proposal_telegram_repo(
 {comments_html}
     """.strip()
     
+    print (telegram_text)
     return telegram_text
 
 
