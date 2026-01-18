@@ -1156,15 +1156,15 @@ async def get_winning_proposal_telegram_repo(
     if not proposal:
         return None
 
-    await _enrich_proposal_with_comments_repo(db, proposal, -1)        
+    await _enrich_proposal_with_comments_repo(db, proposal, 0)        
     
     # 🏗️ Bygg kort-data
-    creator = getattr(proposal, 'creator', None) or type('Creator', (), {'username': 'Användare'})()
+    creator = getattr(proposal, 'creator', None) or type('Creator', (), {'username': 'User'})()
     card = {
         "username": creator.username,
         "title": proposal.title or "Utan titel",
         "message": (proposal.body or "")[:400],  # Trunkera
-        "date": proposal.created_at.strftime("%d/%m %H:%M") if proposal.created_at else "just nu",
+        "date": proposal.created_at.strftime("%d/%m %H:%M") if proposal.created_at else "just now",
         "tags": proposal.meta.get("tags", []),
         "total_score": proposal.total_score or 0,
         "comments": getattr(proposal, 'comments', [])
@@ -1174,11 +1174,11 @@ async def get_winning_proposal_telegram_repo(
     comments_html = ""
     comments = card['comments']
     if comments:
-        comments_html = "\n\n💬 <b>Senaste kommentarer:</b>\n"
+        comments_html = "\n\n💬 <b>Top comments:</b>\n"
         for i, comment in enumerate(comments[-5:], 1):
             # Hantera comment-struktur efter _enrich
-            author = getattr(comment, 'author', {}).get('username', 'Anonym') if isinstance(comment, dict) else 'Anonym'
-            text = getattr(comment, 'text', getattr(comment, 'body', 'Ingen text'))[:120]
+            author = getattr(comment, 'author', {}).get('username', 'user') if isinstance(comment, dict) else 'User'
+            text = getattr(comment, 'text', getattr(comment, 'body', 'No text'))[:120]
             comments_html += f"{i}. <i>@{author}:</i> {text}{'...' if len(str(text)) > 120 else ''}\n"
     
     # 🏆 TELEGRAM HTML (under 4096 tecken)
@@ -1187,7 +1187,7 @@ async def get_winning_proposal_telegram_repo(
 
 {card['message']}{'...' if len(card['message']) > 400 else ''}
 
-<i>@{card['username']} • {card['date']} • ⭐ {card['total_score']:.1f} poäng</i>
+<i>@{card['username']} • {card['date']} • ⭐ {card['total_score']:.1f} points</i>
 
 {''.join([f' <b>#{tag}</b>' for tag in card['tags'][:4]])}
 

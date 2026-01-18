@@ -524,8 +524,7 @@ async def cmd_start(message: types.Message, state: FSMContext):
                         )
                     else:
                         await message.answer(
-                            f"❌ Fractal \"{sanitize_text(fractal.name)}\" är stängd\n"
-                            f"Men inget förslag vann.",
+                            f"❌ Fractal \"{sanitize_text(fractal.name)}\" is closed but has no winning proposal.",
                             parse_mode=None
                         )
                     break
