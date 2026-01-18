@@ -1129,20 +1129,25 @@ async def get_all_cards_repo(
     
     return proposals_data if proposals_data else None
 
+from typing import Optional, Tuple
+import re
+
+from typing import Optional, Tuple
+import re
+
 async def get_winning_proposal_telegram_repo(
     db: AsyncSession,
     fractal_id: int = -1
-) -> Optional[str]:
-    """Load winning proposal + comments. Returns Telegram-formatted text."""
-    
-    # ✅ YOUR IMPORT STYLE
+) -> Tuple[Optional[str], Optional[str]]:
+    """Returns (text, 'HTML') for Telegram. Zero parsing errors."""
+
     Proposal = models.Proposal
-    
+
     group = await get_last_group_repo(db, fractal_id)
     if not group:
-        return None
-        
-    prop_stmt = (
+        return None, None
+
+    stmt = (
         select(Proposal)
         .where(Proposal.group_id == group.id)
         .order_by(
@@ -1150,50 +1155,81 @@ async def get_winning_proposal_telegram_repo(
             desc(Proposal.created_at),
         )
     )
-    prop_result = await db.execute(prop_stmt)
-    proposal = prop_result.scalars().first()
+    result = await db.execute(stmt)
+    proposal = result.scalars().first()
     if not proposal:
-        return None
+        return None, None
 
-    # ✅ Uses your exact enrich function return
     card_data = await _enrich_proposal_with_comments_repo(db, proposal, -1)
-    
     if not card_data:
-        return None
-    
-    # Extract from YOUR template structure
-    card = {
-        "username": card_data["username"],
-        "title": card_data["title"],
-        "message": card_data["message"][:400],
-        "date": card_data["date"],
-        "tags": card_data["tags"],
-        "total_score": card_data["total_score"] or 0,
-        "comments": card_data["comments"][-5:] if card_data["comments"] else []
-    }
-    
-    # 💬 Format YOUR comment structure
-    comments_html = ""
-    comments = card["comments"]
-    if comments:
-        comments_html = "\n\n💬 <b>Latest comments:</b>\n"
-        for i, comment in enumerate(comments, 1):
-            comments_html += f"{i}. <i>@{comment['username']}:</i> {comment['message'][:120]}{'...' if len(comment['message']) > 120 else ''}\n"
-    
-    telegram_text = f"""
-🏆 <b>{card['title']}</b>
+        return None, None
 
-{card['message']}{'...' if len(card['message']) > 400 else ''}
+    def esc_html(s):
+        if not s:
+            return ""
+        s = str(s).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")
+        s = re.sub(r'<[^>]+>', '', s)
+        return s
 
-<i>@{card['username']} • {card['date']} • ⭐ {card['total_score']:.1f} points</i>
+    def truncate(s, n):
+        if not s:
+            return ""
+        s = str(s).strip()
+        return s if len(s) <= n else s[:max(0, n-1)].rstrip() + "…"
 
-{''.join([f' <b>#{tag}</b>' for tag in card['tags'][:4]])}
+    username = esc_html(card_data.get("username") or "anonymous")
+    title = esc_html(card_data.get("title") or "Untitled")
+    message = esc_html(card_data.get("message") or card_data.get("body") or "")
+    date = esc_html(str(card_data.get("date") or "now")[:16])
+    tags = card_data.get("tags") or []
+    total_score = float(card_data.get("total_score") or 0.0)
+    comments = card_data.get("comments") or []
 
-{comments_html}
-    """.strip()
+    safe_title = truncate(title, 80)
+    safe_message = truncate(message, 900)
+
+    tags_line = ""
+    if tags:
+        safe_tag_list = [esc_html(str(t)) for t in tags[:4] if t]
+        tags_line = " ".join(f"#{t}" for t in safe_tag_list)
+
+    comment_lines = []
+    for i, c in enumerate(comments[:5], 1):
+        c_user = esc_html(c.get("username") or "anon")
+        c_msg = esc_html(truncate(c.get("message") or "", 320))
+        # ✅ Plain text numbers, italic usernames only
+        comment_lines.append(f"{i}. <i>@{c_user}:</i> {c_msg}")
+
+    comments_block = ""
+    if comment_lines:
+        # ✅ Emoji and "Latest comments:" are PLAIN TEXT, no tags around them
+        comments_block = "💬 Latest comments:\n" + "\n".join(comment_lines)
+    else:
+        comments_block = "No comments yet"
+
+    lines = [
+        f"<b>{safe_title}</b>",  # Only title is bold
+        "",
+        safe_message,
+        "",
+        f"<i>@{username} • {date} • ⭐ {total_score:.1f} points</i>",  # Metadata italic
+    ]
     
-    print (telegram_text)
-    return telegram_text
+    if tags_line:
+        lines.append("")
+        lines.append(tags_line)
+    
+    lines.append("")
+    lines.append(comments_block)
+
+    text = "\n".join(lines).strip()
+
+    if len(text) > 3900:
+        text = text[:3900].rstrip() + "\n…truncated"
+
+    print (text)
+    return text, "HTML"
+
 
 
 async def _enrich_proposal_with_comments_repo(
