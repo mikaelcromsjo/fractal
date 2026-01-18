@@ -1129,15 +1129,13 @@ async def get_all_cards_repo(
     
     return proposals_data if proposals_data else None
 
-from typing import Optional, Tuple
-import re
-
 async def get_winning_proposal_telegram_repo(
     db: AsyncSession,
     fractal_id: int = -1
 ) -> Optional[str]:
-    """Load winning proposal + comments. Handles long text gracefully."""
+    """Load winning proposal + comments. Returns Telegram-formatted text."""
     
+    # ✅ YOUR IMPORT STYLE
     Proposal = models.Proposal
     
     group = await get_last_group_repo(db, fractal_id)
@@ -1147,60 +1145,52 @@ async def get_winning_proposal_telegram_repo(
     prop_stmt = (
         select(Proposal)
         .where(Proposal.group_id == group.id)
-        .order_by(desc(Proposal.total_score).nullslast(), desc(Proposal.created_at))
+        .order_by(
+            desc(Proposal.total_score).nullslast(),
+            desc(Proposal.created_at),
+        )
     )
     prop_result = await db.execute(prop_stmt)
     proposal = prop_result.scalars().first()
     if not proposal:
         return None
 
+    # ✅ Uses your exact enrich function return
     card_data = await _enrich_proposal_with_comments_repo(db, proposal, -1)
+    
     if not card_data:
         return None
     
-    # 🏗️ Safe extraction with fallbacks
+    # Extract from YOUR template structure
     card = {
-        "username": card_data.get("username", "Anonymous"),
-        "title": card_data.get("title", "Untitled")[:60],
-        "message": card_data.get("message", "")[:280],  # Safe preview length
-        "date": card_data.get("date", "now")[:10],
-        "tags": card_data.get("tags", [])[:3],
-        "total_score": card_data.get("total_score", 0),
-        "comments": card_data.get("comments", [])[-5:]  # Last 5 only
+        "username": card_data["username"],
+        "title": card_data["title"],
+        "message": card_data["message"][:400],
+        "date": card_data["date"],
+        "tags": card_data["tags"],
+        "total_score": card_data["total_score"] or 0,
+        "comments": card_data["comments"][-5:] if card_data["comments"] else []
     }
     
-    # 🔪 SMART TRUNCATION for long messages
-    message_preview = card["message"]
-    if len(message_preview) > 280:
-        message_preview = message_preview[:277] + "..."
-    
-    # 💬 SHORTENED COMMENTS (60 chars max)
+    # 💬 Format YOUR comment structure
     comments_html = ""
     comments = card["comments"]
     if comments:
-        comments_html = "\n\n💬 <b>TOP COMMENTS</b>\n"
+        comments_html = "\n\n💬 <b>Latest comments:</b>\n"
         for i, comment in enumerate(comments, 1):
-            msg = comment.get("message", "")[:60]
-            if len(msg) > 60:
-                msg = msg[:57] + "..."
-            comments_html += f"{i} <i>@{comment.get('username', 'anon')}:</i> {msg}\n"
-    else:
-        comments_html = "\n\n<i>No comments yet</i>"
+            comments_html += f"{i}. <i>@{comment['username']}:</i> {comment['message'][:120]}{'...' if len(comment['message']) > 120 else ''}\n"
     
-    # 🏆 COMPACT + SAFE LAYOUT (max ~2000 chars)
-    telegram_text = f"""🏆 <b>{card['title'].upper()}</b>
-{'─' * 38}
+    telegram_text = f"""
+🏆 <b>{card['title']}</b>
 
-{message_preview}
+{card['message']}{'...' if len(card['message']) > 400 else ''}
 
-<i>@{card['username']}  {card['date']}  ⭐ {card['total_score']:.1f}</i>
-{''.join([f' <b>#{tag}</b>' for tag in card['tags']])}
+<i>@{card['username']} • {card['date']} • ⭐ {card['total_score']:.1f} points</i>
 
-{comments_html}""".strip()
-    
-    # ✅ SAFETY: Truncate if still too long
-    if len(telegram_text) > 3800:
-        telegram_text = telegram_text[:3800] + "\n\n<i>(truncated)</i>"
+{''.join([f' <b>#{tag}</b>' for tag in card['tags'][:4]])}
+
+{comments_html}
+    """.strip()
     
     return telegram_text
 
