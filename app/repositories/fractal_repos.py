@@ -1135,95 +1135,74 @@ import re
 async def get_winning_proposal_telegram_repo(
     db: AsyncSession,
     fractal_id: int = -1
-) -> Tuple[Optional[str], Optional[str]]:
-    """Returns (text, 'HTML') for Telegram. Fixed emoji placement."""
-
+) -> Optional[str]:
+    """Load winning proposal + comments. Handles long text gracefully."""
+    
     Proposal = models.Proposal
-
+    
     group = await get_last_group_repo(db, fractal_id)
     if not group:
-        return None, None
-
-    stmt = (
+        return None
+        
+    prop_stmt = (
         select(Proposal)
         .where(Proposal.group_id == group.id)
-        .order_by(
-            desc(Proposal.total_score).nullslast(),
-            desc(Proposal.created_at),
-        )
+        .order_by(desc(Proposal.total_score).nullslast(), desc(Proposal.created_at))
     )
-    result = await db.execute(stmt)
-    proposal = result.scalars().first()
+    prop_result = await db.execute(prop_stmt)
+    proposal = prop_result.scalars().first()
     if not proposal:
-        return None, None
+        return None
 
     card_data = await _enrich_proposal_with_comments_repo(db, proposal, -1)
     if not card_data:
-        return None, None
-
-    def esc_html(s):
-        if not s:
-            return ""
-        s = str(s).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")
-        s = re.sub(r'<[^>]+>', '', s)
-        return s
-
-    def truncate(s, n):
-        if not s:
-            return ""
-        s = str(s).strip()
-        return s if len(s) <= n else s[:max(0, n-1)].rstrip() + "…"
-
-    username = esc_html(card_data.get("username") or "anonymous")
-    title = esc_html(card_data.get("title") or "Untitled")
-    message = esc_html(card_data.get("message") or card_data.get("body") or "")
-    date = esc_html(str(card_data.get("date") or "now")[:16])
-    tags = card_data.get("tags") or []
-    total_score = float(card_data.get("total_score") or 0.0)
-    comments = card_data.get("comments") or []
-
-    safe_title = truncate(title, 80)
-    safe_message = truncate(message, 900)
-
-    tags_line = ""
-    if tags:
-        safe_tag_list = [esc_html(str(t)) for t in tags[:4] if t]
-        tags_line = " ".join(f"#{t}" for t in safe_tag_list)
-
-    comment_lines = []
-    for c in comments[:5]:
-        c_user = esc_html(c.get("username") or "anon")
-        c_msg = esc_html(truncate(c.get("message") or "", 320))
-        comment_lines.append(f"• @{c_user}: {c_msg}")
-
-    comments_block = ""
-    if comment_lines:
-        # ✅ FIX: Emoji OUTSIDE the <b> tag
-        comments_block = "💬 <b>Latest comments:</b>\n" + "\n".join(comment_lines)
+        return None
+    
+    # 🏗️ Safe extraction with fallbacks
+    card = {
+        "username": card_data.get("username", "Anonymous"),
+        "title": card_data.get("title", "Untitled")[:60],
+        "message": card_data.get("message", "")[:280],  # Safe preview length
+        "date": card_data.get("date", "now")[:10],
+        "tags": card_data.get("tags", [])[:3],
+        "total_score": card_data.get("total_score", 0),
+        "comments": card_data.get("comments", [])[-5:]  # Last 5 only
+    }
+    
+    # 🔪 SMART TRUNCATION for long messages
+    message_preview = card["message"]
+    if len(message_preview) > 280:
+        message_preview = message_preview[:277] + "..."
+    
+    # 💬 SHORTENED COMMENTS (60 chars max)
+    comments_html = ""
+    comments = card["comments"]
+    if comments:
+        comments_html = "\n\n💬 <b>TOP COMMENTS</b>\n"
+        for i, comment in enumerate(comments, 1):
+            msg = comment.get("message", "")[:60]
+            if len(msg) > 60:
+                msg = msg[:57] + "..."
+            comments_html += f"{i} <i>@{comment.get('username', 'anon')}:</i> {msg}\n"
     else:
-        comments_block = "<i>No comments yet</i>"
-
-    lines = [
-        f"🏆 <b>{safe_title}</b>",
-        f"<i>@{username} • {date} • ⭐ {total_score:.1f} pts</i>",
-    ]
+        comments_html = "\n\n<i>No comments yet</i>"
     
-    if tags_line:
-        lines.append(tags_line)
+    # 🏆 COMPACT + SAFE LAYOUT (max ~2000 chars)
+    telegram_text = f"""🏆 <b>{card['title'].upper()}</b>
+{'─' * 38}
+
+{message_preview}
+
+<i>@{card['username']}  {card['date']}  ⭐ {card['total_score']:.1f}</i>
+{''.join([f' <b>#{tag}</b>' for tag in card['tags']])}
+
+{comments_html}""".strip()
     
-    if safe_message:
-        lines.append("")
-        lines.append(safe_message)
+    # ✅ SAFETY: Truncate if still too long
+    if len(telegram_text) > 3800:
+        telegram_text = telegram_text[:3800] + "\n\n<i>(truncated)</i>"
     
-    lines.append("")
-    lines.append(comments_block)
-
-    text = "\n".join(lines).strip()
-
-    if len(text) > 3900:
-        text = text[:3900].rstrip() + "\n<i>…truncated</i>"
-
-    return text, "HTML"
+    return telegram_text
 
 
 async def _enrich_proposal_with_comments_repo(
