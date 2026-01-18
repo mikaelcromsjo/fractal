@@ -1134,7 +1134,7 @@ async def get_winning_proposal_telegram_repo(
     db: AsyncSession,
     fractal_id: int = -1
 ) -> Optional[str]:
-    """Load winning proposal + kommentarer. Returnerar Telegram-formatted text."""
+    """Load winning proposal + comments. Returns Telegram-formatted text."""
     
     from sqlalchemy import select, desc
     Proposal = models.Proposal
@@ -1156,32 +1156,32 @@ async def get_winning_proposal_telegram_repo(
     if not proposal:
         return None
 
-    await _enrich_proposal_with_comments_repo(db, proposal, 0)        
+    # ✅ Get the EXACT template structure from enrich
+    card_data = await _enrich_proposal_with_comments_repo(db, proposal, -1)
     
-    # 🏗️ Bygg kort-data
-    creator = getattr(proposal, 'creator', None) or type('Creator', (), {'username': 'User'})()
+    if not card_data:
+        return None
+    
+    # 🏗️ Extract from template structure
     card = {
-        "username": creator.username,
-        "title": proposal.title or "Utan titel",
-        "message": (proposal.body or "")[:400],  # Trunkera
-        "date": proposal.created_at.strftime("%d/%m %H:%M") if proposal.created_at else "just now",
-        "tags": proposal.meta.get("tags", []),
-        "total_score": proposal.total_score or 0,
-        "comments": getattr(proposal, 'comments', [])
+        "username": card_data["username"],
+        "title": card_data["title"],
+        "message": card_data["message"][:400],  # Truncate
+        "date": card_data["date"],
+        "tags": card_data["tags"],
+        "total_score": card_data["total_score"] or 0,
+        "comments": card_data["comments"][-5:] if card_data["comments"] else []  # Last 5
     }
     
-    # 💬 FORMATERA KOMMENTARER (sista 5)
+    # 💬 Format comments
     comments_html = ""
-    comments = card['comments']
+    comments = card["comments"]
     if comments:
-        comments_html = "\n\n💬 <b>Top comments:</b>\n"
-        for i, comment in enumerate(comments[-5:], 1):
-            # Hantera comment-struktur efter _enrich
-            author = getattr(comment, 'author', {}).get('username', 'user') if isinstance(comment, dict) else 'User'
-            text = getattr(comment, 'text', getattr(comment, 'body', 'No text'))[:120]
-            comments_html += f"{i}. <i>@{author}:</i> {text}{'...' if len(str(text)) > 120 else ''}\n"
+        comments_html = "\n\n💬 <b>Latest comments:</b>\n"
+        for i, comment in enumerate(comments, 1):
+            comments_html += f"{i}. <i>@{comment['username']}:</i> {comment['message'][:120]}{'...' if len(comment['message']) > 120 else ''}\n"
     
-    # 🏆 TELEGRAM HTML (under 4096 tecken)
+    # 🏆 TELEGRAM HTML (under 4096 chars)
     telegram_text = f"""
 🏆 <b>{card['title']}</b>
 
