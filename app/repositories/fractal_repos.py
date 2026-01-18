@@ -1155,7 +1155,6 @@ async def get_winning_proposal_telegram_repo(
     if not card_data:
         return None
     
-    # 🏗️ Safe data extraction
     card = {
         "username": card_data.get("username", "Anonymous"),
         "title": card_data.get("title", "Untitled")[:60],
@@ -1166,7 +1165,7 @@ async def get_winning_proposal_telegram_repo(
         "comments": card_data.get("comments", [])[-5:]
     }
     
-    # 💬 LONG COMMENTS (120 chars each)
+    # 💬 LONG COMMENTS (120 chars)
     comments_html = ""
     comments = card["comments"]
     if comments:
@@ -1179,23 +1178,11 @@ async def get_winning_proposal_telegram_repo(
     else:
         comments_html = "\n\n<i>No comments yet</i>"
     
-    # 🔧 DYNAMIC TRUNCATION
-    MAX_TOTAL = 3800
-    base_length = len(f"""🏆 <b>{card['title'].upper()}</b>\n{'─' * 38}\n""")
-    header_length = len(f"{card['message']}\n<i>@{card['username']}  {card['date']}  ⭐ {card['total_score']:.1f}</i>\n{''.join([f' <b>#{tag}</b>' for tag in card['tags']])}")
-    
-    if base_length + header_length + len(comments_html) > MAX_TOTAL:
-        available_message = max(100, (MAX_TOTAL - base_length - len(comments_html) - 500) // 2)
-        message_preview = card["message"][:available_message]
-        if len(message_preview) > available_message:
-            message_preview = message_preview[:available_message-3] + "..."
-    else:
-        message_preview = card["message"][:350]
-    
+    # 🏆 CLEAN TELEGRAM TEMPLATE
     telegram_text = f"""🏆 <b>{card['title'].upper()}</b>
 {'─' * 38}
 
-{message_preview}
+{card['message'][:350]}{'...' if len(card['message']) > 350 else ''}
 
 <i>@{card['username']}  {card['date']}  ⭐ {card['total_score']:.1f}</i>
 {''.join([f' <b>#{tag}</b>' for tag in card['tags']])}
@@ -1203,6 +1190,7 @@ async def get_winning_proposal_telegram_repo(
 {comments_html}""".strip()
     
     return telegram_text
+
 
 
 async def _enrich_proposal_with_comments_repo(
