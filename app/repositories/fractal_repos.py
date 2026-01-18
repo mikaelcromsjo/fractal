@@ -1184,8 +1184,8 @@ async def get_winning_proposal_telegram_repo(
 
 {card['message'][:350]}{'...' if len(card['message']) > 350 else ''}
 
-<i>@{card['username']}  {card['date']}  ⭐ {card['total_score']:.1f}</i>
-{''.join([f' <b>#{tag}</b>' for tag in card['tags']])}
+<i>@{card['username']}  {card['date']}  ⭐ <b>{card['total_score']:.1f}</b></i>
+{''.join([f'<b>#{tag}</b>' for tag in card['tags']])}
 
 {comments_html}""".strip()
     
