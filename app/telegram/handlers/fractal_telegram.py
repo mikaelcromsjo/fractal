@@ -36,6 +36,7 @@ from services.fractal_service import (
     send_message_to_group,
     get_group_members_repo,
     get_user,
+    get_winning_proposal_telegram_repo
 )
 
 from infrastructure.db.session import get_async_session
@@ -498,7 +499,7 @@ async def cmd_start(message: types.Message, state: FSMContext):
                     break
 
 #                print(f"🔍 FRACTAL STATUS: '{fractal.status}'")
-                now = datetime.now(timezone.utc)
+#                now = datetime.now(timezone.utc)
 
                 # ✅ FIX 1: Define start_date consistently
                 start_date = (
@@ -511,7 +512,25 @@ async def cmd_start(message: types.Message, state: FSMContext):
                 round_time = f"{int(minutes)} minutes"
 
                 # A fractal can only be joined if status is "waiting"
-                if fractal.status.lower() != "waiting":
+
+                if fractal.status.lower() == "closed":
+                    # 🏆 VISAR VINNARE NÄR FRACTAL ÄR STÄNGD
+                    winning_text = await get_winning_proposal_telegram_repo(db, fractal.id)
+                    
+                    if winning_text:
+                        await message.answer(
+                            f"🏆 <b>Fractal avslutad!</b>\n\n{winning_text}",
+                            parse_mode="HTML"
+                        )
+                    else:
+                        await message.answer(
+                            f"❌ Fractal \"{sanitize_text(fractal.name)}\" är stängd\n"
+                            f"Men inget förslag vann.",
+                            parse_mode=None
+                        )
+                    break
+
+                elif fractal.status.lower() != "waiting":
                     international_times = format_international_times(
                         fractal.start_date.isoformat()
                     )

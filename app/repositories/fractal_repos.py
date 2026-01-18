@@ -1130,6 +1130,73 @@ async def get_all_cards_repo(
     return proposals_data if proposals_data else None
 
 
+async def get_winning_proposal_telegram_repo(
+    db: AsyncSession,
+    fractal_id: int = -1
+) -> Optional[str]:
+    """Load winning proposal + kommentarer. Returnerar Telegram-formatted text."""
+    
+    from sqlalchemy import select, desc
+    Proposal = models.Proposal
+    
+    group = await get_last_group_repo(db, fractal_id)
+    if not group:
+        return None
+        
+    prop_stmt = (
+        select(Proposal)
+        .where(Proposal.group_id == group.id)
+        .order_by(
+            desc(Proposal.total_score).nullslast(),
+            desc(Proposal.created_at),
+        )
+    )
+    prop_result = await db.execute(prop_stmt)
+    proposal = prop_result.scalars().first()
+    if not proposal:
+        return None
+
+    await _enrich_proposal_with_comments_repo(db, proposal, -1)        
+    
+    # 🏗️ Bygg kort-data
+    creator = getattr(proposal, 'creator', None) or type('Creator', (), {'username': 'Användare'})()
+    card = {
+        "username": creator.username,
+        "title": proposal.title or "Utan titel",
+        "message": (proposal.body or "")[:400],  # Trunkera
+        "date": proposal.created_at.strftime("%d/%m %H:%M") if proposal.created_at else "just nu",
+        "tags": proposal.meta.get("tags", []),
+        "total_score": proposal.total_score or 0,
+        "comments": getattr(proposal, 'comments', [])
+    }
+    
+    # 💬 FORMATERA KOMMENTARER (sista 5)
+    comments_html = ""
+    comments = card['comments']
+    if comments:
+        comments_html = "\n\n💬 <b>Senaste kommentarer:</b>\n"
+        for i, comment in enumerate(comments[-5:], 1):
+            # Hantera comment-struktur efter _enrich
+            author = getattr(comment, 'author', {}).get('username', 'Anonym') if isinstance(comment, dict) else 'Anonym'
+            text = getattr(comment, 'text', getattr(comment, 'body', 'Ingen text'))[:120]
+            comments_html += f"{i}. <i>@{author}:</i> {text}{'...' if len(str(text)) > 120 else ''}\n"
+    
+    # 🏆 TELEGRAM HTML (under 4096 tecken)
+    telegram_text = f"""
+🏆 <b>{card['title']}</b>
+
+{card['message']}{'...' if len(card['message']) > 400 else ''}
+
+<i>@{card['username']} • {card['date']} • ⭐ {card['total_score']:.1f} poäng</i>
+
+{''.join([f' <b>#{tag}</b>' for tag in card['tags'][:4]])}
+
+{comments_html}
+    """.strip()
+    
+    return telegram_text
+
+
 async def _enrich_proposal_with_comments_repo(
     db: AsyncSession, 
     proposal: Proposal, 

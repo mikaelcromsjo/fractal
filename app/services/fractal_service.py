@@ -63,7 +63,8 @@ from repositories.fractal_repos import (
     get_open_fractals_repo,
     get_or_build_round_tree_repo,
     get_fractals_repo,
-    get_open_rounds_repo
+    get_open_rounds_repo,
+    get_winning_proposal_telegram_repo
 
 )
 from domain import fractal_logic as domain
