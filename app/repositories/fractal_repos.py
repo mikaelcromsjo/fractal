@@ -1135,11 +1135,14 @@ import re
 from typing import Optional, Tuple
 import re
 
+from typing import Optional, Tuple
+import re
+
 async def get_winning_proposal_telegram_repo(
     db: AsyncSession,
     fractal_id: int = -1
-) -> Tuple[Optional[str], Optional[str]]:
-    """Returns (text, 'HTML') for Telegram. Zero parsing errors."""
+) -> Tuple[Optional[str], str]:
+    """Returns (text, parse_mode). Uses plain text - no HTML parsing errors."""
 
     Proposal = models.Proposal
 
@@ -1164,12 +1167,11 @@ async def get_winning_proposal_telegram_repo(
     if not card_data:
         return None, None
 
-    def esc_html(s):
+    def clean(s):
+        """Remove any problematic chars but keep readable."""
         if not s:
             return ""
-        s = str(s).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")
-        s = re.sub(r'<[^>]+>', '', s)
-        return s
+        return str(s).strip()
 
     def truncate(s, n):
         if not s:
@@ -1177,10 +1179,10 @@ async def get_winning_proposal_telegram_repo(
         s = str(s).strip()
         return s if len(s) <= n else s[:max(0, n-1)].rstrip() + "…"
 
-    username = esc_html(card_data.get("username") or "anonymous")
-    title = esc_html(card_data.get("title") or "Untitled")
-    message = esc_html(card_data.get("message") or card_data.get("body") or "")
-    date = esc_html(str(card_data.get("date") or "now")[:16])
+    username = clean(card_data.get("username") or "anonymous")
+    title = clean(card_data.get("title") or "Untitled")
+    message = clean(card_data.get("message") or card_data.get("body") or "")
+    date = clean(str(card_data.get("date") or "now")[:16])
     tags = card_data.get("tags") or []
     total_score = float(card_data.get("total_score") or 0.0)
     comments = card_data.get("comments") or []
@@ -1190,29 +1192,29 @@ async def get_winning_proposal_telegram_repo(
 
     tags_line = ""
     if tags:
-        safe_tag_list = [esc_html(str(t)) for t in tags[:4] if t]
+        safe_tag_list = [clean(str(t)) for t in tags[:4] if t]
         tags_line = " ".join(f"#{t}" for t in safe_tag_list)
 
     comment_lines = []
     for i, c in enumerate(comments[:5], 1):
-        c_user = esc_html(c.get("username") or "anon")
-        c_msg = esc_html(truncate(c.get("message") or "", 320))
-        # ✅ Plain text numbers, italic usernames only
-        comment_lines.append(f"{i}. <i>@{c_user}:</i> {c_msg}")
+        c_user = clean(c.get("username") or "anon")
+        c_msg = clean(truncate(c.get("message") or "", 320))
+        comment_lines.append(f"{i}. @{c_user}: {c_msg}")
 
     comments_block = ""
     if comment_lines:
-        # ✅ Emoji and "Latest comments:" are PLAIN TEXT, no tags around them
         comments_block = "💬 Latest comments:\n" + "\n".join(comment_lines)
     else:
         comments_block = "No comments yet"
 
+    # Use Unicode box drawing for emphasis instead of HTML
     lines = [
-        f"<b>{safe_title}</b>",  # Only title is bold
+        f"🏆 {safe_title.upper()}",
+        "─" * 40,
         "",
         safe_message,
         "",
-        f"<i>@{username} • {date} • ⭐ {total_score:.1f} points</i>",  # Metadata italic
+        f"👤 @{username}  📅 {date}  ⭐ {total_score:.1f} points",
     ]
     
     if tags_line:
@@ -1228,7 +1230,7 @@ async def get_winning_proposal_telegram_repo(
         text = text[:3900].rstrip() + "\n…truncated"
 
     print (text)
-    return text, "HTML"
+    return text, None  # ✅ NO parse_mode = plain text, zero errors
 
 
 

@@ -515,12 +515,11 @@ async def cmd_start(message: types.Message, state: FSMContext):
 
                 if fractal.status.lower() == "closed":
                     # 🏆 VISAR VINNARE NÄR FRACTAL ÄR STÄNGD
-                    winning_text = await get_winning_proposal_telegram_repo(db, fractal.id)
-                    
+                    winning_text, parse_mode = await get_winning_proposal_telegram_repo(db, fractal_id)
                     if winning_text:
                         await message.answer(
                             f"🏆 Results: <b>{sanitize_text(fractal.name)}\n\n{winning_text}",
-                            parse_mode="HTML"
+                            parse_mode=parse_mode
                         )
                     else:
                         await message.answer(
