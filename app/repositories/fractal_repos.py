@@ -1129,92 +1129,133 @@ async def get_all_cards_repo(
     
     return proposals_data if proposals_data else None
 
+from typing import Optional, Tuple
+
+from typing import Optional, Tuple
+
 async def get_winning_proposal_telegram_repo(
     db: AsyncSession,
     fractal_id: int = -1
-) -> tuple[str, str]:
-    """Returns (text, 'MarkdownV2'). No f-string backslash issues."""
-    
+) -> Tuple[Optional[str], Optional[str]]:
+    """
+    Returns (text, parse_mode) for Telegram.
+    Uses MarkdownV2 with blockquote style for proposal + comments.
+    """
+
     Proposal = models.Proposal
-    
+
     group = await get_last_group_repo(db, fractal_id)
     if not group:
         return None, None
-        
+
     prop_stmt = (
         select(Proposal)
         .where(Proposal.group_id == group.id)
-        .order_by(desc(Proposal.total_score).nullslast(), desc(Proposal.created_at))
+        .order_by(
+            desc(Proposal.total_score).nullslast(),
+            desc(Proposal.created_at),
+        )
     )
     prop_result = await db.execute(prop_stmt)
     proposal = prop_result.scalars().first()
     if not proposal:
         return None, None
 
+    # IMPORTANT: your enrich returns the template dict (card)
     card_data = await _enrich_proposal_with_comments_repo(db, proposal, -1)
     if not card_data:
         return None, None
-    
-    card = {
-        "username": card_data.get("username", "Anonymous"),
-        "title": (card_data.get("title") or "Untitled")[:60],
-        "message": (card_data.get("message") or card_data.get("body", ""))[:350],
-        "date": (card_data.get("date") or "now")[:10],
-        "tags": card_data.get("tags", [])[:3],
-        "total_score": card_data.get("total_score", 0),
-        "comments": card_data.get("comments", [])[-5:]
-    }
-    
-    # 🛡️ MDV2 ESCAPE FUNCTION
-    def escape_md(text: str) -> str:
-        if not text:
+
+    # ---- helpers ----
+    # MarkdownV2 special chars: _ * [ ] ( ) ~ ` > # + - = | { } . !
+    # Must be escaped with backslash. [page:0]
+    def md2_escape(s: str) -> str:
+        if not s:
             return ""
-        return (text.replace('\\', '\\\\')
-                   .replace('_', '\\_')
-                   .replace('*', '\\*')
-                   .replace('[', '\\[')
-                   .replace(']', '\\]')
-                   .replace('(', '\\(')
-                   .replace(')', '\\)')
-                   .replace('~', '\\~')
-                   .replace('`', '\\`')
-                   .replace('>', '\\>')
-                   .replace('#', '\\#')
-                   .replace('+', '\\+')
-                   .replace('-', '\\-')
-                   .replace('=', '\\=')
-                   .replace('|', '\\|')
-                   .replace('{', '\\{')
-                   .replace('}', '\\}')
-                   .replace('.', '\\.')
-                   .replace('!', '\\!'))
-    
-    # 💬 COMMENTS
-    comments_lines = []
-    for i, comment in enumerate(card["comments"], 1):
-        username = escape_md(comment.get("username", "anon"))
-        msg = escape_md((comment.get("message") or "")[:120])
-        if len(comment.get("message", "")) > 120:
-            msg = msg[:-3] + "..."
-        comments_lines.append(f"{i} *@{username}:* {msg}")
-    
-    comments_text = "\\n\\n💬 *TOP COMMENTS*" + "".join(f"\\n{line}" for line in comments_lines) if comments_lines else "\\n\\n*i*No comments yet"
-    
-    # 🏆 BUILD TEXT (NO f-STRINGS with backslashes)
-    lines = [
-        f"🏆 *{escape_md(card['title']).upper()}*",
-        "─" * 38,
-        "",
-        escape_md(card['message']),
-        "",
-        f"*{escape_md(card['username'])}  {card['date']}  ⭐ {card['total_score']:.1f}*",
-        " ".join([f"\\#{escape_md(tag)}" for tag in card['tags']]),
-        comments_text
+        specials = r"_*[]()~`>#+-=|{}.!\\"
+        out = []
+        for ch in str(s):
+            if ch in specials:
+                out.append("\\" + ch)
+            else:
+                out.append(ch)
+        return "".join(out)
+
+    def truncate(s: str, n: int) -> str:
+        if not s:
+            return ""
+        s = str(s).strip()
+        return s if len(s) <= n else s[: max(0, n - 1)].rstrip() + "…"
+
+    # ---- safe extraction ----
+    username = card_data.get("username") or "anonymous"
+    title = card_data.get("title") or "Untitled"
+    message = card_data.get("message") or ""
+    date = card_data.get("date") or "now"
+    tags = card_data.get("tags") or []
+    total_score = float(card_data.get("total_score") or 0.0)
+    comments = card_data.get("comments") or []
+
+    # ---- formatting choices ----
+    MAX_TOTAL = 3900  # keep buffer vs 4096
+    TITLE_MAX = 80
+    MSG_MAX = 900            # allow long proposal, but still leave room for comments
+    COMMENT_MAX = 320        # longer comments (requested)
+    MAX_COMMENTS = 5
+
+    title_txt = md2_escape(truncate(title, TITLE_MAX)).upper()
+    msg_txt = md2_escape(truncate(message, MSG_MAX))
+    user_txt = md2_escape(username)
+    date_txt = md2_escape(date)
+
+    tag_txt = ""
+    safe_tags = [t for t in tags if t]
+    if safe_tags:
+        tag_txt = " ".join("\\" + "#" + md2_escape(str(t)) for t in safe_tags[:4])
+
+    # Build comments block (quoted)
+    comment_lines = []
+    for c in comments[:MAX_COMMENTS]:
+        c_user = md2_escape(c.get("username") or "anon")
+        c_msg_raw = c.get("message") or ""
+        c_msg = md2_escape(truncate(c_msg_raw, COMMENT_MAX))
+        comment_lines.append(f"> * @{c_user}:* {c_msg}")
+
+    if comment_lines:
+        comments_block = "\n".join(comment_lines)
+        comments_header = "> *Top comments*"
+        comments_section = "\n".join([comments_header, comments_block])
+    else:
+        comments_section = "> _No comments yet_"
+
+    # Proposal blockquote (nice “quoted” look)
+    proposal_block = "\n".join([
+        f"> {msg_txt}" if msg_txt else "> _No description_",
+    ])
+
+    header_lines = [
+        f"🏆 *{title_txt}*",
+        f"_{user_txt} • {date_txt} • ⭐ {total_score:.1f} points_",
     ]
-    
-    telegram_text = "\n".join(line for line in lines if line.strip()).strip()
-    
+    if tag_txt:
+        header_lines.append(tag_txt)
+
+    # Compose final text (no backslashes inside {expressions})
+    parts = [
+        "\n".join(header_lines),
+        "",
+        proposal_block,
+        "",
+        comments_section,
+    ]
+    telegram_text = "\n".join(parts).strip()
+
+    # Hard safety trim if still too long
+    if len(telegram_text) > MAX_TOTAL:
+        telegram_text = telegram_text[:MAX_TOTAL].rstrip() + "\n> _…truncated_"
+
     return telegram_text, "MarkdownV2"
+
 
 
 
