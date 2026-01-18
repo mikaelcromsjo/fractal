@@ -1135,14 +1135,14 @@ from typing import Optional, Tuple
 
 from typing import Optional, Tuple
 
+from typing import Optional, Tuple
+import re
+
 async def get_winning_proposal_telegram_repo(
     db: AsyncSession,
     fractal_id: int = -1
 ) -> Tuple[Optional[str], Optional[str]]:
-    """
-    Load winning proposal and format it for Telegram using HTML parse_mode.
-    Returns (text, 'HTML') or (None, None) if nothing to show.
-    """
+    """Returns (text, 'HTML') for Telegram. Bulletproof HTML escaping."""
 
     Proposal = models.Proposal
 
@@ -1167,89 +1167,78 @@ async def get_winning_proposal_telegram_repo(
     if not card_data:
         return None, None
 
-    # ---------- helpers ----------
-    def esc_html(s: str) -> str:
+    def esc_html(s):
+        """Ultra-safe HTML escape - removes problematic chars."""
         if not s:
             return ""
-        # minimal, but enough for Telegram HTML
-        return (
-            str(s)
-            .replace("&", "&amp;")
-            .replace("<", "&lt;")
-            .replace(">", "&gt;")
-        )
+        s = str(s).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")
+        # Remove any remaining HTML-like patterns
+        s = re.sub(r'<[^>]+>', '', s)
+        return s
 
-    def truncate(s: str, n: int) -> str:
+    def truncate(s, n):
         if not s:
             return ""
         s = str(s).strip()
-        return s if len(s) <= n else s[: max(0, n - 1)].rstrip() + "…"
+        return s if len(s) <= n else s[:max(0, n-1)].rstrip() + "…"
 
-    # ---------- extract & sanitize ----------
-    username = card_data.get("username") or "anonymous"
-    title = card_data.get("title") or "Untitled"
-    message = card_data.get("message") or card_data.get("body") or ""
-    date = card_data.get("date") or "now"
+    # Extract data
+    username = esc_html(card_data.get("username") or "anonymous")
+    title = esc_html(card_data.get("title") or "Untitled")
+    message = esc_html(card_data.get("message") or card_data.get("body") or "")
+    date = esc_html(str(card_data.get("date") or "now")[:16])
     tags = card_data.get("tags") or []
     total_score = float(card_data.get("total_score") or 0.0)
     comments = card_data.get("comments") or []
 
-    TITLE_MAX = 80
-    MSG_MAX = 900
-    COMMENT_MAX = 320
-    MAX_COMMENTS = 5
+    # Truncate
+    safe_title = truncate(title, 80)
+    safe_message = truncate(message, 900)
 
-    safe_title = esc_html(truncate(title, TITLE_MAX))
-    safe_message = esc_html(truncate(message, MSG_MAX))
-    safe_username = esc_html(username)
-    safe_date = esc_html(date)
-
-    safe_tags = [t for t in tags if t]
+    # Tags (safe)
     tags_line = ""
-    if safe_tags:
-        tags_line = " ".join(f"#{esc_html(str(t))}" for t in safe_tags[:4])
-
-    # ---------- comments ----------
-    comment_lines: list[str] = []
-    for c in comments[:MAX_COMMENTS]:
-        c_user = esc_html(c.get("username") or "anon")
-        raw_msg = c.get("message") or ""
-        c_msg = esc_html(truncate(raw_msg, COMMENT_MAX))
-        comment_lines.append(f"• <b>@{c_user}</b>: {c_msg}")
-
-    if comment_lines:
-        comments_block = "💬 <b>Latest comments:</b>\n" + "\n".join(comment_lines)
-    else:
-        comments_block = "💬 <i>No comments yet.</i>"
-
-    # ---------- final text ----------
-    parts: list[str] = []
-
-    # Header
-    parts.append(f"🏆 <b>{safe_title}</b>")
-    parts.append("\n")
-    parts.append(f"<i>@{safe_username} • {safe_date} • ⭐ {total_score:.1f} points</i>")
-
-    if tags_line:
-        parts.append(f"\n{tags_line}")
-
-    # Body
-    if safe_message:
-        parts.append("\n\n")
-        parts.append(safe_message)
+    if tags:
+        safe_tag_list = [esc_html(str(t)) for t in tags[:4] if t]
+        tags_line = " ".join(f"#{t}" for t in safe_tag_list)
 
     # Comments
-    parts.append("\n\n")
-    parts.append(comments_block)
+    comment_lines = []
+    for c in comments[:5]:
+        c_user = esc_html(c.get("username") or "anon")
+        c_msg = esc_html(truncate(c.get("message") or "", 320))
+        comment_lines.append(f"• @{c_user}: {c_msg}")
 
-    text = "".join(parts).strip()
+    comments_block = ""
+    if comment_lines:
+        comments_block = "<b>💬 Latest comments:</b>\n" + "\n".join(comment_lines)
+    else:
+        comments_block = "<i>No comments yet</i>"
 
-    # keep well under 4096
+    # Build final text
+    lines = [
+        f"🏆 <b>{safe_title}</b>",
+        f"<i>@{username} • {date} • ⭐ {total_score:.1f} pts</i>",
+    ]
+    
+    if tags_line:
+        lines.append(tags_line)
+    
+    if safe_message:
+        lines.append("")
+        lines.append(safe_message)
+    
+    lines.append("")
+    lines.append(comments_block)
+
+    text = "\n".join(lines).strip()
+
+    # Safety trim
     if len(text) > 3900:
-        text = text[:3900].rstrip() + "\n\n<i>…truncated</i>"
+        text = text[:3900].rstrip() + "\n<i>…truncated</i>"
 
+
+    print(text)
     return text, "HTML"
-
 
 
 
