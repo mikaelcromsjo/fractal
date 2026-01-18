@@ -1133,13 +1133,15 @@ from typing import Optional, Tuple
 
 from typing import Optional, Tuple
 
+from typing import Optional, Tuple
+
 async def get_winning_proposal_telegram_repo(
     db: AsyncSession,
     fractal_id: int = -1
 ) -> Tuple[Optional[str], Optional[str]]:
     """
-    Returns (text, parse_mode) for Telegram.
-    Uses MarkdownV2 with blockquote style for proposal + comments.
+    Load winning proposal and format it for Telegram using HTML parse_mode.
+    Returns (text, 'HTML') or (None, None) if nothing to show.
     """
 
     Proposal = models.Proposal
@@ -1148,7 +1150,7 @@ async def get_winning_proposal_telegram_repo(
     if not group:
         return None, None
 
-    prop_stmt = (
+    stmt = (
         select(Proposal)
         .where(Proposal.group_id == group.id)
         .order_by(
@@ -1156,30 +1158,26 @@ async def get_winning_proposal_telegram_repo(
             desc(Proposal.created_at),
         )
     )
-    prop_result = await db.execute(prop_stmt)
-    proposal = prop_result.scalars().first()
+    result = await db.execute(stmt)
+    proposal = result.scalars().first()
     if not proposal:
         return None, None
 
-    # IMPORTANT: your enrich returns the template dict (card)
     card_data = await _enrich_proposal_with_comments_repo(db, proposal, -1)
     if not card_data:
         return None, None
 
-    # ---- helpers ----
-    # MarkdownV2 special chars: _ * [ ] ( ) ~ ` > # + - = | { } . !
-    # Must be escaped with backslash. [page:0]
-    def md2_escape(s: str) -> str:
+    # ---------- helpers ----------
+    def esc_html(s: str) -> str:
         if not s:
             return ""
-        specials = r"_*[]()~`>#+-=|{}.!\\"
-        out = []
-        for ch in str(s):
-            if ch in specials:
-                out.append("\\" + ch)
-            else:
-                out.append(ch)
-        return "".join(out)
+        # minimal, but enough for Telegram HTML
+        return (
+            str(s)
+            .replace("&", "&amp;")
+            .replace("<", "&lt;")
+            .replace(">", "&gt;")
+        )
 
     def truncate(s: str, n: int) -> str:
         if not s:
@@ -1187,74 +1185,71 @@ async def get_winning_proposal_telegram_repo(
         s = str(s).strip()
         return s if len(s) <= n else s[: max(0, n - 1)].rstrip() + "…"
 
-    # ---- safe extraction ----
+    # ---------- extract & sanitize ----------
     username = card_data.get("username") or "anonymous"
     title = card_data.get("title") or "Untitled"
-    message = card_data.get("message") or ""
+    message = card_data.get("message") or card_data.get("body") or ""
     date = card_data.get("date") or "now"
     tags = card_data.get("tags") or []
     total_score = float(card_data.get("total_score") or 0.0)
     comments = card_data.get("comments") or []
 
-    # ---- formatting choices ----
-    MAX_TOTAL = 3900  # keep buffer vs 4096
     TITLE_MAX = 80
-    MSG_MAX = 900            # allow long proposal, but still leave room for comments
-    COMMENT_MAX = 320        # longer comments (requested)
+    MSG_MAX = 900
+    COMMENT_MAX = 320
     MAX_COMMENTS = 5
 
-    title_txt = md2_escape(truncate(title, TITLE_MAX)).upper()
-    msg_txt = md2_escape(truncate(message, MSG_MAX))
-    user_txt = md2_escape(username)
-    date_txt = md2_escape(date)
+    safe_title = esc_html(truncate(title, TITLE_MAX))
+    safe_message = esc_html(truncate(message, MSG_MAX))
+    safe_username = esc_html(username)
+    safe_date = esc_html(date)
 
-    tag_txt = ""
     safe_tags = [t for t in tags if t]
+    tags_line = ""
     if safe_tags:
-        tag_txt = " ".join("\\" + "#" + md2_escape(str(t)) for t in safe_tags[:4])
+        tags_line = " ".join(f"#{esc_html(str(t))}" for t in safe_tags[:4])
 
-    # Build comments block (quoted)
-    comment_lines = []
+    # ---------- comments ----------
+    comment_lines: list[str] = []
     for c in comments[:MAX_COMMENTS]:
-        c_user = md2_escape(c.get("username") or "anon")
-        c_msg_raw = c.get("message") or ""
-        c_msg = md2_escape(truncate(c_msg_raw, COMMENT_MAX))
-        comment_lines.append(f"> * @{c_user}:* {c_msg}")
+        c_user = esc_html(c.get("username") or "anon")
+        raw_msg = c.get("message") or ""
+        c_msg = esc_html(truncate(raw_msg, COMMENT_MAX))
+        comment_lines.append(f"• <b>@{c_user}</b>: {c_msg}")
 
     if comment_lines:
-        comments_block = "\n".join(comment_lines)
-        comments_header = "> *Top comments*"
-        comments_section = "\n".join([comments_header, comments_block])
+        comments_block = "💬 <b>Latest comments:</b>\n" + "\n".join(comment_lines)
     else:
-        comments_section = "> _No comments yet_"
+        comments_block = "💬 <i>No comments yet.</i>"
 
-    # Proposal blockquote (nice “quoted” look)
-    proposal_block = "\n".join([
-        f"> {msg_txt}" if msg_txt else "> _No description_",
-    ])
+    # ---------- final text ----------
+    parts: list[str] = []
 
-    header_lines = [
-        f"🏆 *{title_txt}*",
-        f"_{user_txt} • {date_txt} • ⭐ {total_score:.1f} points_",
-    ]
-    if tag_txt:
-        header_lines.append(tag_txt)
+    # Header
+    parts.append(f"🏆 <b>{safe_title}</b>")
+    parts.append("\n")
+    parts.append(f"<i>@{safe_username} • {safe_date} • ⭐ {total_score:.1f} points</i>")
 
-    # Compose final text (no backslashes inside {expressions})
-    parts = [
-        "\n".join(header_lines),
-        "",
-        proposal_block,
-        "",
-        comments_section,
-    ]
-    telegram_text = "\n".join(parts).strip()
+    if tags_line:
+        parts.append(f"\n{tags_line}")
 
-    # Hard safety trim if still too long
-    if len(telegram_text) > MAX_TOTAL:
-        telegram_text = telegram_text[:MAX_TOTAL].rstrip() + "\n> _…truncated_"
+    # Body
+    if safe_message:
+        parts.append("\n\n")
+        parts.append(safe_message)
 
-    return telegram_text, "MarkdownV2"
+    # Comments
+    parts.append("\n\n")
+    parts.append(comments_block)
+
+    text = "".join(parts).strip()
+
+    # keep well under 4096
+    if len(text) > 3900:
+        text = text[:3900].rstrip() + "\n\n<i>…truncated</i>"
+
+    return text, "HTML"
+
 
 
 
