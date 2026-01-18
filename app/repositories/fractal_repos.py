@@ -1133,7 +1133,7 @@ async def get_winning_proposal_telegram_repo(
     db: AsyncSession,
     fractal_id: int = -1
 ) -> Optional[str]:
-    """Load winning proposal + long comments. Telegram-optimized."""
+    """Load winning proposal + comments. Uses MarkdownV2 (no HTML issues)."""
     
     Proposal = models.Proposal
     
@@ -1155,41 +1155,54 @@ async def get_winning_proposal_telegram_repo(
     if not card_data:
         return None
     
+    # ✅ SAFE EXTRACTION
     card = {
         "username": card_data.get("username", "Anonymous"),
-        "title": card_data.get("title", "Untitled")[:60],
-        "message": card_data.get("message", ""),
-        "date": card_data.get("date", "now")[:10],
+        "title": (card_data.get("title") or "Untitled")[:60],
+        "message": (card_data.get("message") or card_data.get("body", ""))[:350],
+        "date": (card_data.get("date") or "now")[:10],
         "tags": card_data.get("tags", [])[:3],
         "total_score": card_data.get("total_score", 0),
         "comments": card_data.get("comments", [])[-5:]
     }
     
-    # 💬 LONG COMMENTS (120 chars)
-    comments_html = ""
+    # 💬 COMMENTS (120 chars)
+    comments_text = ""
     comments = card["comments"]
     if comments:
-        comments_html = "\n\n💬 <b>TOP COMMENTS</b>\n"
+        comments_text = "\\n\\n💬 *TOP COMMENTS*\\n"
         for i, comment in enumerate(comments, 1):
-            msg = comment.get("message", "")[:120]
+            username = comment.get("username", "anon")
+            msg = (comment.get("message") or "")[:120]
             if len(msg) > 120:
                 msg = msg[:117] + "..."
-            comments_html += f"{i} <i>@{comment.get('username', 'anon')}:</i> {msg}\n"
+            comments_text += f"{i} *@{username}:* {msg}\\n"
     else:
-        comments_html = "\n\n<i>No comments yet</i>"
+        comments_text = "\\n\\n*i*No comments yet"
     
-    # 🏆 CLEAN TELEGRAM TEMPLATE
-    telegram_text = f"""🏆 <b>{card['title'].upper()}</b>
+    # 🏆 MARKDOWNV2 (escape special chars)
+    def escape_md(text):
+        if not text:
+            return ""
+        return text.replace("\\", "\\\\").replace("_", "\\_").replace("*", "\\*").replace("[", "\\[").replace("]", "\\]").replace("(", "\\(").replace(")", "\\)").replace("~", "\\~").replace("`", "\\`").replace(">", "\\>").replace("#", "\\#").replace("+", "\\+").replace("-", "\\-").replace("=", "\\=").replace("|", "\\|").replace("{", "\\{").replace("}", "\\}").replace(".", "\\.").replace("!", "\\!")
+    
+    safe_title = escape_md(card["title"])
+    safe_message = escape_md(card["message"])
+    safe_username = escape_md(card["username"])
+    
+    telegram_text = f"""🏆 *{safe_title.upper()}*
 {'─' * 38}
 
-{card['message'][:350]}{'...' if len(card['message']) > 350 else ''}
+{safe_message}
 
-<i>@{card['username']}  {card['date']}  ⭐ <b>{card['total_score']:.1f}</b></i>
-{''.join([f'<b>#{tag}</b>' for tag in card['tags']])}
+*{safe_username}  {card['date']}  ⭐ {card['total_score']:.1f}*
 
-{comments_html}""".strip()
+{''.join([f' \\#{escape_md(tag)}' for tag in card['tags']])}
+
+{comments_text}""".strip()
     
-    return telegram_text
+    return telegram_text, "MarkdownV2"  # Return format too!
+
 
 
 
