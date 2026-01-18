@@ -1130,19 +1130,13 @@ async def get_all_cards_repo(
     return proposals_data if proposals_data else None
 
 from typing import Optional, Tuple
-
-from typing import Optional, Tuple
-
-from typing import Optional, Tuple
-
-from typing import Optional, Tuple
 import re
 
 async def get_winning_proposal_telegram_repo(
     db: AsyncSession,
     fractal_id: int = -1
 ) -> Tuple[Optional[str], Optional[str]]:
-    """Returns (text, 'HTML') for Telegram. Bulletproof HTML escaping."""
+    """Returns (text, 'HTML') for Telegram. Fixed emoji placement."""
 
     Proposal = models.Proposal
 
@@ -1168,11 +1162,9 @@ async def get_winning_proposal_telegram_repo(
         return None, None
 
     def esc_html(s):
-        """Ultra-safe HTML escape - removes problematic chars."""
         if not s:
             return ""
         s = str(s).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")
-        # Remove any remaining HTML-like patterns
         s = re.sub(r'<[^>]+>', '', s)
         return s
 
@@ -1182,7 +1174,6 @@ async def get_winning_proposal_telegram_repo(
         s = str(s).strip()
         return s if len(s) <= n else s[:max(0, n-1)].rstrip() + "…"
 
-    # Extract data
     username = esc_html(card_data.get("username") or "anonymous")
     title = esc_html(card_data.get("title") or "Untitled")
     message = esc_html(card_data.get("message") or card_data.get("body") or "")
@@ -1191,17 +1182,14 @@ async def get_winning_proposal_telegram_repo(
     total_score = float(card_data.get("total_score") or 0.0)
     comments = card_data.get("comments") or []
 
-    # Truncate
     safe_title = truncate(title, 80)
     safe_message = truncate(message, 900)
 
-    # Tags (safe)
     tags_line = ""
     if tags:
         safe_tag_list = [esc_html(str(t)) for t in tags[:4] if t]
         tags_line = " ".join(f"#{t}" for t in safe_tag_list)
 
-    # Comments
     comment_lines = []
     for c in comments[:5]:
         c_user = esc_html(c.get("username") or "anon")
@@ -1210,11 +1198,11 @@ async def get_winning_proposal_telegram_repo(
 
     comments_block = ""
     if comment_lines:
-        comments_block = "<b>💬 Latest comments:</b>\n" + "\n".join(comment_lines)
+        # ✅ FIX: Emoji OUTSIDE the <b> tag
+        comments_block = "💬 <b>Latest comments:</b>\n" + "\n".join(comment_lines)
     else:
         comments_block = "<i>No comments yet</i>"
 
-    # Build final text
     lines = [
         f"🏆 <b>{safe_title}</b>",
         f"<i>@{username} • {date} • ⭐ {total_score:.1f} pts</i>",
@@ -1232,15 +1220,10 @@ async def get_winning_proposal_telegram_repo(
 
     text = "\n".join(lines).strip()
 
-    # Safety trim
     if len(text) > 3900:
         text = text[:3900].rstrip() + "\n<i>…truncated</i>"
 
-
-    print(text)
     return text, "HTML"
-
-
 
 
 async def _enrich_proposal_with_comments_repo(
