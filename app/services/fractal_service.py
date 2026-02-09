@@ -503,89 +503,87 @@ async def close_last_round(db: AsyncSession, fractal_id: int):
 
 async def promote_to_next_round(db: AsyncSession, prev_round_id: int, fractal_id: int):
     """
-    Start next round if previous round has more than 2 groups.
-    Only representatives join new groups.
-    Top proposals from previous round are promoted to new round.
+    Start next round: Reps form Rep Circles (1 rep → 1 Circle).
+    Each Rep carries top proposals from source_group to their Rep Circle.
     """
-    print(f"\n{'🔄 PROMOTE TO NEXT ROUND' :=^60}")
+    print(f"
+{'🔄 PROMOTE TO NEXT ROUND' :=^60}")
     print(f"   📊 Input: prev_round_id={prev_round_id}, fractal_id={fractal_id}")
 
-    # Step 1: Get all groups in previous round
+    # Step 1: Get prev groups
     prev_groups = await get_groups_for_round(db, prev_round_id)
     print(f"   📋 [STEP 1] Found {len(prev_groups)} groups in prev round")
     
     if len(prev_groups) < 2:
         print(f"   ⏭️  < 2 groups → NO NEXT ROUND")
-        print(f"{'='*60}\n")
+        print(f"{'='*60}
+")
         return None
 
-    # Step 2: Gather representatives from each group
-    rep_user_ids = []
-    print(f"   🏆 [STEP 2] Gathering representatives...")
+    # Step 2: Gather top reps + map rep → source_group
+    rep_to_source_group = {}
     for i, g in enumerate(prev_groups, 1):
         print(f"      Group {i}: id={g.id}")
-        members = await get_group_members(db, g.id)
-        voter_user_ids = [m.user_id for m in members]
-        print(f"         Members: {len(voter_user_ids)} users")
-        
         reps = await get_representatives_for_group_repo(db, g.id, prev_round_id)
         rep_id = reps.get(1)
-        print(f"         Top rep: {rep_id} (rank 1)")
-        
+        print(f"         Top rep: {rep_id}")
         if rep_id:
-            rep_user_ids.append(rep_id)
-        else:
-            print(f"         ⚠️  No rep selected!")
+            rep_to_source_group[rep_id] = g
 
-    print(f"   ✓ Collected {len(rep_user_ids)} unique representatives: {rep_user_ids}")
+    unique_reps = list(rep_to_source_group.keys())
+    print(f"   ✓ {len(unique_reps)} reps mapped to source groups")
 
-    # Step 3: Create new round
+    # Step 3: Create new Rep Circle round
     prev_round_obj = await get_round_repo(db, prev_round_id)
     next_level = prev_round_obj.level + 1
     new_round = await create_round_repo(db, fractal_id, next_level)
-    print(f"   🆕 [STEP 3] Created new round #{new_round.id} (level {next_level})")
+    print(f"   🆕 [STEP 3] New Rep Circle round #{new_round.id} (level {next_level})")
 
-    # Step 4: Divide representatives into new groups
+    # Step 4: Divide reps into Rep Circles + map rep → their SINGLE Rep Circle
     fractal = await get_fractal(db, fractal_id)
     settings_dict = fractal.settings or {}
     group_size = settings_dict.get("group_size", settings.GROUP_SIZE_DEFAULT)
-    print(f"   👥 [STEP 4] Group size: {group_size}")
+    print(f"   👥 [STEP 4] Rep Circle size: {group_size}")
 
-    groups_flat = domain.divide_into_groups(rep_user_ids, group_size)
-    print(f"      Divided into {len(groups_flat)} new groups:")
+    groups_flat = domain.divide_into_groups(unique_reps, group_size)
+    rep_to_new_group = {}  # rep_id → single group_id
     
     new_groups = []
     for i, grp_users in enumerate(groups_flat, 1):
         grp = await create_group_repo(db, fractal_id, new_round.id, next_level)
         for uid in grp_users:
             await add_group_member_repo(db, grp.id, uid)
-        print(f"         Group {i}: id={grp.id}, members={len(grp_users)} users {grp_users}")
+            rep_to_new_group[uid] = grp  # 1:1 mapping
+        print(f"         Rep Circle {i}: id={grp.id}, reps={grp_users}")
         new_groups.append(grp)
 
-    # Step 5: Promote top proposals from previous round
-    top_count = settings.PROPOSALS_PER_USER_DEFAULT  # 3
-    print(f"\n   📈 [STEP 5] Promoting top {top_count} proposals per PREV group...")
+    # Step 5: Each rep carries to THEIR Rep Circle
+    top_count = settings.PROPOSALS_PER_USER_DEFAULT
+    print(f"
+   📈 [STEP 5] Reps carrying top {top_count} from source → their Rep Circle...")
     
     promoted_count = 0
-    for i, g_prev in enumerate(prev_groups, 1):
-        top_props = await get_top_proposals_repo(db, g_prev.id, top_count)
-        print(f"     Prev Group {i} (id={g_prev.id}): {len(top_props)} proposals")
+    for rep_id, source_g in rep_to_source_group.items():
+        target_grp = rep_to_new_group.get(rep_id)
+        if not target_grp:
+            print(f"     ⚠️ Rep {rep_id} missing Rep Circle")
+            continue
+            
+        top_props = await get_top_proposals_repo(db, source_g.id, top_count)
+        print(f"     Rep {rep_id}: {len(top_props)} from {source_g.id} → Rep Circle {target_grp.id}")
         
-        # Distribute evenly across new_groups or to first
-        target_groups = new_groups if new_groups else [None]  # Fallback
-        for j, p in enumerate(top_props):
-            target_grp = target_groups[j % len(target_groups)]
+        for p in top_props:  # No j/enumerate needed (single target)
             p.round_id = new_round.id
-            p.group_id = target_grp.id if target_grp else None
+            p.group_id = target_grp.id
             promoted_count += 1
         
-        await db.flush()  # Batch commit
+        await db.flush()
 
     await db.commit()
-    print(f"   ✅ [COMPLETE] Promoted {promoted_count} total proposals across {len(prev_groups)} prev groups")
-
-    print(f"   🎉 New round {new_round.id} ready!")
-    print(f"{'='*60}\n")
+    print(f"   ✅ {promoted_count} proposals carried to Rep Circles")
+    print(f"   🎉 New Rep Circle round ready!")
+    print(f"{'='*60}
+")
     
     return new_round
 
