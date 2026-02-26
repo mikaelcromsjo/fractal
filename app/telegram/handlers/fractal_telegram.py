@@ -1346,7 +1346,7 @@ async def echo_all(message: types.Message):
 #        await message.answer("User not found or no group assigned.")  # Or log/return
         return
 
-    group_id = int(user_info.get("group_id", 0))
+    group_id = int(user_info.get("group_id") or 0)
     if group_id == 0:
 #        await message.answer("No group assigned to user.")
         return
