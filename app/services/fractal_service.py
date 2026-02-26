@@ -588,8 +588,7 @@ async def __promote_to_next_round(db: AsyncSession, prev_round_id: int, fractal_
     Start next round: Reps form Rep Circles (1 rep → 1 Circle).
     Each Rep carries top proposals from source_group to their Rep Circle.
     """
-    print(f"
-{'🔄 PROMOTE TO NEXT ROUND' :=^60}")
+    print(f"{'🔄 PROMOTE TO NEXT ROUND' :=^60}")
     print(f"   📊 Input: prev_round_id={prev_round_id}, fractal_id={fractal_id}")
 
     # Step 1: Get prev groups
@@ -598,8 +597,7 @@ async def __promote_to_next_round(db: AsyncSession, prev_round_id: int, fractal_
     
     if len(prev_groups) < 2:
         print(f"   ⏭️  < 2 groups → NO NEXT ROUND")
-        print(f"{'='*60}
-")
+        print(f"{'='*60}")
         return None
 
     # Step 2: Gather top reps + map rep → source_group
@@ -641,8 +639,7 @@ async def __promote_to_next_round(db: AsyncSession, prev_round_id: int, fractal_
 
     # Step 5: Each rep carries to THEIR Rep Circle
     top_count = settings.PROPOSALS_PER_USER_DEFAULT
-    print(f"
-   📈 [STEP 5] Reps carrying top {top_count} from source → their Rep Circle...")
+    print(f"   📈 [STEP 5] Reps carrying top {top_count} from source → their Rep Circle...")
     
     promoted_count = 0
     for rep_id, source_g in rep_to_source_group.items():
@@ -664,8 +661,7 @@ async def __promote_to_next_round(db: AsyncSession, prev_round_id: int, fractal_
     await db.commit()
     print(f"   ✅ {promoted_count} proposals carried to Rep Circles")
     print(f"   🎉 New Rep Circle round ready!")
-    print(f"{'='*60}
-")
+    print(f"{'='*60}")
     
     return new_round
 
