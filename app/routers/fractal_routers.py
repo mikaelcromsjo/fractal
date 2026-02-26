@@ -131,6 +131,26 @@ class CreateCommentRequest(BaseModel):
     class Config:
         extra = "allow"
 
+# security
+
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from jose import jwt, JWTError
+
+security = HTTPBearer()
+async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security), db: AsyncSession = Depends(getdb)):
+    try:
+        payload = jwt.decode(credentials.credentials, settings.JWT_SECRET_KEY, algorithms=[settings.ALGORITHM])
+        userid: int = payload.get("sub")
+        if userid is None:
+            raise HTTPException(status_code=401, detail="Invalid token")
+        user = await get_user(db, userid)  # Din service-funktion
+        if user is None:
+            raise HTTPException(status_code=401, detail="User not found")
+        return user
+    except JWTError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    
+
 # ---------- Utility functions ----------
 def _json_safe(value: Any) -> Any:
     """Convert non-JSON-serializable values into safe primitives."""
@@ -846,13 +866,21 @@ async def test_quick_start(num_users: int = 25, db: AsyncSession = Depends(get_d
     
     # 1. Create fractal with random title
     fractal_name = random.choice(COMMUNITY_TITLES)  # [web:17][web:23]
+
+    settings =  {
+        "group_size": 5,
+        "proposals_per_user": 1,
+        "round_time": 3,
+    }
+
+
     fractal = await create_fractal(
         db,
         fractal_name,
         "Quick simulation",
         datetime.now(timezone.utc) + timedelta(minutes=1),
         "waiting",
-        {},
+        settings,
     )
 
     # 2. Join users with randomized usernames (cycled if num_users > len list)
