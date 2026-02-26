@@ -924,9 +924,8 @@ function addCard(html) {
     card.innerHTML = html;
     cardsContainer.appendChild(card);
 
-    // ✅ Hide/disable voting blocks if round is closed
-    console.log("set vote", roundStatus)
-    if (roundStatus == "closed") {
+    // ✅ Hide/disable voting blocks if round is closed or user observer
+    if (roundStatus == "closed" || user_status == "observer") {
         console.log("disable ")
         card.querySelectorAll(".proposal-comment-input-row").forEach(el => {
             el.style.display = "none";
