@@ -487,7 +487,7 @@ async def close_last_round(db: AsyncSession, fractal_id: int):
             await send_button_to_group(db, g.id, text, "Dashboard", round_obj.fractal_id)
             await send_message_to_web_app_group(db, g.id, text, "start")
         return new_round
-    close_round_repo(db, round_obj.id)
+    await close_round_repo(db, round_obj.id)
 
     # Step 4: End fractal if no new round
     end_text = "⚡️ The Fractal has ended!"
