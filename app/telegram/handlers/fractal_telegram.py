@@ -514,10 +514,17 @@ async def cmd_start(message: types.Message, state: FSMContext):
                 # A fractal can only be joined if status is "waiting"
 
 
-                builder = InlineKeyboardBuilder()
-                builder.button(text="🚀 Open Dashboard", url=f"{settings.public_base_url}/api/v1/fractals/dashboard?fractal_id={fractal_id}")
-                builder.adjust(1)  # Single row
+                dashboard_url = f"{settings.public_base_url}/api/v1/fractals/dashboard?fractal_id={fractal_id}"
 
+                keyboard = InlineKeyboardMarkup(inline_keyboard=[
+                    [
+                        InlineKeyboardButton(
+                            text="🚀 Open Dashboard",
+                            web_app=WebAppInfo(url=dashboard_url),
+                        )   
+                    ]
+                ])
+                
                 if fractal.status.lower() == "closed":
                     # 🏆 VISAR VINNARE NÄR FRACTAL ÄR STÄNGD
                     winning_text, parse_mode = await get_winning_proposal_telegram_repo(db, fractal_id)
@@ -525,7 +532,7 @@ async def cmd_start(message: types.Message, state: FSMContext):
                         await message.answer(
                             f"🎯 Results: {sanitize_text(fractal.name)}\n\n{winning_text}",
                             parse_mode=parse_mode,
-                            reply_markup=builder.as_markup()
+                            reply_markup=keyboard
                         )
                     else:
                         await message.answer(
