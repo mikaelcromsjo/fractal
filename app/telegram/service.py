@@ -29,12 +29,12 @@ async def send_button_to_telegram_users(
     data: int,
 ) -> None:
     
-    if (button=="Dashboard"):
+    if (button=="Fractal App"):
         url = f"{settings.public_base_url}/api/v1/fractals/dashboard?fractal_id={fractal_id}"
         keyboard = InlineKeyboardMarkup(
             inline_keyboard=[[
                 InlineKeyboardButton(
-                    text="🚀 Open Dashboard",
+                    text="🚀 Open Fractal App",
                     web_app=WebAppInfo(url=url),
                 )
             ]]

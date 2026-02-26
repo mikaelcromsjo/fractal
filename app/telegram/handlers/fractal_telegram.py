@@ -415,7 +415,7 @@ async def dashboard_command(message: types.Message):
         keyboard = InlineKeyboardMarkup(inline_keyboard=[
 
             [        InlineKeyboardButton(
-                        text="🚀 Open Dashboard",
+                        text="🚀 Open Fractal App",
                         web_app=WebAppInfo(url=dashboard_url),
                     )   
             ]
@@ -447,7 +447,7 @@ async def cmd_invite_group(message: types.Message):
             ],
             [
                 InlineKeyboardButton(
-                    text="🚀 Open Dashboard",
+                    text="🚀 Open Fractal App",
                     url=f"{settings.public_base_url}/api/v1/fractals/dashboard?fractal_id={fractal_id}",
                 )
             ],
@@ -470,7 +470,7 @@ async def cmd_start(message: types.Message, state: FSMContext):
     commands = [
         BotCommand(command="start", description="Start Menu"),
         BotCommand(command="help", description="Information"),
-        BotCommand(command="dashboard", description="Dashboard"),
+        BotCommand(command="dashboard", description="Fractal App"),
     ]
     #await bot.set_my_commands(commands)
     
@@ -519,7 +519,7 @@ async def cmd_start(message: types.Message, state: FSMContext):
                 keyboard = InlineKeyboardMarkup(inline_keyboard=[
                     [
                         InlineKeyboardButton(
-                            text="🚀 See Results in Dashboard",
+                            text="🚀 See Results in Fractal App",
                             web_app=WebAppInfo(url=dashboard_url),
                         )   
                     ]
@@ -612,7 +612,7 @@ async def cmd_help(message: types.Message):
             "🎯 A Fractal meeting is divided into separate rounds where small Circles create proposals, discuss them, and vote on the best ideas. "
             "Most participants attend only one round; only the selected representatives continue to the next round.\n\n"
             "👥 When the fractal starts, you're placed in a small **Circle** (5-7 people). "
-            "You'll chat with your Circle members in a private Telegram group and use the **Dashboard** web app to make proposals and vote.\n\n"
+            "You'll chat with your Circle members in a private Telegram group and use the **Fractal App** web app to make proposals and vote.\n\n"
             "📝 **First half - Create & Discuss:** Focus on creating proposals on the topic and adding comments to refine ideas together. "
             "This is your brainstorming phase—be creative, ask questions, and build on each other's thoughts.\n\n"
             "⏰ **Halfway mark:** The bot reminds you that voting time has begun. You can still add comments to help clarify ideas, but no new proposals can be created. "

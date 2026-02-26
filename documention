@@ -28,7 +28,7 @@ When the organizer launches the meeting, Telegram sends you a message saying:
 > 
 > 💬 Chat with your Circle members in this private group chat
 > 
-> 📝 Open the Dashboard to make proposals and vote
+> 📝 Open the Fractal App to make proposals and vote
 
 ---
 
@@ -38,11 +38,11 @@ You're now part of a **Circle**—a small group (typically 4-8 people) who will 
 
 **Two things happen:**
 1. **A private Telegram group chat opens** where you can chat with your Circle members
-2. **You can open the Dashboard** (a web app) to propose ideas and vote
+2. **You can open the Fractal App** (a web app) to propose ideas and vote
 
 ---
 
-## Inside the Dashboard: Round 1
+## Inside the Fractal App: Round 1
 
 ### **Phase A: Proposal & Discussion Phase (First Half of Round)**
 
@@ -58,7 +58,7 @@ For the first half of the round time, you and your Circle focus on:
 - **Description:** "Brief 15-minute sync to align on priorities and blockers..."
 
 #### **💬 Adding Comments**
-- All proposals will be shown one at a time on the Dashboard
+- All proposals will be shown one at a time on the Fractal App
 - Add comments to refine the idea, ask questions, or add details
 - You can add comments throughout the entire round—even during voting phase
 
@@ -218,14 +218,14 @@ The final Circle's members and their selection journey:
 
 ---
 
-## Dashboard Features
+## Fractal App Features
 
 ### **💬 Chat **
 - Private Telegram group chat with your Circle
 - This conversation is private and will not be stored.
 - Stay on topic—focus on the proposals!
 
-### **📊 Dashboard Buttons & Navigation**
+### **📊 Fractal App Buttons & Navigation**
 
 **Proposal Cards:**
 - See all comments and votes
@@ -306,7 +306,7 @@ The final Circle's members and their selection journey:
 
 ### **Telegram Setup**
 - You must have Telegram installed or use Telegram Web
-- Automatic login via the "Dashboard" button in Telegram
+- Automatic login via the "Fractal App" button in Telegram
 - No separate password needed
 
 ---
@@ -354,7 +354,7 @@ The organizer sets the round duration at the start—you'll be told how long eac
 
 **Technical Issues:**
 - Refresh the web app page
-- Re-open Telegram and tap Dashboard again
+- Re-open Telegram and tap Fractal App again
 - Contact the organizer if problems persist
 
 ---

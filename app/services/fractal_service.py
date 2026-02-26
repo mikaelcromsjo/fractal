@@ -175,11 +175,11 @@ async def start_fractal(db: AsyncSession, fractal_id: int):
         text = f"🚀 Fractal '{fractal.name}' has started!\n\n"
         f"👥 The fractal has {total_members} members in {len(groups)} groups\n\n"
         f"💬 You can chat with your group members in this private telegram chat.'\n\n"
-        f"📝 You you can write and vote on proposals in the Fractal Dashboard!\n\n"
+        f"📝 You you can write and vote on proposals in the Fractal Fractal App!\n\n"
         f"⭐ Please note that you HAVE to vote on EVERY proposal and comment to continue!"
 
-    await send_button_to_fractal_members(db, text, "Dashboard", fractal_id)
-    text = f"🚀 Fractal '{fractal.name}' has started!<p>👥 The fractal has {total_members} members in {len(groups)} groups<p>💬 You can chat with your group members in the Fractal Circle Bot private chat. Try writing 'Hi!'<p>📝 You can write and vote on proposals here in the Fractal Dashboard!<p>⭐ Please note that you HAVE to vote on EVERY proposal and comment to continue!"
+    await send_button_to_fractal_members(db, text, "Fractal App", fractal_id)
+    text = f"🚀 Fractal '{fractal.name}' has started!<p>👥 The fractal has {total_members} members in {len(groups)} groups<p>💬 You can chat with your group members in the Fractal Circle Bot private chat. Try writing 'Hi!'<p>📝 You can write and vote on proposals here in the Fractal Fractal App!<p>⭐ Please note that you HAVE to vote on EVERY proposal and comment to continue!"
     await send_message_to_fractal_web_app_members(db, fractal_id, text, "start")
     await open_fractal_repo(db, fractal_id)
     return round_0
@@ -484,7 +484,7 @@ async def close_last_round(db: AsyncSession, fractal_id: int):
         next_groups = await get_groups_for_round(db, new_round.id)
         text = "🚀 The Next Round has started! ℹ️ You have been selected to represent your Circle!"
         for g in next_groups:
-            await send_button_to_group(db, g.id, text, "Dashboard", round_obj.fractal_id)
+            await send_button_to_group(db, g.id, text, "Fractal App", round_obj.fractal_id)
             await send_message_to_web_app_group(db, g.id, text, "start")
         return new_round
     await close_round_repo(db, round_obj.id)
@@ -492,8 +492,8 @@ async def close_last_round(db: AsyncSession, fractal_id: int):
     # Step 4: End fractal if no new round
     end_text = "⚡️ The Fractal has ended!"
     await send_message_to_fractal_web_app_members(db, fractal_id, end_text, "end")
-    end_text = "\n\n🚀 Open the Dashboard to see the final results."
-    await send_button_to_fractal_members(db, end_text, "Dashboard", fractal_id)
+    end_text = "\n\n🚀 Open the Fractal App to see the final results."
+    await send_button_to_fractal_members(db, end_text, "Fractal App", fractal_id)
     await close_fractal_repo(db, fractal_id)
     return None
 
@@ -1092,7 +1092,7 @@ async def round_half_way_service(db, fractal_id: int):
             db=db,
             group_id=g.id,
             text=text,
-            button="Dashboard",
+            button="Fractal App",
             fractal_id=fractal_id,
         )
 

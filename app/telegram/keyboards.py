@@ -151,7 +151,7 @@ def timezone_keyboard():
 def default_menu(private=None):
     """
     Create default menu based on chat type.
-    - Private: Show Dashboard + Help
+    - Private: Show Fractal App + Help
     - Public/Group: Show Bot link + Help
     """
     if private:
@@ -159,7 +159,7 @@ def default_menu(private=None):
 
         # Button 1: Open Telegram Web App dashboard
         builder.button(
-            text="🚀 Open Dashboard",
+            text="🚀 Open Fractal App",
             web_app=WebAppInfo(
                 url=f"{settings.public_base_url}/api/v1/fractals/dashboard"
             )

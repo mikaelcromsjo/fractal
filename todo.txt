@@ -28,4 +28,4 @@ Add logic for every call. status = open. Is member or group.
 Hide all test routers
 
 
-with 2 users I get 2 open Dashboard messages
+with 2 users I get 2 open Fractal App messages

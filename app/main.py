@@ -73,7 +73,7 @@ async def lifespan(app: FastAPI):
     private_commands = [
         BotCommand(command="start", description="Show Menu"),
         BotCommand(command="help", description="Information"),
-        BotCommand(command="dashboard", description="Dashboard"),
+        BotCommand(command="dashboard", description="Fractal App"),
     ]
 
     # Set PRIVATE chat commands
