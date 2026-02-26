@@ -519,7 +519,7 @@ async def cmd_start(message: types.Message, state: FSMContext):
                 keyboard = InlineKeyboardMarkup(inline_keyboard=[
                     [
                         InlineKeyboardButton(
-                            text="🚀 Open Dashboard",
+                            text="🚀 See Results in Dashboard",
                             web_app=WebAppInfo(url=dashboard_url),
                         )   
                     ]
