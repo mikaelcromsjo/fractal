@@ -11,6 +11,7 @@
     <script src="https://unpkg.com/htmx.org@1.9.10"></script>
     <meta charset="UTF-8">
     <title>Telegram WebApp Fractal App</title>
+    <link rel="icon" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIj48dGV4dCB5PSIuOWVtIiBmb250LXNpemU9IjkwIj7inYTvuI88L3RleHQ+PC9zdmc+">
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
 
@@ -1448,7 +1449,7 @@ const maxReconnects = 5;
 let reconnectTimeout = 1000;
 
 async function fetchToken() {
-    const res = await fetch(`get-ws-token?user_id=${currentTelegramUserId}`, {
+    const res = await fetch(`/api/v1/fractals/get-ws-token?user_id=${currentTelegramUserId}`, {
         credentials: "include"
     });
     const data = await res.json();

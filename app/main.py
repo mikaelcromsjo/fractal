@@ -125,10 +125,17 @@ app.add_middleware(
 # include routers
 app.include_router(fractal_routers.router, prefix="/api/v1/fractals", tags=["fractals"])
 
-@app.get("/")
-async def index():
+@app.get("/health")
+async def health():
     """Health / basic info endpoint."""
     return {"status": "ok", "service": "fractal-backend", "env": settings.ENV}
+
+
+@app.get("/", response_class=HTMLResponse)
+async def index(request: Request):
+    """Marketing landing page — links into /app (the standalone web app)."""
+    template = fractal_routers.templates.get_template("landing.html")
+    return HTMLResponse(template.render(request=request))
 
 
 @app.get("/app", response_class=HTMLResponse)
