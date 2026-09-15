@@ -657,6 +657,16 @@ p{
 </head>
 <body>
 
+<div id="web-name-overlay" style="display:none; position:fixed; inset:0; z-index:9999; background:rgba(0,0,0,0.45); align-items:center; justify-content:center;">
+    <div style="background:#fff; border-radius:12px; padding:24px; width:90%; max-width:340px; box-shadow:0 4px 24px rgba(0,0,0,0.2);">
+        <h3 style="margin:0 0 12px; font-size:18px;">Welcome</h3>
+        <p style="margin:0 0 12px; font-size:14px; color:#555;">Enter a display name to join as a guest (no Telegram account needed).</p>
+        <input id="web-name-input" type="text" placeholder="Your name" maxlength="60"
+               style="width:100%; box-sizing:border-box; padding:10px; border:1px solid #ccc; border-radius:8px; font-size:15px; margin-bottom:12px;" />
+        <button id="web-name-continue" style="width:100%; padding:10px; border:none; border-radius:8px; background:#0088cc; color:#fff; font-size:15px; cursor:pointer;">Continue</button>
+    </div>
+</div>
+
 <div id="status-panel">
     <p id="status">Authenticating...</p>
 </div>
@@ -683,16 +693,19 @@ p{
 
     const defaultName = "${default_name}";
     let openFractalId = "${fractal_id}";
+    const isWebMode = ${'true' if context.get('web_mode', False) else 'false'};
 
 <%text>
 
-    const tg = window.Telegram.WebApp;
-    tg.ready();
-    tg.expand();
+    const tg = (window.Telegram && window.Telegram.WebApp) ? window.Telegram.WebApp : null;
+    if (tg && !isWebMode) {
+        tg.ready();
+        tg.expand();
+    }
 
     let noMoreCards = false;
 
-    const initDataUnsafe = tg.initDataUnsafe || {};
+    const initDataUnsafe = (tg && tg.initDataUnsafe) || {};
     const userName = (initDataUnsafe.user && initDataUnsafe.user.first_name)
         ? initDataUnsafe.user.first_name
         : defaultName;
@@ -715,12 +728,31 @@ p{
 
 
     const statusEl = document.getElementById("status");
-    statusEl.innerText = "Hello, " + userName + "! Sending auth to server...";
 
-fetch("/api/v1/fractals/auth?fractal_id="+openFractalId, {
+    // ---- Guest identity for the standalone web app (no Telegram) ----
+    function getOrCreateWebId() {
+        let id = localStorage.getItem("fractal_web_id");
+        if (!id) {
+            id = "web-" + (crypto.randomUUID ? crypto.randomUUID() : (Date.now() + "-" + Math.random().toString(36).slice(2)));
+            localStorage.setItem("fractal_web_id", id);
+        }
+        return id;
+    }
+
+    function doAuth(webDisplayName) {
+        statusEl.innerText = "Hello, " + (webDisplayName || userName) + "! Sending auth to server...";
+
+        const authUrl = isWebMode
+            ? "/api/v1/fractals/web_auth?fractal_id=" + openFractalId
+            : "/api/v1/fractals/auth?fractal_id=" + openFractalId;
+        const authBody = isWebMode
+            ? { web_id: getOrCreateWebId(), display_name: webDisplayName || userName }
+            : { init_data: tg ? tg.initData : "" };
+
+fetch(authUrl, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ init_data: tg.initData })
+    body: JSON.stringify(authBody)
 })
 .then(res => res.json())
 .then(data => {
@@ -729,35 +761,38 @@ fetch("/api/v1/fractals/auth?fractal_id="+openFractalId, {
 //        statusPanel.style.display = 'none'
         // ✅ Set all current context variables
         currentUserId = data.user_id;
+        if (isWebMode) {
+            currentTelegramUserId = currentUserId; // no separate Telegram id outside Telegram
+        }
         currentFractalId = data.fractal_id;
         currentRoundId = data.round_id;
         currentLevel = data.level;
         currentGroupId = data.group_id;
         currentUserName = data.username;
         fractalName = data.fractal_name;
-        fractalDescription = data.fractal_description; 
-        fractalStartDate = data.fractal_start_date; 
-        fractalRoundTime = data.fractal_round_time; 
+        fractalDescription = data.fractal_description;
+        fractalStartDate = data.fractal_start_date;
+        fractalRoundTime = data.fractal_round_time;
         fractalStatus = data.fractal_status;
-        roundStatus = data.round_status; 
+        roundStatus = data.round_status;
         userStatus = data.user_status;
 
 
 //        statusEl.innerText = "Name: " + data.username + " Fractal: " + currentFractalId + " Level:" + data.level + " Group:" + data.group_id + " Fractal Status: " + data.fractal_status + " User Status: " + data.user_status + " Round Status: " + data.round_status;
-        statusEl.innerText = "Fractal: " + fractalName + " Round:" + (parseInt(data.level) + 1) + " Status: " + data.fractal_status;        
+        statusEl.innerText = "Fractal: " + fractalName + " Round:" + (parseInt(data.level) + 1) + " Status: " + data.fractal_status;
         console.log("Auth context:", data);
 
 
         if (userStatus != "active" || roundStatus == "closed"){
             addCardDiv('<p>'+fractalName+'<p>'+fractalDescription+'<p>Round Time: ' + fractalRoundTime +' minutes<p>Start Date: UTC '+fractalStartDate+'<p>You are not in any active group at the moment. ');
             currentGroupId = -1;
-                        
+
         } else {
             lastGroupId == currentGroupId
         }
         console.log(currentLevel);
         console.log(fractalStatus);
-        
+
         if (!(currentLevel == 0 && roundStatus == "open")){
             addBtn.style.display = "none";
         }else{
@@ -766,7 +801,7 @@ fetch("/api/v1/fractals/auth?fractal_id="+openFractalId, {
         if (fractalStatus == "closed"){
             allBtn.style.display = "block";
         }
-        
+
         getNextCard(); // Start loading cards after auth
     } else {
         statusEl.innerText = "Auth failed: " + data.error;
@@ -777,6 +812,7 @@ fetch("/api/v1/fractals/auth?fractal_id="+openFractalId, {
     console.error(err);
     statusEl.innerText = "Error connecting to server.";
 });
+    } // end doAuth
 
     // Proposal form logic
     const addBtn = document.getElementById("add-proposal-btn");
@@ -789,6 +825,29 @@ fetch("/api/v1/fractals/auth?fractal_id="+openFractalId, {
     const descInput = document.getElementById("proposal-desc");
     const charCount = document.getElementById("char-count");
     const cardsContainer = document.getElementById("cards-container");
+
+    // ---- Kick off auth: ask for a name first in web mode, straight away in Telegram ----
+    if (isWebMode) {
+        const savedName = localStorage.getItem("fractal_web_name");
+        if (savedName) {
+            doAuth(savedName);
+        } else {
+            const overlay = document.getElementById("web-name-overlay");
+            const nameField = document.getElementById("web-name-input");
+            const continueBtn = document.getElementById("web-name-continue");
+            overlay.style.display = "flex";
+            const submitName = () => {
+                const name = (nameField.value || "Guest").trim() || "Guest";
+                localStorage.setItem("fractal_web_name", name);
+                overlay.style.display = "none";
+                doAuth(name);
+            };
+            continueBtn.addEventListener("click", submitName);
+            nameField.addEventListener("keydown", (e) => { if (e.key === "Enter") submitName(); });
+        }
+    } else {
+        doAuth();
+    }
 
     addBtn.addEventListener("click", function() {
         form.style.display = "flex";

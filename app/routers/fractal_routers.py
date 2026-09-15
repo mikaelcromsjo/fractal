@@ -47,6 +47,7 @@ from services.fractal_service import (
     get_group_members,
     get_fractal,
     get_user,
+    get_user_by_telegram_id,
     get_user_info_by_telegram_id,
     get_next_card,
     get_all_cards,
@@ -263,7 +264,99 @@ async def fractals_auth(
     except Exception as e:
         print(f"❌ Auth failed: {e}")
         raise HTTPException(status_code=400, detail=str(e))
-        
+
+
+class WebAuthRequest(BaseModel):
+    web_id: str
+    display_name: Optional[str] = None
+
+
+@router.post("/web_auth")
+async def fractals_web_auth(
+    request: WebAuthRequest,
+    db: AsyncSession = Depends(get_db),
+    fractal_id: Optional[int] = Query(None, description="Current fractal ID"),
+):
+    """Same as /auth, but for the standalone web app (no Telegram init_data).
+    Identifies the visitor by a client-generated web_id (stored in the
+    browser), stored in the same `telegram_id` column real Telegram users
+    use, so every other endpoint/table needs no changes."""
+    try:
+        telegram_id = request.web_id
+        display_name = (request.display_name or "Guest").strip() or "Guest"
+
+        # get_user_info_by_telegram_id only returns a payload once the user
+        # has an active_fractal_id, so it can't tell "no user yet" apart from
+        # "user exists but hasn't joined a fractal" — use the plain lookup
+        # for the existence check, and only create a row if truly new.
+        existing_user = await get_user_by_telegram_id(db, telegram_id)
+        if existing_user:
+            user_id = existing_user.id
+        else:
+            new_user = await create_user(db, {"telegram_id": telegram_id, "username": display_name})
+            user_id = new_user.id
+
+        user_context = await get_user_info_by_telegram_id(db, telegram_id) or {}
+
+        # If a fractal was requested and we're not already in it, try to join
+        # (mirrors the bot's `/join <fractal_id>` command) — fine to fail
+        # silently if already a member or the fractal isn't open for joining.
+        if fractal_id and fractal_id != user_context.get("fractal_id"):
+            try:
+                await join_fractal(db, {"telegram_id": telegram_id, "username": display_name}, fractal_id)
+                user_context = await get_user_info_by_telegram_id(db, telegram_id) or {}
+                user_id = user_context.get("user_id") or user_id
+            except ValueError as e:
+                print(f"ℹ️ web join skipped: {e}")
+
+        if not fractal_id or fractal_id == 0 or fractal_id == user_context.get("fractal_id"):
+            fractal_id = user_context.get("fractal_id")
+            group_id = user_context.get("group_id")
+            round_id = user_context.get("round_id")
+        else:
+            group_id = -1
+            round_id = -1
+
+        fractal = await get_fractal(db, fractal_id) if fractal_id else None
+        round_obj = await get_last_round_repo(db, fractal_id) if fractal_id else None
+        round_status = round_obj.status if round_obj else None
+
+        user_status = "active"
+        if not group_id:
+            user_status = "observer"
+
+        response_data = {
+            "status": "ok",
+            "user_id": user_id,
+            "fractal_id": fractal_id,
+            "round_id": round_id,
+            "group_id": group_id,
+            "first_name": display_name,
+            "username": display_name,
+            "fractal_name": fractal.name if fractal else None,
+            "fractal_description": fractal.description if fractal else None,
+            "fractal_start_date": (
+                fractal.start_date.strftime("%Y-%m-%d %H:%M")
+                if fractal and fractal.start_date
+                else None
+            ),
+            "fractal_round_time": (
+                fractal.meta.get("round_time")
+                if fractal and fractal.meta and "round_time" in fractal.meta
+                else None
+            ),
+            "level": getattr(round_obj, "level", None),
+            "fractal_status": getattr(fractal, "status", None),
+            "round_status": round_status,
+            "user_status": user_status,
+        }
+
+        return JSONResponse(content=response_data)
+
+    except Exception as e:
+        print(f"❌ Web auth failed: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+
 # ---------- HTML Endpoints ----------
 templates = TemplateLookup(
     directories=["templates"],

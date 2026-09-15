@@ -4,8 +4,10 @@ Application entrypoint. Includes routers and mounts.
 """
 
 import asyncpg
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, Query
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse
+from typing import Optional
 import asyncio
 
 from routers import fractal_routers
@@ -127,5 +129,24 @@ app.include_router(fractal_routers.router, prefix="/api/v1/fractals", tags=["fra
 async def index():
     """Health / basic info endpoint."""
     return {"status": "ok", "service": "fractal-backend", "env": settings.ENV}
+
+
+@app.get("/app", response_class=HTMLResponse)
+async def web_app_entry(
+    request: Request,
+    fractal_id: Optional[int] = Query(None, description="Fractal to join/view"),
+):
+    """Standalone (non-Telegram) web app entry point — same dashboard.html,
+    rendered in web_mode so it authenticates via a browser-generated guest id
+    instead of Telegram init_data."""
+    template = fractal_routers.templates.get_template("dashboard.html")
+    html = template.render(
+        request=request,
+        fractal_id=fractal_id,
+        default_name="Guest",
+        settings=settings,
+        web_mode=True,
+    )
+    return HTMLResponse(html)
 
 
