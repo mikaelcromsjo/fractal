@@ -54,7 +54,8 @@ from services.fractal_service import (
     get_all_cards,
     get_or_build_round_tree_repo,
     get_last_round_repo,
-    calculate_rep_results
+    calculate_rep_results,
+    get_full_fractal_tree
 )
 
 from telegram.bot import process_update
@@ -843,6 +844,22 @@ async def get_fractal_tree(
     if not tree.get("rounds"):
         raise HTTPException(status_code=404, detail="No rounds found")
     return tree
+
+@router.get("/{fractal_id}/tree_view", response_class=HTMLResponse)
+async def get_fractal_tree_view(
+    request: Request,
+    fractal_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    """Whole-fractal bracket-style view: every round's Circles side by side,
+    with each Circle's winners (top contribution(s) + representative) in the
+    column between rounds — same cards/CSS as the normal viewer."""
+    data = await get_full_fractal_tree(db, fractal_id)
+    if not data.get("rounds"):
+        raise HTTPException(status_code=404, detail="No rounds found")
+    template = templates.get_template("tree_view.html")
+    html = template.render(request=request, data=data)
+    return HTMLResponse(html)
 
 @router.get("/get-ws-token")
 def get_ws_token(request: Request, user_id: str):

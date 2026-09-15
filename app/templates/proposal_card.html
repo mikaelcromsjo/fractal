@@ -1,3 +1,4 @@
+<%page args="proposal, user_id=None, current_group_id=None, number_comments=1, show_comments=True"/>
 <%
     proposal_id = proposal.get('id', 0)
     username = proposal.get('username', '')
@@ -70,6 +71,7 @@
         % endif
 
         <!-- Comments -->
+        % if show_comments:
         <div class="proposal-comments-block">
             <div class="proposal-comments-header">Comments</div>
             <div class="proposal-comments-list" id="comments-list-${proposal_id}">
@@ -178,5 +180,6 @@
                 </button>
             </div>
         </div>
+        % endif
     </div>
 </div>

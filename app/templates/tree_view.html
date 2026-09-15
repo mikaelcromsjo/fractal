@@ -1,0 +1,394 @@
+<%!
+    import json
+%>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fractal Tree — ${data.get('fractal_name') or 'Fractal'}</title>
+    <link rel="icon" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIj48dGV4dCB5PSIuOWVtIiBmb250LXNpemU9IjkwIj7inYTvuI88L3RleHQ+PC9zdmc+">
+    <style>
+        body {
+            font-family: "Telegram", sans-serif;
+            margin: 0;
+            padding: 0;
+            background: #f5f5f5;
+        }
+
+        /* ===== Cards — same style as the normal viewer ===== */
+        .proposal-card {
+            background: #fff;
+            border-radius: 14px;
+            padding: 12px;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .proposal-header-row {
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+        }
+        .proposal-userblock {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .proposal-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 999px;
+            object-fit: cover;
+        }
+        .proposal-usertext {
+            display: flex;
+            flex-direction: column;
+        }
+        .proposal-username {
+            font-weight: 600;
+            font-size: 14px;
+            color: #0088cc;
+            text-decoration: none;
+        }
+        .proposal-date {
+            font-size: 12px;
+            color: #888;
+        }
+        .proposal-score-badge {
+            position: absolute;
+            top: 8px;
+            right: 12px;
+            background-color: #ffda77;
+            color: #333;
+            font-weight: bold;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 0.9em;
+        }
+        .proposal-main { margin-top: 4px; }
+        .proposal-title {
+            margin: 0 0 4px;
+            font-size: 16px;
+            font-weight: 600;
+            color: #222;
+        }
+        .proposal-text {
+            margin: 0;
+            font-size: 14px;
+            color: #444;
+            white-space: pre-wrap;
+        }
+        .proposal-tags { margin-top: 6px; display: flex; flex-wrap: wrap; gap: 4px; }
+        .proposal-tag {
+            font-size: 11px;
+            padding: 2px 6px;
+            border-radius: 999px;
+            background: #f0f4ff;
+            color: #4a6fdc;
+        }
+        .proposal-comments-block {
+            margin-top: 6px;
+            padding-top: 6px;
+            border-top: 1px solid #eee;
+        }
+        .proposal-comments-header {
+            font-size: 13px;
+            font-weight: 600;
+            color: #555;
+            margin-bottom: 4px;
+        }
+        .proposal-comments-list {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            margin-bottom: 6px;
+        }
+        .proposal-comment-row { display: flex; align-items: flex-start; gap: 6px; }
+        .proposal-comment-avatar {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            object-fit: cover;
+        }
+        .proposal-comment-content {
+            flex: 1;
+            background: #f6f7fb;
+            border-radius: 10px;
+            padding: 6px 8px;
+        }
+        .proposal-comment-top { display: flex; justify-content: space-between; font-size: 11px; color: #777; }
+        .proposal-comment-username { font-weight: 600; color: #444; }
+        .proposal-comment-text { font-size: 13px; color: #333; margin-top: 2px; }
+        .proposal-comment-empty { font-size: 12px; color: #999; font-style: italic; }
+        .comment-score-badge {
+            height: 14px;
+            background-color: #ffda77;
+            color: #333;
+            font-weight: bold;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 0.9em;
+            margin: 8px 0;
+        }
+        .show-more-comments { font-size: 10px; cursor: pointer; color: #0088cc; }
+        [class*="hidden_"] { display: none; }
+
+        /* Read-only report: no voting/replying here */
+        .proposal-comment-input-row { display: none; }
+        .rep-vote-popup { display: none !important; }
+        .vote-hover-target { cursor: default; }
+        .proposal-star-rating, .comment-star-rating { display: none; }
+
+        /* ===== Bracket-style tree layout ===== */
+        #tree-header {
+            background: #fff;
+            padding: 14px 20px;
+            border-bottom: 1px solid #ddd;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            position: sticky;
+            top: 0;
+            z-index: 5;
+        }
+        #tree-header h1 { font-size: 17px; margin: 0; }
+        #tree-header a { color: #0088cc; text-decoration: none; font-size: 14px; white-space: nowrap; margin-left: 16px; }
+
+        #zoom-toolbar {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 20;
+            background: #fff;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.18);
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            padding: 6px;
+        }
+        #zoom-toolbar button {
+            border: none;
+            background: #f0f0f0;
+            border-radius: 6px;
+            width: 32px;
+            height: 32px;
+            font-size: 16px;
+            line-height: 1;
+            cursor: pointer;
+            color: #333;
+        }
+        #zoom-toolbar button:hover { background: #e2e2e2; }
+        #zoom-toolbar button#zoom-fit { width: auto; padding: 0 10px; font-size: 12px; font-weight: 600; }
+        #zoom-level { font-size: 12px; color: #555; min-width: 42px; text-align: center; }
+
+        #zoom-viewport {
+            overflow: auto;
+            width: 100vw;
+            height: calc(100vh - 60px);
+            box-sizing: border-box;
+        }
+
+        .tree-wrap {
+            display: flex;
+            flex-direction: row;
+            align-items: stretch;
+            padding: 24px;
+            box-sizing: border-box;
+            width: max-content;
+            transform-origin: top left;
+        }
+        .tree-col {
+            display: flex;
+            flex-direction: column;
+            min-width: 300px;
+            max-width: 320px;
+            flex-shrink: 0;
+        }
+        .tree-col + .tree-col { margin-left: 24px; }
+        .col-header {
+            text-align: center;
+            font-weight: 700;
+            font-size: 12px;
+            color: #777;
+            text-transform: uppercase;
+            letter-spacing: .04em;
+            margin-bottom: 16px;
+            line-height: 1.4;
+        }
+        .winners-col .col-header { color: #b8860b; }
+        .col-body {
+            display: flex;
+            flex-direction: column;
+            justify-content: space-evenly;
+            flex: 1;
+            gap: 20px;
+        }
+        .circle-block {
+            background: #eef1f6;
+            border-radius: 16px;
+            padding: 14px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .winner-block {
+            background: #fffbea;
+            border: 2px solid #ffda77;
+        }
+        .circle-title {
+            font-size: 12px;
+            font-weight: 700;
+            color: #888;
+        }
+        .reps-row { display: flex; flex-wrap: wrap; gap: 12px; font-size: 13px; }
+        .reps-row .rep {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            background: #fff;
+            border-radius: 999px;
+            padding: 3px 10px 3px 3px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+        }
+        .rep-avatar {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            object-fit: cover;
+        }
+        .rep-medal { font-size: 15px; }
+        .no-winner { font-size: 12px; color: #999; font-style: italic; }
+    </style>
+</head>
+<body>
+
+<div id="tree-header">
+    <h1>❄️ ${data.get('fractal_name') or 'Fractal'} — Tree</h1>
+    <a href="/app?fractal_id=${data.get('fractal_id')}">← Back to app</a>
+</div>
+
+<div id="zoom-toolbar">
+    <button id="zoom-out" title="Zoom out">−</button>
+    <span id="zoom-level">100%</span>
+    <button id="zoom-in" title="Zoom in">+</button>
+    <button id="zoom-fit" title="Fit whole tree on screen">Fit</button>
+</div>
+
+<div id="zoom-viewport">
+<div class="tree-wrap" id="zoom-content">
+% for round in data['rounds']:
+    <div class="tree-col contributions-col">
+        <div class="col-header">Round ${round['level'] + 1}<br>Contributions</div>
+        <div class="col-body">
+        % for g in round['groups']:
+            <div class="circle-block">
+                <div class="circle-title">Circle ${g['group_id']} · ${', '.join((m.get('username') or ('User ' + str(m['user_id']))) for m in g['members'])}</div>
+                % if g['cards']:
+                    % for card in g['cards']:
+                        <%include file="proposal_card.html" args="proposal=card"/>
+                    % endfor
+                % else:
+                    <div class="no-winner">No contributions.</div>
+                % endif
+            </div>
+        % endfor
+        </div>
+    </div>
+
+    <div class="tree-col winners-col">
+        <div class="col-header">Round ${round['level'] + 1}<br>Winners</div>
+        <div class="col-body">
+        % for g in round['groups']:
+            <div class="circle-block winner-block">
+                <div class="circle-title">Circle ${g['group_id']}</div>
+                % if g['representatives']:
+                    <div class="reps-row">
+                    % for rep in g['representatives']:
+                        <div class="rep">
+                            <img class="rep-avatar" src="/static/img/64_${(rep['user_id'] % 16) + 1}.png" alt="${rep['username']}">
+                            <span class="rep-medal">${rep['medal']}</span> ${rep['username']}
+                        </div>
+                    % endfor
+                    </div>
+                % endif
+                % if g['winners']:
+                    % for card in g['winners']:
+                        <%include file="proposal_card.html" args="proposal=card, show_comments=False"/>
+                    % endfor
+                % else:
+                    <div class="no-winner">No winner yet.</div>
+                % endif
+            </div>
+        % endfor
+        </div>
+    </div>
+% endfor
+</div>
+</div>
+
+<script>
+function showHiddenComments(proposalId) {
+    document.querySelectorAll('.hidden_' + proposalId).forEach(function (el) { el.style.display = 'flex'; });
+    var btn = document.getElementById('show_more_comment_proposal_' + proposalId);
+    if (btn) btn.style.display = 'none';
+}
+
+// The rep-vote-popup / medal-voting UI only makes sense in the live app — strip it
+// out entirely here rather than just hiding it (this is a read-only report).
+document.querySelectorAll('.rep-vote-popup').forEach(function (el) { el.remove(); });
+
+(function () {
+    var content = document.getElementById('zoom-content');
+    var viewport = document.getElementById('zoom-viewport');
+    var levelLabel = document.getElementById('zoom-level');
+    var zoom = 1;
+    var MIN_ZOOM = 0.1;
+    var MAX_ZOOM = 3;
+
+    function applyZoom() {
+        content.style.transform = 'scale(' + zoom + ')';
+        levelLabel.textContent = Math.round(zoom * 100) + '%';
+    }
+
+    function fitToView() {
+        // Fit the full *width* of the bracket (all round columns) into the
+        // screen — height is left free to scroll, since with many comments a
+        // circle-block can be far taller than any single screen anyway, and
+        // shrinking to fit that would make every card unreadably tiny.
+        content.style.transform = 'scale(1)';
+        var contentWidth = content.scrollWidth;
+        var availW = viewport.clientWidth - 16;
+        zoom = Math.min(availW / contentWidth, 1);
+        zoom = Math.max(zoom, MIN_ZOOM);
+        applyZoom();
+    }
+
+    document.getElementById('zoom-in').addEventListener('click', function () {
+        zoom = Math.min(zoom + 0.1, MAX_ZOOM);
+        applyZoom();
+    });
+    document.getElementById('zoom-out').addEventListener('click', function () {
+        zoom = Math.max(zoom - 0.1, MIN_ZOOM);
+        applyZoom();
+    });
+    document.getElementById('zoom-fit').addEventListener('click', fitToView);
+
+    // Ctrl/Cmd + scroll (and trackpad pinch, which browsers report as a ctrl-wheel) to zoom.
+    viewport.addEventListener('wheel', function (e) {
+        if (!(e.ctrlKey || e.metaKey)) return;
+        e.preventDefault();
+        var delta = e.deltaY > 0 ? -0.08 : 0.08;
+        zoom = Math.min(Math.max(zoom + delta, MIN_ZOOM), MAX_ZOOM);
+        applyZoom();
+    }, { passive: false });
+
+    fitToView(); // start zoomed out to the full tree
+})();
+</script>
+</body>
+</html>

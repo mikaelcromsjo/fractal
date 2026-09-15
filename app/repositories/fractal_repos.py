@@ -1390,6 +1390,14 @@ async def get_or_build_round_tree_repo(
     return tree
 
 
+async def get_all_rounds_for_fractal_repo(db: AsyncSession, fractal_id: int) -> List[Round]:
+    """All rounds for a fractal, ordered oldest (level 0) to newest."""
+    result = await db.execute(
+        select(Round).where(Round.fractal_id == fractal_id).order_by(Round.level.asc())
+    )
+    return result.scalars().all()
+
+
 # =================== REPOSITORY HELPERS ========================
 
 async def get_votes_for_group_proposals_repo(db: AsyncSession, group_id: int):

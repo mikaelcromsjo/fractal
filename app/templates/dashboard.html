@@ -620,7 +620,7 @@ p{
             border: none;
             cursor: pointer;
         }
-        #add-proposal-btn, #more-btn, #all-btn{
+        #add-proposal-btn, #more-btn, #all-btn, #tree-btn{
             margin: 2px 9px;
             padding: 10px;
             border-radius: 12px;
@@ -633,6 +633,10 @@ p{
         }
         #all-btn{
             display:none;
+        }
+        #tree-btn{
+            display:none;
+            background: #6a5acd;
         }
         #add-proposal-btn {
             display:none;
@@ -709,6 +713,7 @@ p{
 
 <button id="more-btn">Update View</button>
 <button id="all-btn">Show All Contributions</button>
+<button id="tree-btn">🌳 View Fractal Tree</button>
 <button id="add-proposal-btn">Create Proposal</button>
 
 <div id="proposal-form">
@@ -918,6 +923,7 @@ fetch(authUrl, {
         }
         if (fractalStatus == "closed"){
             allBtn.style.display = "block";
+            treeBtn.style.display = "block";
         }
 
         getNextCard(); // Start loading cards after auth
@@ -941,6 +947,7 @@ fetch(authUrl, {
     const addBtn = document.getElementById("add-proposal-btn");
     const moreBtn = document.getElementById("more-btn");
     const allBtn = document.getElementById("all-btn");
+    const treeBtn = document.getElementById("tree-btn");
     const form = document.getElementById("proposal-form");
     const cancelBtn = document.getElementById("cancel-proposal");
     const submitBtn = document.getElementById("submit-proposal");
@@ -987,6 +994,10 @@ fetch(authUrl, {
     allBtn.addEventListener("click", function() {
         currentGroupId = -2;
         getAllCards();
+    });
+
+    treeBtn.addEventListener("click", function() {
+        window.open("/api/v1/fractals/" + currentFractalId + "/tree_view", "_blank");
     });
 
 

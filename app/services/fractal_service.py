@@ -62,6 +62,7 @@ from repositories.fractal_repos import (
     get_waiting_fractals_repo,
     get_open_fractals_repo,
     get_or_build_round_tree_repo,
+    get_all_rounds_for_fractal_repo,
     get_fractals_repo,
     get_open_rounds_repo,
     get_winning_proposal_telegram_repo
@@ -873,6 +874,103 @@ async def calculate_rep_results(db: AsyncSession, group_id: int, round_id: int):
     )
     
     return {user_id: data for user_id, data in ranked[:3]}  # Top 3 only
+
+
+# ===================== FULL FRACTAL TREE VIEW ===========================
+
+def _flatten_comment_nodes(nodes: List[Dict]) -> List[Dict]:
+    """proposal_card.html renders a flat comment list (same as the normal viewer),
+    so nested replies are walked depth-first into one flat list."""
+    flat = []
+    for node in nodes:
+        votes = node.get("votes") or []
+        vote_sum = sum(v.get("vote", 0) for v in votes)
+        flat.append({
+            "id": node["comment_id"],
+            "user_id": node["user_id"],
+            "username": node.get("username") or "Unknown",
+            "avatar": f"/static/img/64_{(node['user_id'] % 16) + 1}.png",
+            "date": (node.get("created_at") or "")[:16].replace("T", " "),
+            "message": node.get("text") or "",
+            "text": node.get("text") or "",
+            "vote": -1,
+            "total_score": vote_sum / 10.0,
+            "group_id": node.get("group_id") if node.get("group_id") is not None else "",
+        })
+        flat.extend(_flatten_comment_nodes(node.get("replies") or []))
+    return flat
+
+
+def _tree_proposal_to_card(p: Dict) -> Dict:
+    """Adapts a build_fractal_tree() proposal node into the flat dict shape
+    proposal_card.html expects (same shape _enrich_proposal_with_comments_repo produces)."""
+    votes = p.get("votes") or []
+    vote_sum = sum(v.get("score", 0) for v in votes)
+    creator_user_id = p.get("creator_user_id") or 0
+    return {
+        "id": p["proposal_id"],
+        "user_id": creator_user_id,
+        "username": p.get("creator_username") or "Unknown",
+        "avatar": f"/static/img/64_{(creator_user_id % 16) + 1}.png",
+        "date": (p.get("created_at") or "")[:16].replace("T", " "),
+        "title": p.get("title") or "",
+        "message": p.get("body") or "",
+        "tags": [],
+        "vote": -1,
+        "total_score": vote_sum,
+        "comments": _flatten_comment_nodes(p.get("comments") or []),
+    }
+
+
+async def get_full_fractal_tree(db: AsyncSession, fractal_id: int) -> Dict:
+    """Whole-fractal tree: every round, every Circle's contributions, and each
+    Circle's winners (top proposal(s) + gold/silver/bronze representative)."""
+    fractal = await get_fractal(db, fractal_id)
+    rounds = await get_all_rounds_for_fractal_repo(db, fractal_id)
+    top_count = settings.PROPOSALS_PER_USER_DEFAULT
+
+    rounds_out = []
+    for round_obj in rounds:
+        round_tree = await get_or_build_round_tree_repo(db, fractal_id=fractal_id, round_id=round_obj.id)
+        raw_rounds = round_tree.get("rounds") or []
+        groups_raw = raw_rounds[0].get("groups", []) if raw_rounds else []
+
+        groups_out = []
+        for g in groups_raw:
+            members = g.get("members") or []
+            member_names = {m["user_id"]: m.get("username") or f"User {m['user_id']}" for m in members}
+
+            cards = [_tree_proposal_to_card(p) for p in (g.get("proposals") or [])]
+            cards.sort(key=lambda c: -(c.get("total_score") or 0))
+
+            reps = await get_representatives_for_group_repo(db, g["group_id"], round_obj.id)
+            medal = {1: "🥇", 2: "🥈", 3: "🥉"}
+            representatives = [
+                {"place": place, "medal": medal.get(place, ""), "user_id": uid,
+                 "username": member_names.get(uid, f"User {uid}")}
+                for place, uid in sorted(reps.items())
+            ]
+
+            groups_out.append({
+                "group_id": g["group_id"],
+                "members": members,
+                "cards": cards,
+                "winners": cards[:top_count],
+                "representatives": representatives,
+            })
+
+        rounds_out.append({
+            "round_id": round_obj.id,
+            "level": round_obj.level,
+            "status": round_obj.status,
+            "groups": groups_out,
+        })
+
+    return {
+        "fractal_id": fractal_id,
+        "fractal_name": fractal.name if fractal else None,
+        "rounds": rounds_out,
+    }
 
 
 # Add to services/fractal_service.py:
