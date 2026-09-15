@@ -673,6 +673,10 @@ p{
         <h3 style="margin:0 0 12px; font-size:18px;">Join or start a Fractal</h3>
         <p id="web-picker-info" style="margin:0 0 16px; font-size:14px; color:#555;">You're not currently in any active Fractal.</p>
 
+        <button id="web-demo-btn" type="button" style="width:100%; text-align:left; padding:12px; border:1px solid #cfeaf5; background:#f2fafd; border-radius:8px; cursor:pointer; margin-bottom:12px; font-size:14px; color:#0088cc;">
+            👀 View a demo: <strong>Digital Rights &amp; Privacy Forum</strong>
+        </button>
+
         <div style="border:1px solid #eee; border-radius:8px; padding:14px; margin-bottom:12px;">
             <div style="font-weight:600; font-size:14px; margin-bottom:8px;">Join an existing Fractal</div>
             <input id="web-join-input" type="text" placeholder="Fractal ID or name" maxlength="120"
@@ -786,12 +790,18 @@ p{
     }
 
     function setupFractalPicker() {
+        const demoBtn = document.getElementById("web-demo-btn");
         const joinInput = document.getElementById("web-join-input");
         const joinBtn = document.getElementById("web-join-btn");
         const createName = document.getElementById("web-create-name");
         const createDesc = document.getElementById("web-create-desc");
         const createRoundTime = document.getElementById("web-create-round-time");
         const createBtn = document.getElementById("web-create-btn");
+
+        demoBtn.addEventListener("click", () => {
+            hideFractalPicker();
+            location.href = "/app?fractal_id=1";
+        });
 
         joinBtn.addEventListener("click", () => {
             const value = joinInput.value.trim();
@@ -876,12 +886,20 @@ fetch(authUrl, {
 
 
 //        statusEl.innerText = "Name: " + data.username + " Fractal: " + currentFractalId + " Level:" + data.level + " Group:" + data.group_id + " Fractal Status: " + data.fractal_status + " User Status: " + data.user_status + " Round Status: " + data.round_status;
-        statusEl.innerText = "Fractal: " + fractalName + " Round:" + (parseInt(data.level) + 1) + " Status: " + data.fractal_status;
+        if (fractalName) {
+            statusEl.innerText = "Fractal: " + fractalName + " Round:" + (parseInt(data.level) + 1) + " Status: " + data.fractal_status;
+        } else if (isWebMode) {
+            statusEl.innerText = "";
+        }
         console.log("Auth context:", data);
 
 
         if (userStatus != "active" || roundStatus == "closed"){
-            addCardDiv('<p>'+fractalName+'<p>'+fractalDescription+'<p>Round Time: ' + fractalRoundTime +' minutes<p>Start Date: UTC '+fractalStartDate+'<p>You are not in any active group at the moment. ');
+            if (fractalName) {
+                addCardDiv('<p>'+fractalName+'<p>'+fractalDescription+'<p>Round Time: ' + fractalRoundTime +' minutes<p>Start Date: UTC '+fractalStartDate+'<p>You are not in any active group at the moment. ');
+            } else if (!isWebMode) {
+                addCardDiv('You are not in any active group at the moment.');
+            }
             currentGroupId = -1;
             if (isWebMode && userStatus != "active") {
                 showFractalPicker(fractalName ? ("You're viewing \"" + fractalName + "\" — it's not currently open to join.") : null);
@@ -904,9 +922,13 @@ fetch(authUrl, {
 
         getNextCard(); // Start loading cards after auth
     } else {
-        statusEl.innerText = "Auth failed: " + data.error;
+        if (isWebMode) {
+            statusEl.innerText = "";
+            showFractalPicker();
+        } else {
+            statusEl.innerText = "Auth failed: " + data.error;
             addCardDiv('You are not in any active group at the moment.');
-            if (isWebMode) showFractalPicker();
+        }
     }
 })
 .catch(err => {
