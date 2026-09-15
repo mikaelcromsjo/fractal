@@ -46,6 +46,7 @@ from services.fractal_service import (
     vote_representative_repo,
     get_group_members,
     get_fractal,
+    get_fractal_from_name_or_id,
     get_user,
     get_user_by_telegram_id,
     get_user_info_by_telegram_id,
@@ -275,7 +276,7 @@ class WebAuthRequest(BaseModel):
 async def fractals_web_auth(
     request: WebAuthRequest,
     db: AsyncSession = Depends(get_db),
-    fractal_id: Optional[int] = Query(None, description="Current fractal ID"),
+    fractal_id: Optional[str] = Query(None, description="Fractal ID or name to join/view"),
 ):
     """Same as /auth, but for the standalone web app (no Telegram init_data).
     Identifies the visitor by a client-generated web_id (stored in the
@@ -284,6 +285,18 @@ async def fractals_web_auth(
     try:
         telegram_id = request.web_id
         display_name = (request.display_name or "Guest").strip() or "Guest"
+
+        # Accept an id OR a name here (like the bot's `/join <fractal_id|name>`
+        # command) and resolve it to a concrete int id up front, so the rest
+        # of this function only ever deals with a plain fractal_id.
+        fractal_id = str(fractal_id).strip() if fractal_id else ""
+        if fractal_id and fractal_id not in ("0", "None"):
+            requested_fractal = await get_fractal_from_name_or_id(db, fractal_id)
+            if not requested_fractal:
+                raise HTTPException(status_code=404, detail=f"Fractal '{fractal_id}' not found")
+            fractal_id = requested_fractal.id
+        else:
+            fractal_id = None
 
         # get_user_info_by_telegram_id only returns a payload once the user
         # has an active_fractal_id, so it can't tell "no user yet" apart from

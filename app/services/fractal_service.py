@@ -888,6 +888,9 @@ async def get_user_info_by_telegram_id(db: AsyncSession, telegram_id: str):
 async def get_fractal(db: AsyncSession, fractal_id: int):
     return await get_fractal_repo(db, fractal_id)
 
+async def get_fractal_from_name_or_id(db: AsyncSession, fractal_identifier):
+    return await get_fractal_from_name_or_id_repo(db, fractal_identifier)
+
 async def get_user(db: AsyncSession, user_id: int):
     return await get_user_repo(db, user_id)
 

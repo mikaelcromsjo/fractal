@@ -134,7 +134,7 @@ async def index():
 @app.get("/app", response_class=HTMLResponse)
 async def web_app_entry(
     request: Request,
-    fractal_id: Optional[int] = Query(None, description="Fractal to join/view"),
+    fractal_id: Optional[str] = Query(None, description="Fractal id or name to join/view"),
 ):
     """Standalone (non-Telegram) web app entry point — same dashboard.html,
     rendered in web_mode so it authenticates via a browser-generated guest id

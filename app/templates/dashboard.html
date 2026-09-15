@@ -667,6 +667,33 @@ p{
     </div>
 </div>
 
+<div id="web-fractal-picker-overlay" style="display:none; position:fixed; inset:0; z-index:9998; background:rgba(0,0,0,0.45); align-items:center; justify-content:center;">
+    <div style="background:#fff; border-radius:12px; padding:24px; width:90%; max-width:380px; box-shadow:0 4px 24px rgba(0,0,0,0.2);">
+        <h3 style="margin:0 0 12px; font-size:18px;">Join or start a Fractal</h3>
+        <p id="web-picker-info" style="margin:0 0 16px; font-size:14px; color:#555;">You're not currently in any active Fractal.</p>
+
+        <div style="border:1px solid #eee; border-radius:8px; padding:14px; margin-bottom:12px;">
+            <div style="font-weight:600; font-size:14px; margin-bottom:8px;">Join an existing Fractal</div>
+            <input id="web-join-input" type="text" placeholder="Fractal ID or name" maxlength="120"
+                   style="width:100%; box-sizing:border-box; padding:10px; border:1px solid #ccc; border-radius:8px; font-size:15px; margin-bottom:8px;" />
+            <button id="web-join-btn" style="width:100%; padding:10px; border:none; border-radius:8px; background:#0088cc; color:#fff; font-size:15px; cursor:pointer;">Join</button>
+        </div>
+
+        <div style="border:1px solid #eee; border-radius:8px; padding:14px;">
+            <div style="font-weight:600; font-size:14px; margin-bottom:8px;">Create a new Fractal</div>
+            <input id="web-create-name" type="text" placeholder="Fractal name" maxlength="120"
+                   style="width:100%; box-sizing:border-box; padding:10px; border:1px solid #ccc; border-radius:8px; font-size:15px; margin-bottom:8px;" />
+            <textarea id="web-create-desc" rows="2" placeholder="Description (optional)"
+                   style="width:100%; box-sizing:border-box; padding:10px; border:1px solid #ccc; border-radius:8px; font-size:15px; margin-bottom:8px; resize:vertical;"></textarea>
+            <input id="web-create-round-time" type="number" min="1" placeholder="Round time (minutes, optional)"
+                   style="width:100%; box-sizing:border-box; padding:10px; border:1px solid #ccc; border-radius:8px; font-size:15px; margin-bottom:8px;" />
+            <button id="web-create-btn" style="width:100%; padding:10px; border:none; border-radius:8px; background:#4CAF50; color:#fff; font-size:15px; cursor:pointer;">Create &amp; Open</button>
+        </div>
+
+        <p id="web-picker-error" style="margin:12px 0 0; font-size:13px; color:#c0392b; display:none;"></p>
+    </div>
+</div>
+
 <div id="status-panel">
     <p id="status">Authenticating...</p>
 </div>
@@ -739,6 +766,75 @@ p{
         return id;
     }
 
+    // ---- Join-or-create picker (web mode only) ----
+    function showFractalPicker(infoMessage) {
+        const overlay = document.getElementById("web-fractal-picker-overlay");
+        const info = document.getElementById("web-picker-info");
+        if (infoMessage) info.textContent = infoMessage;
+        overlay.style.display = "flex";
+    }
+
+    function hideFractalPicker() {
+        document.getElementById("web-fractal-picker-overlay").style.display = "none";
+    }
+
+    function showPickerError(msg) {
+        const err = document.getElementById("web-picker-error");
+        err.textContent = msg;
+        err.style.display = "block";
+    }
+
+    function setupFractalPicker() {
+        const joinInput = document.getElementById("web-join-input");
+        const joinBtn = document.getElementById("web-join-btn");
+        const createName = document.getElementById("web-create-name");
+        const createDesc = document.getElementById("web-create-desc");
+        const createRoundTime = document.getElementById("web-create-round-time");
+        const createBtn = document.getElementById("web-create-btn");
+
+        joinBtn.addEventListener("click", () => {
+            const value = joinInput.value.trim();
+            if (!value) { showPickerError("Enter a Fractal ID or name."); return; }
+            hideFractalPicker();
+            openFractalId = value;
+            location.href = "/app?fractal_id=" + encodeURIComponent(value);
+        });
+        joinInput.addEventListener("keydown", (e) => { if (e.key === "Enter") joinBtn.click(); });
+
+        createBtn.addEventListener("click", () => {
+            const name = createName.value.trim();
+            if (!name) { showPickerError("Enter a name for the new Fractal."); return; }
+            createBtn.disabled = true;
+            createBtn.textContent = "Creating…";
+            const settings = {};
+            const roundTime = parseInt(createRoundTime.value, 10);
+            if (!isNaN(roundTime) && roundTime > 0) settings.round_time = roundTime;
+
+            fetch("/api/v1/fractals/create_fractal", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ name: name, description: createDesc.value.trim(), settings: settings })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.ok && data.fractal && data.fractal.id) {
+                    hideFractalPicker();
+                    location.href = "/app?fractal_id=" + encodeURIComponent(data.fractal.id);
+                } else {
+                    createBtn.disabled = false;
+                    createBtn.textContent = "Create & Open";
+                    showPickerError("Could not create Fractal.");
+                }
+            })
+            .catch(err => {
+                console.error(err);
+                createBtn.disabled = false;
+                createBtn.textContent = "Create & Open";
+                showPickerError("Error connecting to server.");
+            });
+        });
+    }
+
     function doAuth(webDisplayName) {
         statusEl.innerText = "Hello, " + (webDisplayName || userName) + "! Sending auth to server...";
 
@@ -786,6 +882,9 @@ fetch(authUrl, {
         if (userStatus != "active" || roundStatus == "closed"){
             addCardDiv('<p>'+fractalName+'<p>'+fractalDescription+'<p>Round Time: ' + fractalRoundTime +' minutes<p>Start Date: UTC '+fractalStartDate+'<p>You are not in any active group at the moment. ');
             currentGroupId = -1;
+            if (isWebMode && userStatus != "active") {
+                showFractalPicker(fractalName ? ("You're viewing \"" + fractalName + "\" — it's not currently open to join.") : null);
+            }
 
         } else {
             lastGroupId == currentGroupId
@@ -806,6 +905,7 @@ fetch(authUrl, {
     } else {
         statusEl.innerText = "Auth failed: " + data.error;
             addCardDiv('You are not in any active group at the moment.');
+            if (isWebMode) showFractalPicker();
     }
 })
 .catch(err => {
@@ -828,6 +928,7 @@ fetch(authUrl, {
 
     // ---- Kick off auth: ask for a name first in web mode, straight away in Telegram ----
     if (isWebMode) {
+        setupFractalPicker();
         const savedName = localStorage.getItem("fractal_web_name");
         if (savedName) {
             doAuth(savedName);
