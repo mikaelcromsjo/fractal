@@ -67,7 +67,7 @@ async def lifespan(app: FastAPI):
 
 
     await bot.delete_webhook(drop_pending_updates=True)
-    await bot.set_webhook("https://fractal.ia-ai.se/api/v1/fractals/webhook/8568824507:AAHGONnctVOq0L7IC9O_ZewzYNpqj4CSWkU")
+    await bot.set_webhook(f"https://fractal.ia-ai.se/api/v1/fractals/webhook/{settings.bot_token}")
 
     # Private chat commands
     private_commands = [

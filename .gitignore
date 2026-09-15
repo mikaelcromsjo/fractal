@@ -15,5 +15,8 @@ env/
 .DS_Store
 Thumbs.db
 
+# Secrets
+.env
+
 # Ignore local configuration data files (keep tracked versions as demo)
 backend/data/*.json
